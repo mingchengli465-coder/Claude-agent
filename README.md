@@ -135,11 +135,16 @@ thread each mention sits in, asks Claude for a reply, and posts it back.
 ## Commands
 
 ```bash
-python x_bot.py whoami            # check the X credentials
+python x_bot.py doctor            # check every credential and permission
+python x_bot.py doctor --write    # same, plus post and delete a test tweet
+python x_bot.py whoami            # print the authenticated account
 python x_bot.py ask "..."         # ask Claude, print the answer, post nothing
 python x_bot.py post "..."        # compose a standalone tweet and post it
 python x_bot.py run               # poll mentions and reply (the default)
 ```
+
+`doctor` is the one to start with: it tests each credential separately and
+prints the exact fix and link for whatever is broken.
 
 ## Setup
 
@@ -155,11 +160,12 @@ python x_bot.py run               # poll mentions and reply (the default)
 4. **Check the credentials, then start it:**
 
    ```bash
-   export $(grep -v '^#' .env | xargs)
-   python x_bot.py whoami
+   python x_bot.py doctor --write     # fix anything it reports, then re-run
    DRY_RUN=true python x_bot.py run   # watch what it would post
    python x_bot.py run                # for real
    ```
+
+   `.env` is loaded automatically — no `export` step needed.
 
 On its first run the bot records the newest existing mention and starts from
 there, so it won't answer a backlog. Set `REPLY_TO_BACKLOG=true` if you want it
@@ -177,14 +183,28 @@ python test_x_bot.py
 
 It needs no keys and makes no network calls.
 
-## X API access tiers
+## What X API access costs
 
-Reading mentions needs at least the **Basic** X API tier. The **Free** tier only
-allows posting plus `users/me`, so on Free the `run` command cannot fetch
-mentions — `post`, `ask` and `whoami` still work. Check the current limits on
-[developer.x.com](https://developer.x.com/en/portal/products) before picking a
-`POLL_INTERVAL_SECONDS`; the 900 s default is deliberately conservative, and
-tweepy is configured to wait out rate limits rather than fail.
+X replaced its flat tiers with pay-per-use pricing for new developers in
+February 2026, and closed the old free tier to new signups. At the time of
+writing that means roughly **$0.005 per post read** and **$0.015 per post
+created** — but a post containing a **link costs about $0.20**, which is why
+`AVOID_LINKS` defaults to `true`. Legacy Basic and Pro subscriptions continue
+only for accounts that already had them.
+
+Prices and tier names move around, and these figures come from secondary
+sources rather than X's own docs, so **treat them as a rough guide and confirm
+in the portal**: [developer.x.com/en/portal/products](https://developer.x.com/en/portal/products)
+
+What this means in practice:
+
+- Idle polling is nearly free — a cycle that finds no mentions reads no posts.
+- Each answered mention costs roughly one read per tweet of context plus one
+  post. `MAX_THREAD_CONTEXT` is therefore a direct cost dial.
+- `POLL_INTERVAL_SECONDS` defaults to 900 s to keep request volume modest.
+
+Rather than guess what your account can do, run `python x_bot.py doctor` — it
+calls the mentions endpoint and tells you whether your plan allows it.
 
 ## Configuration
 
@@ -205,6 +225,7 @@ tweepy is configured to wait out rate limits rather than fail.
 | `MAX_THREAD_CONTEXT`       | no       | `4`            | Ancestor tweets used as context                               |
 | `TWEET_CHAR_LIMIT`         | no       | `280`          | Per-tweet character budget                                    |
 | `MAX_TWEETS_PER_REPLY`     | no       | `3`            | Tweets one reply may be split across                          |
+| `AVOID_LINKS`              | no       | `true`         | Ask Claude for no URLs — posts with links cost far more       |
 | `ALLOWED_USERS`            | no       | everyone       | Comma-separated handles to answer, without `@`                |
 | `STATE_FILE`               | no       | `x_bot_state.json` | Where `since_id` and answered ids are stored              |
 | `REPLY_TO_BACKLOG`         | no       | `false`        | Answer mentions from before the first run                     |

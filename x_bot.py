@@ -18,6 +18,13 @@ from pathlib import Path
 import anthropic
 import tweepy
 
+try:  # Optional: load a .env sitting next to this file, so no export step is needed.
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:  # python-dotenv isn't installed; rely on the real environment.
+    pass
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -51,6 +58,9 @@ MAX_THREAD_CONTEXT = int(os.environ.get("MAX_THREAD_CONTEXT", "4"))
 # 280 for a standard account; X Premium accounts can raise this.
 TWEET_CHAR_LIMIT = int(os.environ.get("TWEET_CHAR_LIMIT", "280"))
 MAX_TWEETS_PER_REPLY = int(os.environ.get("MAX_TWEETS_PER_REPLY", "3"))
+# X charges far more for a post containing a link than for a plain one, so by
+# default we ask Claude not to include URLs. See the README's cost section.
+AVOID_LINKS = os.environ.get("AVOID_LINKS", "true").lower() != "false"
 # Comma-separated handles (without @). Empty means "reply to anyone".
 ALLOWED_USERS = {
     handle.strip().lstrip("@").lower()
@@ -182,6 +192,13 @@ def ask_claude(system: str, user_content: str) -> str | None:
     return text or None
 
 
+def _link_rule() -> str:
+    """The URL instruction, kept identical between replies and standalone posts."""
+    if not AVOID_LINKS:
+        return ""
+    return "Do not include any URLs or links."
+
+
 def build_reply_prompt(thread: list[dict], me_username: str) -> str:
     """Render a thread into the single user message Claude answers."""
     lines = [
@@ -200,6 +217,7 @@ def build_reply_prompt(thread: list[dict], me_username: str) -> str:
     lines += [
         "--- end of thread ---",
         "",
+        _link_rule(),
         f"Write the reply tweet. Keep it under {TWEET_CHAR_LIMIT} characters if you can "
         f"(at most {MAX_TWEETS_PER_REPLY * TWEET_CHAR_LIMIT}); anything longer is posted as a "
         "thread. Do not add hashtags, quotation marks around the whole reply, or a "
@@ -445,6 +463,204 @@ def poll_once(client: tweepy.Client, me, state: dict) -> None:
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# Diagnostics
+# --------------------------------------------------------------------------- #
+
+ANTHROPIC_KEYS_URL = "https://console.anthropic.com/settings/keys"
+ANTHROPIC_BILLING_URL = "https://console.anthropic.com/settings/billing"
+X_PORTAL_URL = "https://developer.x.com/en/portal/dashboard"
+X_PRODUCTS_URL = "https://developer.x.com/en/portal/products"
+
+OK, BAD, WARN = "  OK  ", " FAIL ", " WARN "
+
+
+def _report(status: str, label: str, detail: str = "", fix: str = "", link: str = "") -> None:
+    print(f"[{status}] {label}")
+    if detail:
+        print(f"         {detail}")
+    if fix:
+        print(f"         -> {fix}")
+    if link:
+        print(f"         -> {link}")
+
+
+def check_env() -> bool:
+    """Report which required variables are set, without printing their values."""
+    pairs = [
+        ("ANTHROPIC_API_KEY", ANTHROPIC_API_KEY, ANTHROPIC_KEYS_URL),
+        ("X_API_KEY", X_API_KEY, X_PORTAL_URL),
+        ("X_API_SECRET", X_API_SECRET, X_PORTAL_URL),
+        ("X_ACCESS_TOKEN", X_ACCESS_TOKEN, X_PORTAL_URL),
+        ("X_ACCESS_TOKEN_SECRET", X_ACCESS_TOKEN_SECRET, X_PORTAL_URL),
+    ]
+    all_set = True
+    for name, value, link in pairs:
+        if value:
+            _report(OK, f"{name} is set")
+        else:
+            all_set = False
+            _report(BAD, f"{name} is missing", fix="Add it to your .env file", link=link)
+    return all_set
+
+
+def check_anthropic() -> bool:
+    """Spend a handful of tokens to prove the Anthropic key works."""
+    if not ANTHROPIC_API_KEY:
+        _report(BAD, "Claude API", "skipped: ANTHROPIC_API_KEY is not set")
+        return False
+    try:
+        anthropic_client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=16,
+            messages=[{"role": "user", "content": "Reply with the single word: ok"}],
+            output_config={"effort": "low"},
+        )
+    except anthropic.AuthenticationError:
+        _report(BAD, "Claude API", "the key was rejected",
+                fix="Create a fresh key and paste it into .env", link=ANTHROPIC_KEYS_URL)
+        return False
+    except anthropic.PermissionDeniedError:
+        _report(BAD, "Claude API", "the key lacks permission or the org has no credit",
+                fix="Add a payment method / credits", link=ANTHROPIC_BILLING_URL)
+        return False
+    except anthropic.NotFoundError:
+        _report(BAD, "Claude API", f"the model {CLAUDE_MODEL} is not available to this account",
+                fix="Set CLAUDE_MODEL in .env to a model your account can use",
+                link=ANTHROPIC_KEYS_URL)
+        return False
+    except anthropic.APIStatusError as exc:
+        _report(BAD, "Claude API", f"HTTP {exc.status_code}: {exc.message}")
+        return False
+    except anthropic.APIConnectionError:
+        _report(BAD, "Claude API", "could not reach the API — check your network")
+        return False
+
+    _report(OK, "Claude API", f"{CLAUDE_MODEL} responded")
+    return True
+
+
+def check_x_identity(client: tweepy.Client):
+    """Confirm the X credentials resolve to an account (proves read access)."""
+    try:
+        me = client.get_me(user_fields=USER_FIELDS).data
+    except tweepy.Unauthorized:
+        _report(BAD, "X credentials", "X rejected the four X_* values",
+                fix="Regenerate the API key/secret and the access token/secret, "
+                    "then paste all four into .env", link=X_PORTAL_URL)
+        return None
+    except tweepy.Forbidden:
+        _report(BAD, "X credentials", "the app is not allowed to call the API",
+                fix="Check the app is attached to a Project with an active access plan",
+                link=X_PRODUCTS_URL)
+        return None
+    except Exception as exc:  # noqa: BLE001 - a diagnostic must never traceback
+        _report(BAD, "X credentials", f"unexpected error: {type(exc).__name__}: {exc}",
+                fix="Check your network connection and any proxy settings")
+        return None
+    _report(OK, "X credentials", f"authenticated as @{me.username} (id {me.id})")
+    return me
+
+
+def check_mentions(client: tweepy.Client, me) -> bool:
+    """Confirm the account's access plan actually allows reading mentions."""
+    try:
+        client.get_users_mentions(
+            str(me.id), max_results=5, tweet_fields=["text"], user_auth=True
+        )
+    except tweepy.Forbidden:
+        _report(BAD, "Reading mentions", "your access plan does not include this endpoint",
+                fix="`run` needs mention reads. `post` and `ask` still work without it",
+                link=X_PRODUCTS_URL)
+        return False
+    except tweepy.TooManyRequests:
+        _report(WARN, "Reading mentions", "rate limited right now, but the endpoint is allowed",
+                fix="Raise POLL_INTERVAL_SECONDS in .env")
+        return True
+    except tweepy.Unauthorized:
+        _report(BAD, "Reading mentions", "the access token is not valid for reads",
+                fix="Regenerate the access token and secret", link=X_PORTAL_URL)
+        return False
+    except Exception as exc:  # noqa: BLE001 - a diagnostic must never traceback
+        _report(BAD, "Reading mentions", f"unexpected error: {type(exc).__name__}: {exc}",
+                fix="Check your network connection and any proxy settings")
+        return False
+    _report(OK, "Reading mentions", "the mentions endpoint is available")
+    return True
+
+
+def check_write(client: tweepy.Client) -> bool:
+    """Post a throwaway tweet and delete it, to prove write access really works."""
+    marker = f"setup check {int(time.time())} - deleting this immediately"
+    try:
+        created = client.create_tweet(text=marker)
+    except tweepy.Forbidden:
+        _report(BAD, "Posting", "the app's tokens are read-only",
+                fix="Set User authentication settings to 'Read and write', then REGENERATE "
+                    "the access token and secret — changing the permission does not upgrade "
+                    "a token you already made", link=X_PORTAL_URL)
+        return False
+    except tweepy.Unauthorized:
+        _report(BAD, "Posting", "X rejected the credentials for writing",
+                fix="Regenerate the access token and secret", link=X_PORTAL_URL)
+        return False
+    except Exception as exc:  # noqa: BLE001 - a diagnostic must never traceback
+        _report(BAD, "Posting", f"unexpected error: {type(exc).__name__}: {exc}",
+                fix="Check your network connection and any proxy settings")
+        return False
+
+    tweet_id = created.data["id"]
+    try:
+        client.delete_tweet(tweet_id)
+        _report(OK, "Posting", "posted a test tweet and deleted it again")
+    except tweepy.TweepyException:
+        _report(WARN, "Posting", f"posted tweet {tweet_id} but could not delete it",
+                fix=f"Delete it by hand: https://x.com/i/status/{tweet_id}")
+    return True
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Check every credential and permission, and say exactly what to fix."""
+    print("Checking your setup...\n")
+
+    print("Configuration")
+    env_ok = check_env()
+    print()
+
+    print("Claude")
+    claude_ok = check_anthropic()
+    print()
+
+    print("X")
+    x_ok = False
+    mentions_ok = False
+    write_ok = None
+    if all((X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET)):
+        client = build_x_client()
+        me = check_x_identity(client)
+        if me is not None:
+            x_ok = True
+            mentions_ok = check_mentions(client, me)
+            if args.write:
+                write_ok = check_write(client)
+            else:
+                _report(WARN, "Posting", "not checked",
+                        fix="Run `python x_bot.py doctor --write` to post and delete a "
+                            "test tweet")
+    else:
+        _report(BAD, "X credentials", "skipped: some X_* variables are missing")
+    print()
+
+    print("Summary")
+    if claude_ok and x_ok and mentions_ok and write_ok is not False:
+        print("  Ready. Start with:  DRY_RUN=true python x_bot.py run")
+    elif claude_ok and x_ok and write_ok is not False:
+        print("  Partly ready. `post` and `ask` will work; `run` needs mention reads.")
+    else:
+        print("  Not ready yet — fix the FAIL lines above and run doctor again.")
+    return 0 if (env_ok and claude_ok and x_ok) else 1
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Poll mentions forever, answering each one with Claude."""
     require_config()
@@ -486,7 +702,8 @@ def cmd_post(args: argparse.Namespace) -> int:
     )
     prompt = (
         f"Write a tweet about the following. Keep it under {TWEET_CHAR_LIMIT} characters, "
-        "with no hashtags and no surrounding quotation marks. Output only the tweet text.\n\n"
+        "with no hashtags and no surrounding quotation marks. "
+        f"{_link_rule()} Output only the tweet text.\n\n"
         f"{args.topic}"
     )
 
@@ -535,6 +752,11 @@ def main() -> int:
     ask.set_defaults(func=cmd_ask)
 
     sub.add_parser("whoami", help="check the X credentials").set_defaults(func=cmd_whoami)
+
+    doctor = sub.add_parser("doctor", help="check every credential and permission")
+    doctor.add_argument("--write", action="store_true",
+                        help="also post and delete a test tweet to prove write access")
+    doctor.set_defaults(func=cmd_doctor)
 
     args = parser.parse_args()
     if not hasattr(args, "func"):
