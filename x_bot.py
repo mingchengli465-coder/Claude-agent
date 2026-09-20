@@ -54,7 +54,9 @@ X_SYSTEM_PROMPT = os.environ.get(
     "Be genuinely useful, warm and concise, and reply in the language the person used.",
 )
 
-POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "900"))
+# Floored at 60s: polling faster only burns read quota, and in the combined
+# loop a zero interval would spin instead of sleeping.
+POLL_INTERVAL_SECONDS = max(60, int(os.environ.get("POLL_INTERVAL_SECONDS", "900")))
 MAX_REPLIES_PER_CYCLE = int(os.environ.get("MAX_REPLIES_PER_CYCLE", "5"))
 # How many ancestor tweets to pull in as context. 0 means "just the mention".
 MAX_THREAD_CONTEXT = int(os.environ.get("MAX_THREAD_CONTEXT", "4"))
@@ -153,7 +155,9 @@ def load_state() -> dict:
 
 def save_state(state: dict) -> None:
     """Write the state file atomically so a crash mid-write can't corrupt it."""
-    state["replied_to"] = state["replied_to"][-REPLIED_HISTORY_SIZE:]
+    # Don't assume the caller's dict shape: a truncated or hand-edited state
+    # file can leave these missing or null.
+    state["replied_to"] = (state.get("replied_to") or [])[-REPLIED_HISTORY_SIZE:]
     tmp = STATE_FILE.with_suffix(STATE_FILE.suffix + ".tmp")
     try:
         tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -857,6 +861,56 @@ def cmd_post(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_post_slot(client: tweepy.Client, state: dict, slot_id: str) -> bool:
+    """Publish the scheduled post, absorbing failures.
+
+    Returns True when the slot is finished with (posted, or failed in a way
+    that retrying would not fix) and False when it is worth trying again.
+    """
+    try:
+        publish_one(client, state)
+    except tweepy.Forbidden:
+        logger.error("X refused the post (duplicate text, or read-only tokens)", exc_info=True)
+    except tweepy.TooManyRequests:
+        logger.warning("Rate limited by X; will try this slot again", exc_info=True)
+        return False
+    except anthropic.APIStatusError as exc:
+        logger.error("Claude returned HTTP %s; will try this slot again", exc.status_code)
+        return False
+    except anthropic.APIConnectionError:
+        logger.warning("Could not reach Claude; will try this slot again", exc_info=True)
+        return False
+    except Exception:
+        logger.exception("Unexpected error while posting; giving up on this slot")
+
+    state["last_slot"] = slot_id
+    save_state(state)
+    return True
+
+
+def run_mention_poll(client: tweepy.Client, me, state: dict) -> None:
+    """Check mentions once, absorbing failures so the caller's loop survives."""
+    try:
+        poll_once(client, me, state)
+    except tweepy.TooManyRequests:
+        logger.warning("Rate limited by X; waiting for the next cycle", exc_info=True)
+    except tweepy.TweepyException:
+        logger.error("X API error; waiting for the next cycle", exc_info=True)
+    except Exception:
+        logger.exception("Unexpected error while checking mentions")
+
+
+def slot_target(now: datetime, times: list[tuple[int, int]]) -> tuple[str, datetime]:
+    """Next slot as (stable id, the moment to post, jitter already applied)."""
+    slot = next_slot(now, times)
+    slot_id = slot.isoformat(timespec="minutes")
+    target = slot
+    if POST_JITTER_MINUTES > 0:
+        # Seeded on the slot so the target doesn't move as the loop re-checks it.
+        target += timedelta(minutes=random.Random(slot_id).randint(0, POST_JITTER_MINUTES))
+    return slot_id, target
+
+
 def cmd_autopost(args: argparse.Namespace) -> int:
     """Compose and publish one scheduled post, then exit. For external cron."""
     require_config()
@@ -890,44 +944,63 @@ def cmd_schedule(args: argparse.Namespace) -> int:
     )
 
     while True:
-        now = datetime.now(tz=tz)
-        target = next_slot(now, times)
-        slot_id = target.isoformat(timespec="minutes")
-
-        if POST_JITTER_MINUTES > 0:
-            target += timedelta(minutes=random.randint(0, POST_JITTER_MINUTES))
-
+        slot_id, target = slot_target(datetime.now(tz=tz), times)
         wait = (target - datetime.now(tz=tz)).total_seconds()
         if wait > 0:
-            logger.info("Next post at %s (in %.1f min)", target.strftime("%Y-%m-%d %H:%M"), wait / 60)
+            logger.info("Next post %s (in %.1f min)", target.strftime("%Y-%m-%d %H:%M"), wait / 60)
             time.sleep(wait)
 
-        # A restart inside the same minute must not post the slot twice.
         if state.get("last_slot") == slot_id:
-            logger.info("Slot %s already posted; waiting for the next one", slot_id)
-            time.sleep(61)
+            time.sleep(61)  # Restarted inside the same minute: don't post twice.
             continue
 
-        try:
-            publish_one(client, state)
-            state["last_slot"] = slot_id
-            save_state(state)
-        except tweepy.Forbidden:
-            logger.error("X refused the post (duplicate text, or read-only tokens)", exc_info=True)
-            state["last_slot"] = slot_id
-            save_state(state)
-        except tweepy.TooManyRequests:
-            logger.warning("Rate limited by X; will try again at the next slot", exc_info=True)
-        except anthropic.APIStatusError as exc:
-            logger.error("Claude returned HTTP %s; skipping this slot", exc.status_code)
-        except anthropic.APIConnectionError:
-            logger.warning("Could not reach Claude; skipping this slot", exc_info=True)
-        except Exception:
-            logger.exception("Unexpected error while posting; skipping this slot")
-            state["last_slot"] = slot_id
-            save_state(state)
+        run_post_slot(client, state, slot_id)
+        time.sleep(61)
 
-        time.sleep(61)  # Step past the scheduled minute before recomputing.
+
+def cmd_both(args: argparse.Namespace) -> int:
+    """Post on a schedule and answer mentions, in one process."""
+    require_config()
+    tz = post_timezone()
+    times = parse_times(POST_TIMES)
+    topics = load_topics()
+
+    client = build_x_client()
+    me = client.get_me(user_fields=USER_FIELDS).data
+    state = load_state()
+
+    logger.info(
+        "Running as @%s%s\n"
+        "  posting at %s (%s), %d topic(s) in rotation\n"
+        "  checking mentions every %ds",
+        me.username,
+        " [DRY RUN]" if DRY_RUN else "",
+        ", ".join(f"{h:02d}:{m:02d}" for h, m in times),
+        tz.key,
+        len(topics),
+        POLL_INTERVAL_SECONDS,
+    )
+
+    next_poll = time.monotonic()  # Check mentions once straight away.
+
+    while True:
+        slot_id, target = slot_target(datetime.now(tz=tz), times)
+
+        # Sleep until whichever job comes first.
+        until_post = (target - datetime.now(tz=tz)).total_seconds()
+        until_poll = next_poll - time.monotonic()
+        wait = min(until_post, until_poll)
+        if wait > 0:
+            logger.debug("Sleeping %.1fs (post in %.1fs, poll in %.1fs)", wait, until_post, until_poll)
+            time.sleep(wait)
+
+        if time.monotonic() >= next_poll:
+            run_mention_poll(client, me, state)
+            next_poll = time.monotonic() + POLL_INTERVAL_SECONDS
+
+        if datetime.now(tz=tz) >= target and state.get("last_slot") != slot_id:
+            run_post_slot(client, state, slot_id)
+            time.sleep(61)  # Step past the scheduled minute.
 
 
 def cmd_whoami(args: argparse.Namespace) -> int:
@@ -962,6 +1035,9 @@ def main() -> int:
 
     schedule = sub.add_parser("schedule", help="post automatically on a daily schedule")
     schedule.set_defaults(func=cmd_schedule)
+
+    both = sub.add_parser("both", help="post on a schedule AND reply to mentions, one process")
+    both.set_defaults(func=cmd_both)
 
     autopost = sub.add_parser("autopost", help="compose and post once, then exit (for cron)")
     autopost.add_argument("--topic", help="override the next topic in the rotation")

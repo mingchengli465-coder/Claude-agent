@@ -143,6 +143,7 @@ python x_bot.py post "..."        # compose a standalone tweet and post it
 python x_bot.py autopost          # post once from the topic rotation, then exit
 python x_bot.py schedule          # post automatically, every day, on a timetable
 python x_bot.py run               # poll mentions and reply
+python x_bot.py both              # do both, in one process
 ```
 
 `doctor` is the one to start with: it tests each credential separately and
@@ -182,10 +183,30 @@ long-reply threading and refusal handling:
 ```bash
 python test_x_bot.py        # the mentions loop
 python test_x_schedule.py   # the posting schedule
+python test_x_both.py       # the combined loop
 ```
 
 It needs no keys and makes no network calls.
 
+
+## Running both jobs together
+
+`both` does the scheduled posting *and* answers mentions from a single
+process, so you pay for one instance instead of two. It sleeps until whichever
+job is due next, and a failure in one never stops the other.
+
+```bash
+DRY_RUN=true python x_bot.py both
+```
+
+This is the `xbot` process type in the `Procfile`. Run `schedule` or `run`
+alone if you only want one half.
+
+Note the cost asymmetry: the posting half is cheap (one post per slot), while
+the mentions half reads posts, which is the metered side of the X API. If the
+bill matters more than the coverage, `MAX_THREAD_CONTEXT` and
+`POLL_INTERVAL_SECONDS` are the two dials — the latter is floored at 60s,
+since polling faster only burns quota.
 
 ## Posting on a schedule
 
