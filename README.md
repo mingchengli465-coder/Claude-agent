@@ -140,7 +140,9 @@ python x_bot.py doctor --write    # same, plus post and delete a test tweet
 python x_bot.py whoami            # print the authenticated account
 python x_bot.py ask "..."         # ask Claude, print the answer, post nothing
 python x_bot.py post "..."        # compose a standalone tweet and post it
-python x_bot.py run               # poll mentions and reply (the default)
+python x_bot.py autopost          # post once from the topic rotation, then exit
+python x_bot.py schedule          # post automatically, every day, on a timetable
+python x_bot.py run               # poll mentions and reply
 ```
 
 `doctor` is the one to start with: it tests each credential separately and
@@ -178,10 +180,37 @@ covering the backlog skip, the per-cycle cap, thread ordering, deduplication,
 long-reply threading and refusal handling:
 
 ```bash
-python test_x_bot.py
+python test_x_bot.py        # the mentions loop
+python test_x_schedule.py   # the posting schedule
 ```
 
 It needs no keys and makes no network calls.
+
+
+## Posting on a schedule
+
+`schedule` is the cheap half of this bot: it only writes, so it never touches
+the expensive read quota. It walks `topics.txt` in order — every theme gets
+used before any repeats — and shows Claude the last dozen posts so it doesn't
+say the same thing twice.
+
+```bash
+cp topics.txt my-topics.txt   # then edit it: one theme per line
+POST_TIMES=08:30,19:00 POST_TIMEZONE=Asia/Shanghai DRY_RUN=true python x_bot.py schedule
+```
+
+Keep each theme narrow — *"a mistake beginners make in X"* produces better
+posts than *"productivity"*.
+
+Two ways to run it:
+
+- **`schedule`** stays running and posts at each time in `POST_TIMES`. This is
+  the `xpost` process type in the `Procfile`.
+- **`autopost`** posts once and exits, for platforms with their own cron. Add
+  `--topic "..."` to post something specific without disturbing the rotation.
+
+It remembers the last slot it posted, so a restart inside the same minute won't
+double-post. A slot where Claude declines is skipped rather than retried.
 
 ## What X API access costs
 
@@ -226,6 +255,11 @@ calls the mentions endpoint and tells you whether your plan allows it.
 | `TWEET_CHAR_LIMIT`         | no       | `280`          | Per-tweet character budget                                    |
 | `MAX_TWEETS_PER_REPLY`     | no       | `3`            | Tweets one reply may be split across                          |
 | `AVOID_LINKS`              | no       | `true`         | Ask Claude for no URLs — posts with links cost far more       |
+| `TOPICS_FILE`              | no       | `topics.txt`   | Themes for scheduled posting, one per line                    |
+| `POST_TIMES`               | no       | `09:00`        | Daily posting times, e.g. `08:30,19:00`                       |
+| `POST_TIMEZONE`            | no       | `UTC`          | Timezone those times are in, e.g. `Asia/Shanghai`             |
+| `POST_HISTORY_SIZE`        | no       | `12`           | Recent posts shown to Claude to avoid repetition              |
+| `POST_JITTER_MINUTES`      | no       | `0`            | Random delay after the slot, so posting looks less robotic    |
 | `ALLOWED_USERS`            | no       | everyone       | Comma-separated handles to answer, without `@`                |
 | `STATE_FILE`               | no       | `x_bot_state.json` | Where `since_id` and answered ids are stored              |
 | `REPLY_TO_BACKLOG`         | no       | `false`        | Answer mentions from before the first run                     |

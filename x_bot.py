@@ -11,9 +11,12 @@ import argparse
 import json
 import logging
 import os
+import random
 import sys
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import anthropic
 import tweepy
@@ -68,6 +71,17 @@ ALLOWED_USERS = {
     if handle.strip()
 }
 STATE_FILE = Path(os.environ.get("STATE_FILE", "x_bot_state.json"))
+
+# --- Scheduled posting ---
+# One theme per line; the bot walks the list in order so every theme gets used.
+TOPICS_FILE = Path(os.environ.get("TOPICS_FILE", "topics.txt"))
+# Local clock times to post at, e.g. "09:00" or "08:30,19:00".
+POST_TIMES = os.environ.get("POST_TIMES", "09:00")
+POST_TIMEZONE = os.environ.get("POST_TIMEZONE", "UTC")
+# Recent posts shown to Claude so it does not repeat itself.
+POST_HISTORY_SIZE = int(os.environ.get("POST_HISTORY_SIZE", "12"))
+# Minutes of random delay after the scheduled time, so posts don't look robotic.
+POST_JITTER_MINUTES = int(os.environ.get("POST_JITTER_MINUTES", "0"))
 # On a fresh state file, answer mentions that predate the first run?
 REPLY_TO_BACKLOG = os.environ.get("REPLY_TO_BACKLOG", "false").lower() == "true"
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
@@ -464,6 +478,132 @@ def poll_once(client: tweepy.Client, me, state: dict) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Scheduled posting
+# --------------------------------------------------------------------------- #
+
+
+def post_timezone() -> ZoneInfo:
+    """Resolve POST_TIMEZONE, falling back to UTC rather than crashing."""
+    try:
+        return ZoneInfo(POST_TIMEZONE)
+    except (ZoneInfoNotFoundError, ValueError):
+        logger.warning("Unknown POST_TIMEZONE %r; using UTC instead", POST_TIMEZONE)
+        return ZoneInfo("UTC")
+
+
+def parse_times(spec: str) -> list[tuple[int, int]]:
+    """Turn "09:00,18:30" into [(9, 0), (18, 30)], sorted and de-duplicated."""
+    times: set[tuple[int, int]] = set()
+    for chunk in spec.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            hour_s, minute_s = chunk.split(":")
+            hour, minute = int(hour_s), int(minute_s)
+        except ValueError:
+            raise SystemExit(f"POST_TIMES has an unreadable entry: {chunk!r}. Use HH:MM.")
+        if not (0 <= hour < 24 and 0 <= minute < 60):
+            raise SystemExit(f"POST_TIMES entry out of range: {chunk!r}.")
+        times.add((hour, minute))
+    if not times:
+        raise SystemExit("POST_TIMES is empty. Set something like POST_TIMES=09:00.")
+    return sorted(times)
+
+
+def next_slot(now: datetime, times: list[tuple[int, int]]) -> datetime:
+    """Return the next scheduled datetime strictly after `now`."""
+    for hour, minute in times:
+        candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate > now:
+            return candidate
+    hour, minute = times[0]
+    tomorrow = now + timedelta(days=1)
+    return tomorrow.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+
+def load_topics() -> list[str]:
+    """Read the topic list, ignoring blanks and # comments."""
+    if not TOPICS_FILE.exists():
+        raise SystemExit(
+            f"No topic file at {TOPICS_FILE}. Create it with one theme per line, "
+            "or point TOPICS_FILE somewhere else."
+        )
+    topics = [
+        line.strip()
+        for line in TOPICS_FILE.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not topics:
+        raise SystemExit(f"{TOPICS_FILE} has no usable lines in it.")
+    return topics
+
+
+def take_topic(state: dict, topics: list[str]) -> str:
+    """Walk the topic list in order, so every theme gets its turn."""
+    index = int(state.get("topic_index", 0)) % len(topics)
+    state["topic_index"] = (index + 1) % len(topics)
+    return topics[index]
+
+
+def recent_texts(state: dict) -> list[str]:
+    return [entry.get("text", "") for entry in state.get("posts", [])][-POST_HISTORY_SIZE:]
+
+
+def compose_post(topic: str, recent: list[str]) -> str | None:
+    """Ask Claude for one post on `topic` that doesn't echo the recent ones."""
+    lines = [
+        f"Write ONE post for this X (Twitter) account. Today's theme: {topic}",
+        "",
+        "Rules:",
+        f"- Under {TWEET_CHAR_LIMIT} characters.",
+        "- Say one concrete, specific thing. No throat-clearing.",
+        '- Do not open with "Let\'s talk about", a rhetorical question, or "Ever wonder".',
+        "- No hashtags. Do not sound like an advertisement.",
+    ]
+    rule = _link_rule()
+    if rule:
+        lines.append("- " + rule)
+
+    if recent:
+        lines += [
+            "",
+            "This account posted these recently. Do not repeat their ideas, their "
+            "sentence shapes, or their opening words:",
+        ]
+        lines += ["- " + text for text in recent]
+
+    lines += ["", "Output only the post text."]
+    return ask_claude(X_SYSTEM_PROMPT, "\n".join(lines))
+
+
+def publish_one(client: tweepy.Client, state: dict, topic: str | None = None) -> str | None:
+    """Compose a post, publish it, and record it. Returns the text, or None."""
+    topics = load_topics()
+    chosen = topic or take_topic(state, topics)
+    logger.info("Composing a post about: %s", chosen)
+
+    text = compose_post(chosen, recent_texts(state))
+    if text is None:
+        logger.warning("Claude produced nothing for %r; skipping this slot", chosen)
+        save_state(state)
+        return None
+
+    ids = post_thread(client, text)
+    state.setdefault("posts", []).append(
+        {
+            "id": ids[0] if ids else None,
+            "topic": chosen,
+            "text": text,
+            "at": datetime.now(tz=post_timezone()).isoformat(timespec="seconds"),
+        }
+    )
+    state["posts"] = state["posts"][-POST_HISTORY_SIZE * 3:]
+    save_state(state)
+    return text
+
+
+# --------------------------------------------------------------------------- #
 # Diagnostics
 # --------------------------------------------------------------------------- #
 
@@ -717,6 +857,79 @@ def cmd_post(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_autopost(args: argparse.Namespace) -> int:
+    """Compose and publish one scheduled post, then exit. For external cron."""
+    require_config()
+    client = build_x_client()
+    state = load_state()
+    text = publish_one(client, state, topic=args.topic)
+    if text is None:
+        return 1
+    print(text)
+    return 0
+
+
+def cmd_schedule(args: argparse.Namespace) -> int:
+    """Stay running and post at each time in POST_TIMES, every day."""
+    require_config()
+    tz = post_timezone()
+    times = parse_times(POST_TIMES)
+    topics = load_topics()
+
+    client = build_x_client()
+    me = client.get_me(user_fields=USER_FIELDS).data
+    state = load_state()
+
+    logger.info(
+        "Posting as @%s at %s (%s), %d topic(s) in rotation%s",
+        me.username,
+        ", ".join(f"{h:02d}:{m:02d}" for h, m in times),
+        tz.key,
+        len(topics),
+        " [DRY RUN]" if DRY_RUN else "",
+    )
+
+    while True:
+        now = datetime.now(tz=tz)
+        target = next_slot(now, times)
+        slot_id = target.isoformat(timespec="minutes")
+
+        if POST_JITTER_MINUTES > 0:
+            target += timedelta(minutes=random.randint(0, POST_JITTER_MINUTES))
+
+        wait = (target - datetime.now(tz=tz)).total_seconds()
+        if wait > 0:
+            logger.info("Next post at %s (in %.1f min)", target.strftime("%Y-%m-%d %H:%M"), wait / 60)
+            time.sleep(wait)
+
+        # A restart inside the same minute must not post the slot twice.
+        if state.get("last_slot") == slot_id:
+            logger.info("Slot %s already posted; waiting for the next one", slot_id)
+            time.sleep(61)
+            continue
+
+        try:
+            publish_one(client, state)
+            state["last_slot"] = slot_id
+            save_state(state)
+        except tweepy.Forbidden:
+            logger.error("X refused the post (duplicate text, or read-only tokens)", exc_info=True)
+            state["last_slot"] = slot_id
+            save_state(state)
+        except tweepy.TooManyRequests:
+            logger.warning("Rate limited by X; will try again at the next slot", exc_info=True)
+        except anthropic.APIStatusError as exc:
+            logger.error("Claude returned HTTP %s; skipping this slot", exc.status_code)
+        except anthropic.APIConnectionError:
+            logger.warning("Could not reach Claude; skipping this slot", exc_info=True)
+        except Exception:
+            logger.exception("Unexpected error while posting; skipping this slot")
+            state["last_slot"] = slot_id
+            save_state(state)
+
+        time.sleep(61)  # Step past the scheduled minute before recomputing.
+
+
 def cmd_whoami(args: argparse.Namespace) -> int:
     """Verify the X credentials and print the account they belong to."""
     require_config()
@@ -746,6 +959,13 @@ def main() -> int:
     post = sub.add_parser("post", help="compose and post a standalone tweet")
     post.add_argument("topic", help="what the tweet should be about")
     post.set_defaults(func=cmd_post)
+
+    schedule = sub.add_parser("schedule", help="post automatically on a daily schedule")
+    schedule.set_defaults(func=cmd_schedule)
+
+    autopost = sub.add_parser("autopost", help="compose and post once, then exit (for cron)")
+    autopost.add_argument("--topic", help="override the next topic in the rotation")
+    autopost.set_defaults(func=cmd_autopost)
 
     ask = sub.add_parser("ask", help="ask Claude something without posting")
     ask.add_argument("prompt", help="the prompt to send")
