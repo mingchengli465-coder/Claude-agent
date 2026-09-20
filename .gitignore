@@ -3,3 +3,5 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+x_bot_state.json
