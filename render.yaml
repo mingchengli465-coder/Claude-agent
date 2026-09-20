@@ -1,0 +1,29 @@
+# Render Blueprint. Point Render at this repo and it creates the worker for you.
+# `sync: false` means Render asks you for the value instead of storing it here —
+# secrets never belong in a repository.
+services:
+  - type: worker
+    name: x-bot
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python x_bot.py both
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: X_API_KEY
+        sync: false
+      - key: X_API_SECRET
+        sync: false
+      - key: X_ACCESS_TOKEN
+        sync: false
+      - key: X_ACCESS_TOKEN_SECRET
+        sync: false
+      - key: POST_TIMES
+        value: "09:00,20:00"
+      - key: POST_TIMEZONE
+        value: Asia/Shanghai
+      - key: POLL_INTERVAL_SECONDS
+        value: "900"
+      - key: DRY_RUN
+        value: "true"     # Flip to false once you've watched it for a day.
