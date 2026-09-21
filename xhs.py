@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,9 @@ RED = (232, 50, 46)          # #E8322E
 WHITE = (255, 255, 255)
 MARGIN = 76
 BADGE_TEXT = "真实经历"
+
+# Flipped off for the process once a model rejects response_format.
+_json_mode_supported = os.environ.get("XHS_JSON_MODE", "true").lower() != "false"
 
 client = AsyncOpenAI(
     api_key=OPENROUTER_API_KEY,
@@ -129,7 +132,16 @@ def take_domain(state: dict) -> str:
 # --------------------------------------------------------------------------- #
 
 SYSTEM_PROMPT = """你是资深的小红书内容写手，擅长写出评论区会吵起来的观点型笔记。
-你只输出简体中文，只输出 JSON，不输出任何解释、前言或 Markdown 代码块标记。"""
+
+你的输出会被程序直接用 json.loads() 解析，所以：
+- 第一个字符必须是 {，最后一个字符必须是 }
+- 不要写 ```json，不要写 ```，不要写任何代码块标记
+- 不要在 JSON 前后加"好的""以下是""希望对你有帮助"之类的话
+- 不要在 JSON 里写注释
+- 正文里的换行必须写成 \\n 转义，不能直接敲回车
+- 所有内容用简体中文
+
+只输出那一个 JSON 对象，其他什么都不要输出。"""
 
 # These four are non-negotiable and repeated in every request.
 HARD_RULES = """【必须遵守的硬性规则，违反即视为失败】
@@ -164,38 +176,173 @@ def _build_user_prompt(domain: str, avoid: list[str]) -> str:
 
 {HARD_RULES}
 
-【输出格式】严格输出下面结构的 JSON，不要加代码块标记：
+【输出格式】
+只输出一个 JSON 对象。第一个字符是 {{，最后一个字符是 }}，前后不要有任何其他文字，
+也不要用 ``` 包起来。正文的换行写成 \\n，不要直接敲回车。
+
+下面是一个完整的示例，照这个结构和长度来写（内容不要抄，换你自己的）：
+
 {{
-  "topic": "这篇的选题，一句话概括",
-  "title": "标题",
-  "body": "正文，段落之间用 \\n\\n 分隔",
-  "tags": ["标签1", "标签2", "标签3", "标签4", "标签5", "标签6"],
+  "topic": "为了通勤少 40 分钟，值不值得每月多付 1500 房租",
+  "title": "多花1500换回每天40分钟，我不后悔",
+  "body": "上个月我搬了家，房租从3200涨到4700，每月多掏1500。\\n\\n身边所有人都说我疯了。我妈在电话里一笔一笔算给我听：一年多花一万八，三年就是一套全屋家电，五年能付个小县城的首付。\\n\\n但我算的是另一笔账。\\n\\n以前我每天通勤单程一小时十分钟。早上六点四十出门，地铁上连站的地方都要抢。晚上八点多才到家，进门第一件事是瘫在沙发上刷半小时手机，缓过来已经九点半。外卖我点了整整三年，厨房的灶台是新的。\\n\\n现在单程二十五分钟。我七点半起床，晚上六点半就能进家门。\\n\\n上周三我煮了顿饭，西红柿鸡蛋面，很普通。但那是我搬到这座城市三年来第一次开火。吃完还有时间看完一部电影。\\n\\n所以那一万八买的根本不是四十分钟，是我晚上那段能喘口气、还能干点别的事的时间。\\n\\n这事我发朋友圈之后吵翻了。有人说我这是典型的年轻人不会算账，也有人说早就该这么干，钱是挣来花的不是攒来看的。\\n\\n所以你会怎么选：省下这一万八，还是换回每天那四十分钟？",
+  "tags": ["租房", "通勤", "北漂日常", "生活选择", "时间管理", "年轻人现状"],
   "cover": {{
-    "main": ["主标第一行", "主标第二行"],
-    "question": "争议问句",
-    "small": ["小字第一行", "小字第二行", "小字第三行"]
+    "main": ["月租多掏1500", "只为少走40分钟"],
+    "question": "这笔账到底划不划算？",
+    "small": ["一年多花一万八", "换回每天四十分钟", "你会怎么选"]
   }}
-}}"""
+}}
+
+注意：示例里 body 的换行用的是 \\n，不是真的回车。你也必须这样写。
+
+现在按同样的结构，就【{domain}】这个领域写一篇新的。只输出 JSON。"""
+
+
+# How much of a bad reply to put in the log. Small models fail in ways you
+# cannot guess at, so the raw text is the only way to see what went wrong.
+RAW_LOG_CHARS = 300
+
+_FENCE_RE = re.compile(r"```[a-zA-Z]*\s*\n?(.*?)(?:```|\Z)", re.S)
+_TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
+
+
+def _strip_fences(text: str) -> str:
+    """Drop a ``` wrapper, including one the model never closed."""
+    if "```" not in text:
+        return text
+    match = _FENCE_RE.search(text)
+    if match and match.group(1).strip():
+        return match.group(1).strip()
+    return text.replace("```", " ")
+
+
+# Top-level keys we expect, used to tell the real object apart from a stray
+# "{}" that happened to appear in the model's preamble.
+_EXPECTED_KEYS = {"topic", "title", "body", "tags", "cover"}
+# Cap the candidate scan so a pathological reply can't make this quadratic.
+_MAX_CANDIDATES = 20
+
+
+def _object_candidates(text: str) -> list[str]:
+    """Every balanced {...} span, one per opening brace, outermost first.
+
+    Trying only the first brace breaks when the model writes something like
+    "这里有个 { 花括号" before the real object: the depth counter starts on the
+    prose brace and never balances.
+    """
+    candidates: list[str] = []
+    for start in range(len(text)):
+        if text[start] != "{":
+            continue
+        depth = 0
+        in_string = False
+        escaped = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    candidates.append(text[start:i + 1])
+                    break
+        if len(candidates) >= _MAX_CANDIDATES:
+            break
+
+    # Nothing balanced: fall back to the widest span, which _repair may salvage.
+    if not candidates:
+        first, last = text.find("{"), text.rfind("}")
+        if first != -1 and last > first:
+            candidates.append(text[first:last + 1])
+    return candidates
+
+
+def _escape_raw_control_chars(text: str) -> str:
+    """Escape literal newlines/tabs inside strings.
+
+    Small models routinely write a multi-paragraph 正文 with real line breaks
+    instead of \\n, which json.loads rejects as an invalid control character.
+    """
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if escaped:
+            out.append(ch)
+            escaped = False
+            continue
+        if ch == "\\":
+            out.append(ch)
+            escaped = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            out.append(ch)
+            continue
+        if in_string and ch in "\n\r\t":
+            out.append({"\n": "\\n", "\r": "\\r", "\t": "\\t"}[ch])
+            continue
+        out.append(ch)
+    return "".join(out)
+
+
+def _repair(text: str) -> str:
+    """Last-resort fixes for the ways small models bend JSON."""
+    return _TRAILING_COMMA_RE.sub(r"\1", _escape_raw_control_chars(text))
 
 
 def _extract_json(raw: str) -> dict:
-    """Pull the JSON object out of a reply that may be fenced or padded."""
-    text = raw.strip()
-    fence = re.search(r"```(?:json)?\s*(.+?)\s*```", text, re.S)
-    if fence:
-        text = fence.group(1).strip()
-    if not text.startswith("{"):
-        start, end = text.find("{"), text.rfind("}")
-        if start == -1 or end <= start:
-            raise GenerationError("模型没有返回 JSON")
-        text = text[start:end + 1]
-    try:
-        data = json.loads(text)
-    except ValueError as exc:
-        raise GenerationError(f"返回的 JSON 无法解析：{exc}") from exc
-    if not isinstance(data, dict):
-        raise GenerationError("返回的 JSON 不是对象")
-    return data
+    """Pull a JSON object out of a reply that may be fenced, padded or malformed.
+
+    Raises GenerationError with the raw text logged, so a failure is diagnosable
+    instead of just "没有返回 JSON".
+    """
+    text = (raw or "").strip()
+    if not text:
+        logger.error("模型返回了空内容（免费模型限流，或把内容放进了别的字段）")
+        raise GenerationError("模型返回了空内容")
+
+    candidates = _object_candidates(_strip_fences(text))
+    if not candidates:
+        logger.error("模型回复里找不到 JSON 对象。原始回复前 %d 字：\n%s",
+                     RAW_LOG_CHARS, text[:RAW_LOG_CHARS])
+        raise GenerationError("模型没有返回 JSON")
+
+    parsed: list[dict] = []
+    last_error: Exception | None = None
+    for candidate in candidates:
+        for attempt in (candidate, _repair(candidate)):
+            try:
+                data = json.loads(attempt)
+            except ValueError as exc:
+                last_error = exc
+                continue
+            if isinstance(data, dict):
+                # A stray "{}" in the preamble parses too, so prefer the object
+                # that actually looks like a note.
+                if _EXPECTED_KEYS & set(data):
+                    return data
+                parsed.append(data)
+            break
+
+    if parsed:
+        return parsed[0]
+
+    logger.error("JSON 解析失败（%s）。原始回复前 %d 字：\n%s",
+                 last_error, RAW_LOG_CHARS, text[:RAW_LOG_CHARS])
+    raise GenerationError(f"返回的 JSON 无法解析：{last_error}")
 
 
 def _clean_tag(tag: str) -> str:
@@ -246,19 +393,44 @@ def _normalize(data: dict, domain: str) -> Note:
 
 
 async def _one_call(domain: str, avoid: list[str]) -> Note:
+    global _json_mode_supported
+
     if client is None:
         raise GenerationError("OPENROUTER_API_KEY 没有设置")
-    response = await client.chat.completions.create(
-        model=XHS_MODEL,
-        messages=[
+
+    kwargs = {
+        "model": XHS_MODEL,
+        "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": _build_user_prompt(domain, avoid)},
         ],
-        temperature=1.0,
-    )
+        "temperature": 1.0,
+    }
+
+    if _json_mode_supported:
+        try:
+            response = await client.chat.completions.create(
+                response_format={"type": "json_object"}, **kwargs
+            )
+        except BadRequestError:
+            # Plenty of free OpenRouter models don't implement JSON mode.
+            logger.warning(
+                "%s 不支持 response_format=json_object，之后都改用纯提示词约束", XHS_MODEL,
+                exc_info=True,
+            )
+            _json_mode_supported = False
+            response = await client.chat.completions.create(**kwargs)
+    else:
+        response = await client.chat.completions.create(**kwargs)
+
     if not response.choices:
         raise GenerationError("模型返回了空的 choices")
-    return _normalize(_extract_json(response.choices[0].message.content or ""), domain)
+
+    choice = response.choices[0]
+    content = choice.message.content or ""
+    if not content.strip():
+        logger.error("模型返回空内容，finish_reason=%s", getattr(choice, "finish_reason", "?"))
+    return _normalize(_extract_json(content), domain)
 
 
 async def generate_note(domain: str | None = None, state: dict | None = None) -> Note:

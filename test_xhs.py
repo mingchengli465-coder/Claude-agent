@@ -30,6 +30,75 @@ for bad in ("完全不是 JSON", "```\nnot json\n```", "{broken"):
         pass
 print("PASS malformed replies raise GenerationError")
 
+# --- the parser must survive how small models actually fail ----------------
+GOOD = {"topic": "t", "title": "标题", "body": "第一段\n\n第二段",
+        "tags": ["a", "b"], "cover": {"main": ["一", "二"], "question": "q?",
+                                      "small": ["s1", "s2", "s3"]}}
+raw = json.dumps(GOOD, ensure_ascii=False)
+
+cases = {
+    "bare": raw,
+    "fenced": f"```json\n{raw}\n```",
+    "fenced, no language tag": f"```\n{raw}\n```",
+    "unterminated fence": f"```json\n{raw}",
+    "preamble": f"好的，这是你要的笔记：\n\n{raw}",
+    "postamble with a brace": f"{raw}\n\n希望有帮助！如果要改格式 {{ 告诉我 }}",
+    "both sides": f"当然可以！\n```json\n{raw}\n```\n还需要我调整吗？",
+    "trailing comma in object": raw.replace('"cover":', '"extra": 1, "cover":').replace("}}", "},}"),
+    "literal newlines in body": raw.replace("第一段\\n\\n第二段", "第一段\n\n第二段"),
+}
+for label, payload in cases.items():
+    try:
+        got = xhs._extract_json(payload)
+    except xhs.GenerationError as exc:
+        raise AssertionError(f"{label!r} should have parsed, got {exc}") from exc
+    assert got["title"] == "标题", f"{label}: {got}"
+    assert got["body"].startswith("第一段"), f"{label}: {got['body'][:20]!r}"
+print(f"PASS parser recovers from {len(cases)} real-world malformations:")
+for label in cases:
+    print(f"       · {label}")
+
+# a brace inside prose must not be mistaken for the object
+tricky = f"这里有个 {{ 花括号\n\n{raw}"
+assert xhs._extract_json(tricky)["title"] == "标题", "must find the real object"
+print("PASS a stray brace in the preamble doesn't derail extraction")
+
+# --- genuinely unparseable input still fails, and logs the raw text --------
+import logging
+class Capture(logging.Handler):
+    def __init__(self): super().__init__(); self.msgs = []
+    def emit(self, r): self.msgs.append(r.getMessage())
+
+cap = Capture()
+xhs.logger.addHandler(cap)
+xhs.logger.setLevel(logging.ERROR)
+for label, bad in {
+    "empty": "",
+    "whitespace only": "   \n  ",
+    "pure prose": "抱歉，我不能帮你写这个内容。",
+    "broken json": "{\"title\": \"x\", \"body\": }",
+}.items():
+    try:
+        xhs._extract_json(bad)
+        raise AssertionError(f"{label!r} should have been rejected")
+    except xhs.GenerationError:
+        pass
+xhs.logger.removeHandler(cap)
+assert len(cap.msgs) >= 4, cap.msgs
+assert any("抱歉，我不能帮你写这个内容" in m for m in cap.msgs), "raw reply must reach the log"
+assert any("空内容" in m for m in cap.msgs), "an empty reply must say so"
+print("PASS unparseable input is rejected AND the raw reply is logged for debugging")
+
+# the log excerpt is capped
+long_junk = "不是 JSON " * 500
+cap2 = Capture(); xhs.logger.addHandler(cap2)
+try: xhs._extract_json(long_junk)
+except xhs.GenerationError: pass
+xhs.logger.removeHandler(cap2)
+logged = [m for m in cap2.msgs if "不是 JSON" in m]
+assert logged and len(logged[0]) < len(long_junk), "the log excerpt must be truncated"
+print(f"PASS the logged excerpt is capped at {xhs.RAW_LOG_CHARS} chars, not the whole reply")
+
 # --- normalising ------------------------------------------------------------
 n = xhs._normalize({
     "topic": "话题", "title": "这个标题故意写得超过二十个字用来测试截断行为",
@@ -126,4 +195,64 @@ assert a != b, "换封面 must produce a visibly different layout"
 print("PASS the 换封面 variants render differently")
 
 xhs.render_cover(normal, 0).__len__()  # cached fonts stay usable
+
+
+# --- response_format=json_object with a fallback for models that reject it ---
+import asyncio, types
+import openai
+
+calls = []
+
+class FakeCompletions:
+    def __init__(self, reject_json_mode): self.reject = reject_json_mode
+    async def create(self, **kw):
+        calls.append("json_object" if "response_format" in kw else "plain")
+        if self.reject and "response_format" in kw:
+            raise openai.BadRequestError(
+                "response_format is not supported",
+                response=types.SimpleNamespace(status_code=400, headers={},
+                                               request=None, text=""),
+                body=None,
+            )
+        payload = json.dumps(GOOD, ensure_ascii=False)
+        msg = types.SimpleNamespace(content=payload)
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=msg, finish_reason="stop")]
+        )
+
+def fake_client(reject):
+    return types.SimpleNamespace(chat=types.SimpleNamespace(completions=FakeCompletions(reject)))
+
+# A model that supports it: one call, with response_format.
+calls.clear(); xhs.client = fake_client(reject=False); xhs._json_mode_supported = True
+note = asyncio.run(xhs._one_call("消费观", []))
+assert calls == ["json_object"], calls
+assert note.title == "标题"
+print("PASS json_object is sent when the model accepts it")
+
+# A model that rejects it: falls back within the same attempt, then remembers.
+calls.clear(); xhs.client = fake_client(reject=True); xhs._json_mode_supported = True
+note = asyncio.run(xhs._one_call("消费观", []))
+assert calls == ["json_object", "plain"], calls
+assert note.title == "标题", "the fallback call must still produce a note"
+assert xhs._json_mode_supported is False, "the rejection must be remembered"
+calls.clear()
+asyncio.run(xhs._one_call("消费观", []))
+assert calls == ["plain"], f"later calls must skip json_object: {calls}"
+print("PASS a model rejecting json_object falls back in-place and isn't retried with it")
+
+# Empty content is reported clearly rather than as "没有返回 JSON".
+class EmptyCompletions:
+    async def create(self, **kw):
+        msg = types.SimpleNamespace(content="")
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=msg, finish_reason="length")])
+xhs.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=EmptyCompletions()))
+try:
+    asyncio.run(xhs._one_call("消费观", []))
+    raise AssertionError("empty content should raise")
+except xhs.GenerationError as exc:
+    assert "空内容" in str(exc), exc
+print("PASS an empty reply says so instead of 模型没有返回 JSON")
+
 print("\nALL XHS TESTS PASSED")

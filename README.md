@@ -180,11 +180,35 @@ box and re-wraps character by character if it still doesn't, keeping punctuation
 off the start of a line. The remaining height is shared out as spacing so the
 composition fills the frame instead of pooling at the top.
 
+## Surviving small models
+
+Free OpenRouter models are loose about output format, so the reply is not
+trusted to be clean JSON:
+
+- The request asks for `response_format: json_object`. Many free models reject
+  that parameter — the first rejection falls back to a plain request inside the
+  same attempt and is remembered, so later calls skip it. Set
+  `XHS_JSON_MODE=false` to never send it.
+- The prompt says JSON-only in both the system and user message, and carries a
+  complete worked example (itself valid JSON, and the right length) to imitate.
+- Parsing strips ``` fences — including one the model never closed — then scans
+  for balanced `{...}` spans and takes the first that parses and looks like a
+  note. Scanning every candidate rather than the first brace matters when the
+  model writes something like `这里有个 { 花括号` before the real object.
+- Two common malformations are repaired before giving up: trailing commas, and
+  real line breaks inside a string where `\n` was meant — the usual cause of
+  "Invalid control character" on a multi-paragraph 正文.
+
 ## Failure handling
 
 A failed generation — a transport error, or a reply that isn't usable JSON — is
 retried once. If the second attempt also fails, the error is sent to
 `ADMIN_CHAT_ID` rather than disappearing into the log.
+
+**When parsing fails, the first 300 characters of the raw reply go to the log**
+(`RAW_LOG_CHARS`). An empty reply is reported as 模型返回了空内容 rather than
+模型没有返回 JSON, since the two have different causes — the former usually means
+a free-model rate limit.
 
 ## Configuration
 
@@ -198,6 +222,7 @@ retried once. If the second attempt also fails, the error is sent to
 | `XHS_STATE_FILE`      | no       | `xhs_state.json`     | Domain rotation and topic history                    |
 | `XHS_AVOID_DAYS`      | no       | `7`                  | Don't reuse a topic from the last N days             |
 | `XHS_FONT_PATH`       | no       | `fonts/NotoSansSC-VF.ttf` | Override the bundled cover font                 |
+| `XHS_JSON_MODE`       | no       | `true`               | Send `response_format: json_object`; auto-disables if the model rejects it |
 
 \* Required for this feature only. The chat bot works without it.
 
