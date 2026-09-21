@@ -5,6 +5,7 @@ Two bots live in this repo:
 | Bot | File | Talks to | Model |
 | --- | ---- | -------- | ----- |
 | Telegram chatbot | `bot.py` | Telegram DMs and groups | any [OpenRouter](https://openrouter.ai) model |
+| 小红书 note generator | `xhs.py` (via `bot.py`) | the admin's Telegram chat | any OpenRouter model |
 | X (Twitter) bot  | `x_bot.py` | mentions on X | [Claude](https://docs.claude.com) |
 
 They share a `requirements.txt` and a `.env`, but run as separate processes —
@@ -29,10 +30,11 @@ A Telegram bot that lets you chat with an AI model through
 
 ## Commands
 
-| Command  | Description                    |
-| -------- | ------------------------------ |
-| `/start` | Show the welcome message       |
-| `/reset` | Clear this chat's history      |
+| Command  | Description                              |
+| -------- | ---------------------------------------- |
+| `/start` | Show the welcome message                 |
+| `/reset` | Clear this chat's history                |
+| `/xhs`   | Generate a 小红书 note (admin only)        |
 
 Any other text message is sent to the model.
 
@@ -113,6 +115,102 @@ allows a single polling client per bot.
 - Conversation history is kept in memory, so it is cleared on restart.
 - Free OpenRouter models are rate limited; the bot reports this rather than
   crashing.
+
+---
+
+# 小红书 Note Generator
+
+`bot.py` can also write 小红书 (Xiaohongshu) notes: one opinionated, argument-
+starting post per day, delivered to your Telegram chat ready to copy out. The
+generation lives in `xhs.py`; `bot.py` only wires it to Telegram.
+
+## How it runs
+
+- **Every day at 09:00 Asia/Taipei**, via python-telegram-bot's `JobQueue`
+- **`/xhs`** generates one on demand
+
+Both are restricted to `ADMIN_CHAT_ID`. Everyone else can still chat with the
+bot as usual; `/xhs` from another chat is politely refused before any model
+call is made.
+
+## What arrives
+
+Four separate messages, so each can be long-pressed and copied on its own:
+
+1. the cover image (1080×1440 PNG)
+2. the title
+3. the body
+4. the hashtags — this one carries two buttons:
+   - **🔁 重写文案** — generate a fresh note
+   - **🎨 换封面** — re-render the cover in a different layout
+
+## Topic selection
+
+Six domains rotate one per day, so no single area takes over the account:
+
+> 搞钱与职场 · 消费观 · 感情与生活选择 · AI 与未来 · 年轻人现状 · 反常识观点
+
+Topics written in the last `XHS_AVOID_DAYS` days (7 by default) are passed back
+to the model as things not to repeat — including "the same thing said
+differently". The history lives in `xhs_state.json`.
+
+## Content rules
+
+Four rules are written into every request, and the model is told that breaking
+them means the note is a failure:
+
+- no attacks on any group — gender, region, ethnicity, occupation, age, and so on
+- no invented news, statistics, study findings or quotes from real people
+  (personal anecdotes are fine; anything dressed up as fact is not)
+- no medical advice, no investment advice
+- nothing political
+
+## The cover
+
+Rendered locally with Pillow at 1080×1440: yellow `#FFE14D` ground, black
+headline, the argumentative question in a red `#E8322E` rounded box, and a
+black 「真实经历」 tag in the top-left corner.
+
+The font (**Noto Sans SC**) is committed to `fonts/` rather than taken from the
+system — a server without a CJK font renders every character as tofu. One
+variable file supplies every weight the cover uses.
+
+Long text never overflows: each block shrinks to the largest size that fits its
+box and re-wraps character by character if it still doesn't, keeping punctuation
+off the start of a line. The remaining height is shared out as spacing so the
+composition fills the frame instead of pooling at the top.
+
+## Failure handling
+
+A failed generation — a transport error, or a reply that isn't usable JSON — is
+retried once. If the second attempt also fails, the error is sent to
+`ADMIN_CHAT_ID` rather than disappearing into the log.
+
+## Configuration
+
+| Variable              | Required | Default              | Description                                          |
+| --------------------- | -------- | -------------------- | ---------------------------------------------------- |
+| `ADMIN_CHAT_ID`       | yes*     | —                    | The only chat that may use `/xhs` and the buttons, and where the daily note goes. Unset disables the feature |
+| `XHS_DAILY_TIME`      | no       | `09:00`              | Daily generation time                                |
+| `XHS_TIMEZONE`        | no       | `Asia/Taipei`        | Timezone for that time                               |
+| `XHS_MODEL`           | no       | falls back to `MODEL`| Model used for notes                                 |
+| `XHS_REQUEST_TIMEOUT` | no       | `120`                | Seconds to wait for a note                           |
+| `XHS_STATE_FILE`      | no       | `xhs_state.json`     | Domain rotation and topic history                    |
+| `XHS_AVOID_DAYS`      | no       | `7`                  | Don't reuse a topic from the last N days             |
+| `XHS_FONT_PATH`       | no       | `fonts/NotoSansSC-VF.ttf` | Override the bundled cover font                 |
+
+\* Required for this feature only. The chat bot works without it.
+
+Find your chat id by messaging [@userinfobot](https://t.me/userinfobot).
+
+## Testing without credentials
+
+```bash
+python test_xhs.py          # JSON parsing, topic rotation, cover rendering
+python test_bot_wiring.py   # admin gate, the daily job, the four-message send
+```
+
+Neither needs a token, an API key, or a network connection.
 
 ---
 

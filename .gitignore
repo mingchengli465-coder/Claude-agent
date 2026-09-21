@@ -5,3 +5,5 @@ __pycache__/
 venv/
 
 x_bot_state.json
+
+xhs_state.json
