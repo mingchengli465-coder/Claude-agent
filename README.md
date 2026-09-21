@@ -1,3 +1,18 @@
+# AI Chatbots
+
+Two bots live in this repo:
+
+| Bot | File | Talks to | Model |
+| --- | ---- | -------- | ----- |
+| Telegram chatbot | `bot.py` | Telegram DMs and groups | any [OpenRouter](https://openrouter.ai) model |
+| 小红书 note generator | `xhs.py` (via `bot.py`) | the admin's Telegram chat | any OpenRouter model |
+| X (Twitter) bot  | `x_bot.py` | mentions on X | [Claude](https://docs.claude.com) |
+
+They share a `requirements.txt` and a `.env`, but run as separate processes —
+set up only the one you need.
+
+---
+
 # Telegram AI Chatbot
 
 A Telegram bot that lets you chat with an AI model through
@@ -15,10 +30,11 @@ A Telegram bot that lets you chat with an AI model through
 
 ## Commands
 
-| Command  | Description                    |
-| -------- | ------------------------------ |
-| `/start` | Show the welcome message       |
-| `/reset` | Clear this chat's history      |
+| Command  | Description                              |
+| -------- | ---------------------------------------- |
+| `/start` | Show the welcome message                 |
+| `/reset` | Clear this chat's history                |
+| `/xhs`   | Generate a 小红书 note (admin only)        |
 
 Any other text message is sent to the model.
 
@@ -99,3 +115,306 @@ allows a single polling client per bot.
 - Conversation history is kept in memory, so it is cleared on restart.
 - Free OpenRouter models are rate limited; the bot reports this rather than
   crashing.
+
+---
+
+# 小红书 Note Generator
+
+`bot.py` can also write 小红书 (Xiaohongshu) notes: one opinionated, argument-
+starting post per day, delivered to your Telegram chat ready to copy out. The
+generation lives in `xhs.py`; `bot.py` only wires it to Telegram.
+
+## How it runs
+
+- **Every day at 09:00 Asia/Taipei**, via python-telegram-bot's `JobQueue`
+- **`/xhs`** generates one on demand
+
+Both are restricted to `ADMIN_CHAT_ID`. Everyone else can still chat with the
+bot as usual; `/xhs` from another chat is politely refused before any model
+call is made.
+
+## What arrives
+
+Four separate messages, so each can be long-pressed and copied on its own:
+
+1. the cover image (1080×1440 PNG)
+2. the title
+3. the body
+4. the hashtags — this one carries two buttons:
+   - **🔁 重写文案** — generate a fresh note
+   - **🎨 换封面** — re-render the cover in a different layout
+
+## Topic selection
+
+Six domains rotate one per day, so no single area takes over the account:
+
+> 搞钱与职场 · 消费观 · 感情与生活选择 · AI 与未来 · 年轻人现状 · 反常识观点
+
+Topics written in the last `XHS_AVOID_DAYS` days (7 by default) are passed back
+to the model as things not to repeat — including "the same thing said
+differently". The history lives in `xhs_state.json`.
+
+## Content rules
+
+Four rules are written into every request, and the model is told that breaking
+them means the note is a failure:
+
+- no attacks on any group — gender, region, ethnicity, occupation, age, and so on
+- no invented news, statistics, study findings or quotes from real people
+  (personal anecdotes are fine; anything dressed up as fact is not)
+- no medical advice, no investment advice
+- nothing political
+
+## The cover
+
+Rendered locally with Pillow at 1080×1440: yellow `#FFE14D` ground, black
+headline, the argumentative question in a red `#E8322E` rounded box, and a
+black 「真实经历」 tag in the top-left corner.
+
+The font (**Noto Sans SC**) is committed to `fonts/` rather than taken from the
+system — a server without a CJK font renders every character as tofu. One
+variable file supplies every weight the cover uses.
+
+Long text never overflows: each block shrinks to the largest size that fits its
+box and re-wraps character by character if it still doesn't, keeping punctuation
+off the start of a line. The remaining height is shared out as spacing so the
+composition fills the frame instead of pooling at the top.
+
+## Failure handling
+
+A failed generation — a transport error, or a reply that isn't usable JSON — is
+retried once. If the second attempt also fails, the error is sent to
+`ADMIN_CHAT_ID` rather than disappearing into the log.
+
+## Configuration
+
+| Variable              | Required | Default              | Description                                          |
+| --------------------- | -------- | -------------------- | ---------------------------------------------------- |
+| `ADMIN_CHAT_ID`       | yes*     | —                    | The only chat that may use `/xhs` and the buttons, and where the daily note goes. Unset disables the feature |
+| `XHS_DAILY_TIME`      | no       | `09:00`              | Daily generation time                                |
+| `XHS_TIMEZONE`        | no       | `Asia/Taipei`        | Timezone for that time                               |
+| `XHS_MODEL`           | no       | falls back to `MODEL`| Model used for notes                                 |
+| `XHS_REQUEST_TIMEOUT` | no       | `120`                | Seconds to wait for a note                           |
+| `XHS_STATE_FILE`      | no       | `xhs_state.json`     | Domain rotation and topic history                    |
+| `XHS_AVOID_DAYS`      | no       | `7`                  | Don't reuse a topic from the last N days             |
+| `XHS_FONT_PATH`       | no       | `fonts/NotoSansSC-VF.ttf` | Override the bundled cover font                 |
+
+\* Required for this feature only. The chat bot works without it.
+
+Find your chat id by messaging [@userinfobot](https://t.me/userinfobot).
+
+## Testing without credentials
+
+```bash
+python test_xhs.py          # JSON parsing, topic rotation, cover rendering
+python test_bot_wiring.py   # admin gate, the daily job, the four-message send
+```
+
+Neither needs a token, an API key, or a network connection.
+
+---
+
+# X (Twitter) Bot powered by Claude
+
+`x_bot.py` puts Claude behind your X account: it polls your mentions, reads the
+thread each mention sits in, asks Claude for a reply, and posts it back.
+
+## Features
+
+- Replies to mentions with [Claude](https://docs.claude.com), in the language the
+  person used
+- Pulls the parent tweets into context, so replies follow the thread
+- Replies longer than a tweet are posted as a self-replying thread
+- Remembers `since_id` and the tweets it already answered across restarts, so a
+  restart never double-posts
+- Never answers itself or retweets; optional handle allowlist and a per-cycle cap
+- `DRY_RUN=true` generates replies and logs them without posting
+
+## Commands
+
+```bash
+python x_bot.py doctor            # check every credential and permission
+python x_bot.py doctor --write    # same, plus post and delete a test tweet
+python x_bot.py whoami            # print the authenticated account
+python x_bot.py ask "..."         # ask Claude, print the answer, post nothing
+python x_bot.py post "..."        # compose a standalone tweet and post it
+python x_bot.py autopost          # post once from the topic rotation, then exit
+python x_bot.py schedule          # post automatically, every day, on a timetable
+python x_bot.py run               # poll mentions and reply
+python x_bot.py both              # do both, in one process
+```
+
+`doctor` is the one to start with: it tests each credential separately and
+prints the exact fix and link for whatever is broken.
+
+## Setup
+
+1. **Get an Anthropic API key** at
+   [console.anthropic.com](https://console.anthropic.com/settings/keys).
+2. **Create an X app** at [developer.x.com](https://developer.x.com): make a
+   Project and an App, set **User authentication settings** to **Read and
+   write**, then from **Keys and tokens** copy the API key/secret and generate an
+   Access token/secret. Regenerate the access token if you changed the
+   permissions after creating it — otherwise it stays read-only.
+3. **Install dependencies** and **configure the environment** as in the Telegram
+   setup above; `.env.example` covers both bots.
+4. **Check the credentials, then start it:**
+
+   ```bash
+   python x_bot.py doctor --write     # fix anything it reports, then re-run
+   DRY_RUN=true python x_bot.py run   # watch what it would post
+   python x_bot.py run                # for real
+   ```
+
+   `.env` is loaded automatically — no `export` step needed.
+
+On its first run the bot records the newest existing mention and starts from
+there, so it won't answer a backlog. Set `REPLY_TO_BACKLOG=true` if you want it
+to.
+
+## Testing without credentials
+
+`test_x_bot.py` drives the mention loop against a fake X API and a fake Claude,
+covering the backlog skip, the per-cycle cap, thread ordering, deduplication,
+long-reply threading and refusal handling:
+
+```bash
+python test_x_bot.py        # the mentions loop
+python test_x_schedule.py   # the posting schedule
+python test_x_both.py       # the combined loop
+```
+
+It needs no keys and makes no network calls.
+
+
+## Running both jobs together
+
+`both` does the scheduled posting *and* answers mentions from a single
+process, so you pay for one instance instead of two. It sleeps until whichever
+job is due next, and a failure in one never stops the other.
+
+```bash
+DRY_RUN=true python x_bot.py both
+```
+
+This is the `xbot` process type in the `Procfile`. Run `schedule` or `run`
+alone if you only want one half.
+
+Note the cost asymmetry: the posting half is cheap (one post per slot), while
+the mentions half reads posts, which is the metered side of the X API. If the
+bill matters more than the coverage, `MAX_THREAD_CONTEXT` and
+`POLL_INTERVAL_SECONDS` are the two dials — the latter is floored at 60s,
+since polling faster only burns quota.
+
+## Posting on a schedule
+
+`schedule` is the cheap half of this bot: it only writes, so it never touches
+the expensive read quota. It walks `topics.txt` in order — every theme gets
+used before any repeats — and shows Claude the last dozen posts so it doesn't
+say the same thing twice.
+
+```bash
+cp topics.txt my-topics.txt   # then edit it: one theme per line
+POST_TIMES=08:30,19:00 POST_TIMEZONE=Asia/Shanghai DRY_RUN=true python x_bot.py schedule
+```
+
+Keep each theme narrow — *"a mistake beginners make in X"* produces better
+posts than *"productivity"*.
+
+Two ways to run it:
+
+- **`schedule`** stays running and posts at each time in `POST_TIMES`. This is
+  the `xpost` process type in the `Procfile`.
+- **`autopost`** posts once and exits, for platforms with their own cron. Add
+  `--topic "..."` to post something specific without disturbing the rotation.
+
+It remembers the last slot it posted, so a restart inside the same minute won't
+double-post. A slot where Claude declines is skipped rather than retried.
+
+## What X API access costs
+
+X replaced its flat tiers with pay-per-use pricing for new developers in
+February 2026, and closed the old free tier to new signups. At the time of
+writing that means roughly **$0.005 per post read** and **$0.015 per post
+created** — but a post containing a **link costs about $0.20**, which is why
+`AVOID_LINKS` defaults to `true`. Legacy Basic and Pro subscriptions continue
+only for accounts that already had them.
+
+Prices and tier names move around, and these figures come from secondary
+sources rather than X's own docs, so **treat them as a rough guide and confirm
+in the portal**: [developer.x.com/en/portal/products](https://developer.x.com/en/portal/products)
+
+What this means in practice:
+
+- Idle polling is nearly free — a cycle that finds no mentions reads no posts.
+- Each answered mention costs roughly one read per tweet of context plus one
+  post. `MAX_THREAD_CONTEXT` is therefore a direct cost dial.
+- `POLL_INTERVAL_SECONDS` defaults to 900 s to keep request volume modest.
+
+Rather than guess what your account can do, run `python x_bot.py doctor` — it
+calls the mentions endpoint and tells you whether your plan allows it.
+
+## Configuration
+
+| Variable                   | Required | Default        | Description                                                  |
+| -------------------------- | -------- | -------------- | ------------------------------------------------------------ |
+| `ANTHROPIC_API_KEY`        | yes      | —              | API key from the Anthropic Console                            |
+| `X_API_KEY`                | yes      | —              | X app API key                                                 |
+| `X_API_SECRET`             | yes      | —              | X app API secret                                              |
+| `X_ACCESS_TOKEN`           | yes      | —              | Access token for your account (read **and write**)            |
+| `X_ACCESS_TOKEN_SECRET`    | yes      | —              | Access token secret                                           |
+| `CLAUDE_MODEL`             | no       | `claude-opus-5`| Model id                                                      |
+| `CLAUDE_EFFORT`            | no       | `low`          | `low`…`max` — thinking depth and token spend                  |
+| `CLAUDE_MAX_TOKENS`        | no       | `4096`         | Response cap (thinking counts toward it)                      |
+| `ENABLE_REFUSAL_FALLBACK`  | no       | `true`         | Re-run a declined request on a fallback model, server-side    |
+| `X_SYSTEM_PROMPT`          | no       | a short persona| The account's voice (separate from the Telegram `SYSTEM_PROMPT`) |
+| `POLL_INTERVAL_SECONDS`    | no       | `900`          | Seconds between mention checks                                |
+| `MAX_REPLIES_PER_CYCLE`    | no       | `5`            | Most mentions answered per cycle                              |
+| `MAX_THREAD_CONTEXT`       | no       | `4`            | Ancestor tweets used as context                               |
+| `TWEET_CHAR_LIMIT`         | no       | `280`          | Per-tweet character budget                                    |
+| `MAX_TWEETS_PER_REPLY`     | no       | `3`            | Tweets one reply may be split across                          |
+| `AVOID_LINKS`              | no       | `true`         | Ask Claude for no URLs — posts with links cost far more       |
+| `TOPICS_FILE`              | no       | `topics.txt`   | Themes for scheduled posting, one per line                    |
+| `POST_TIMES`               | no       | `09:00`        | Daily posting times, e.g. `08:30,19:00`                       |
+| `POST_TIMEZONE`            | no       | `UTC`          | Timezone those times are in, e.g. `Asia/Shanghai`             |
+| `POST_HISTORY_SIZE`        | no       | `12`           | Recent posts shown to Claude to avoid repetition              |
+| `POST_JITTER_MINUTES`      | no       | `0`            | Random delay after the slot, so posting looks less robotic    |
+| `ALLOWED_USERS`            | no       | everyone       | Comma-separated handles to answer, without `@`                |
+| `STATE_FILE`               | no       | `x_bot_state.json` | Where `since_id` and answered ids are stored              |
+| `REPLY_TO_BACKLOG`         | no       | `false`        | Answer mentions from before the first run                     |
+| `DRY_RUN`                  | no       | `false`        | Generate replies but post nothing                             |
+| `LOG_LEVEL`                | no       | `INFO`         | `DEBUG`, `INFO`, `WARNING`, or `ERROR`                        |
+
+## How it works
+
+- Claude is called with adaptive thinking and a configurable `effort`. Effort is
+  the cost lever here — `low` suits tweet-length replies; raise it if the account
+  answers hard questions.
+- Tweets are handed to Claude as untrusted data, and the prompt tells it not to
+  follow instructions found in them. That blunts prompt injection from a stranger
+  replying to your account, but does not eliminate it — keep `ALLOWED_USERS` set
+  while you are testing.
+- If Claude declines a request (`stop_reason: "refusal"`), the mention is marked
+  handled and nothing is posted. With `ENABLE_REFUSAL_FALLBACK` on, Anthropic
+  first retries the request on a fallback model server-side; if your account
+  can't use that beta, the bot logs it once and carries on without it.
+- The immediate parent of a mention comes free in the mentions payload's
+  `includes`; deeper ancestors cost one API call each, which is why
+  `MAX_THREAD_CONTEXT` is small by default.
+- `TWEET_CHAR_LIMIT` is measured with plain `len()`. X weights characters
+  differently — a URL always counts as 23 and CJK counts double — so lower the
+  limit for headroom if the account posts a lot of links or CJK text.
+
+## Deploying
+
+The `Procfile` declares the X bot as its own process type:
+
+```
+xbot: python x_bot.py run
+```
+
+Scale `xbot` to **one** instance — two would answer the same mention twice. Note
+that `STATE_FILE` lives on local disk, which is ephemeral on Heroku-style
+platforms: a restart there resets `since_id`, and the bot then starts from the
+newest mention rather than replaying old ones. Mount a volume if you need the
+state to survive.

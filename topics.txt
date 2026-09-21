@@ -1,0 +1,14 @@
+# One theme per line. The bot walks this list in order, so every theme gets used
+# before any repeats. Lines starting with # are ignored.
+#
+# Replace these with your own themes — they are only a starting point.
+# Keep each one narrow: "a mistake beginners make" beats "productivity".
+
+a small mistake people make in this field, and the fix
+something that took you a long time to learn but sounds obvious now
+a short opinion most people in this space would disagree with
+one thing you changed recently and what happened
+a question worth asking before starting a new project
+a tool or habit that quietly saves you time
+something you were wrong about a year ago
+a plain explanation of a term people use without defining

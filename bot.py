@@ -5,9 +5,11 @@ each chat, and relays messages between Telegram and OpenRouter.
 """
 
 import asyncio
+import datetime as dt
 import logging
 import os
 from collections import defaultdict, deque
+from zoneinfo import ZoneInfo
 
 from openai import (
     APIConnectionError,
@@ -16,16 +18,19 @@ from openai import (
     AsyncOpenAI,
     RateLimitError,
 )
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.error import TelegramError
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
 )
+
+import xhs
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -44,6 +49,11 @@ SYSTEM_PROMPT = os.environ.get(
     "Keep answers clear and concise, and reply in the user's language.",
 )
 REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
+
+# Only this chat may use /xhs and the note buttons; everyone else just chats.
+ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "").strip()
+XHS_DAILY_TIME = os.environ.get("XHS_DAILY_TIME", "09:00")
+XHS_TIMEZONE = os.environ.get("XHS_TIMEZONE", "Asia/Taipei")
 
 # One "round" is a user message plus the assistant's reply.
 MAX_HISTORY_ROUNDS = int(os.environ.get("MAX_HISTORY_ROUNDS", "20"))
@@ -190,6 +200,121 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Failed to deliver reply to chat %s", chat_id)
 
 
+# --------------------------------------------------------------------------- #
+# 小红书 note generation
+# --------------------------------------------------------------------------- #
+
+XHS_DENIED_TEXT = "这个功能没有对你开放，直接发消息就能聊天 🙂"
+XHS_WORKING_TEXT = "正在生成小红书笔记，大概要十几秒…"
+XHS_FAILED_TEXT = "😵 小红书笔记生成失败了（已经重试过一次）。\n\n{error}"
+
+# chat_id -> the note last sent there, so the buttons have something to act on.
+last_notes: dict[int, xhs.Note] = {}
+# chat_id -> which cover layout that chat is currently on.
+cover_variants: dict[int, int] = defaultdict(int)
+
+
+def is_admin(chat_id: int | str | None) -> bool:
+    """True only for ADMIN_CHAT_ID. With it unset, nobody is admin."""
+    return bool(ADMIN_CHAT_ID) and str(chat_id) == ADMIN_CHAT_ID
+
+
+def note_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[
+            InlineKeyboardButton("🔁 重写文案", callback_data="xhs:rewrite"),
+            InlineKeyboardButton("🎨 换封面", callback_data="xhs:cover"),
+        ]]
+    )
+
+
+async def send_note(context: ContextTypes.DEFAULT_TYPE, chat_id: int, note: xhs.Note) -> None:
+    """Send the note as four separate messages, so each is easy to long-press."""
+    variant = cover_variants[chat_id]
+    cover = await xhs.render_cover_async(note, variant)
+
+    await context.bot.send_photo(chat_id=chat_id, photo=cover)
+    await context.bot.send_message(chat_id=chat_id, text=note.title)
+    for chunk in split_message(note.body):
+        await context.bot.send_message(chat_id=chat_id, text=chunk)
+    await context.bot.send_message(
+        chat_id=chat_id, text=note.tags_text(), reply_markup=note_keyboard()
+    )
+
+    last_notes[chat_id] = note
+
+
+async def produce_and_send(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
+    """Generate a fresh note and deliver it, reporting failures to the admin."""
+    try:
+        note = await xhs.generate_note()
+    except Exception as exc:  # noqa: BLE001 - already retried inside generate_note
+        logger.exception("小红书笔记生成失败")
+        await context.bot.send_message(chat_id=chat_id, text=XHS_FAILED_TEXT.format(error=exc))
+        return
+
+    logger.info("生成了小红书笔记：[%s] %s", note.domain, note.title)
+    await send_note(context, chat_id, note)
+
+
+async def xhs_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/xhs - generate a note on demand."""
+    chat_id = update.effective_chat.id
+    if not is_admin(chat_id):
+        logger.info("拒绝了来自 chat %s 的 /xhs", chat_id)
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+
+    await update.effective_message.reply_text(XHS_WORKING_TEXT)
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    except TelegramError:
+        logger.debug("Could not send typing action to chat %s", chat_id, exc_info=True)
+    await produce_and_send(context, chat_id)
+
+
+async def xhs_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """The 09:00 Asia/Taipei run."""
+    chat_id = int(ADMIN_CHAT_ID)
+    logger.info("每日小红书任务触发，发送到 chat %s", chat_id)
+    await produce_and_send(context, chat_id)
+
+
+async def xhs_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 重写文案 / 换封面."""
+    query = update.callback_query
+    chat_id = query.message.chat_id
+
+    if not is_admin(chat_id):
+        await query.answer(XHS_DENIED_TEXT, show_alert=True)
+        return
+
+    action = (query.data or "").split(":", 1)[-1]
+
+    if action == "cover":
+        note = last_notes.get(chat_id)
+        if note is None:
+            await query.answer("这条笔记我这边已经没有记录了，重新 /xhs 一次吧", show_alert=True)
+            return
+        await query.answer("换个封面…")
+        cover_variants[chat_id] += 1
+        try:
+            cover = await xhs.render_cover_async(note, cover_variants[chat_id])
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("封面渲染失败")
+            await context.bot.send_message(chat_id=chat_id, text=f"😵 封面生成失败：{exc}")
+            return
+        await context.bot.send_photo(chat_id=chat_id, photo=cover, reply_markup=note_keyboard())
+        return
+
+    if action == "rewrite":
+        await query.answer("重写中…")
+        await produce_and_send(context, chat_id)
+        return
+
+    await query.answer()
+
+
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Catch-all so an unexpected failure never takes the bot down."""
     logger.exception("Unhandled exception while processing update", exc_info=context.error)
@@ -199,6 +324,34 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text(GENERIC_ERROR_TEXT)
         except TelegramError:
             logger.debug("Could not report the error back to the chat", exc_info=True)
+
+
+def schedule_daily_note(application: Application) -> None:
+    """Run the note job every day at XHS_DAILY_TIME in XHS_TIMEZONE."""
+    if not ADMIN_CHAT_ID:
+        logger.warning("ADMIN_CHAT_ID 没有设置，/xhs 和每日任务都不会启用")
+        return
+    if application.job_queue is None:
+        logger.error(
+            "JobQueue 不可用，每日任务无法排程。"
+            "请安装 python-telegram-bot[job-queue]（见 requirements.txt）。"
+        )
+        return
+
+    try:
+        hour, minute = (int(part) for part in XHS_DAILY_TIME.split(":"))
+        tz = ZoneInfo(XHS_TIMEZONE)
+        when = dt.time(hour=hour, minute=minute, tzinfo=tz)
+    except (ValueError, KeyError):
+        logger.error(
+            "XHS_DAILY_TIME=%r 或 XHS_TIMEZONE=%r 无法解析，每日任务跳过",
+            XHS_DAILY_TIME, XHS_TIMEZONE, exc_info=True,
+        )
+        return
+
+    application.job_queue.run_daily(xhs_daily_job, time=when, name="xhs-daily")
+    logger.info("每日小红书任务已排程：%s %s，发送到 chat %s",
+                XHS_DAILY_TIME, XHS_TIMEZONE, ADMIN_CHAT_ID)
 
 
 def main() -> None:
@@ -221,8 +374,12 @@ def main() -> None:
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("reset", reset))
+    application.add_handler(CommandHandler("xhs", xhs_command))
+    application.add_handler(CallbackQueryHandler(xhs_button, pattern=r"^xhs:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
     application.add_error_handler(on_error)
+
+    schedule_daily_note(application)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
