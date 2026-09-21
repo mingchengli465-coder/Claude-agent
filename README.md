@@ -180,6 +180,26 @@ box and re-wraps character by character if it still doesn't, keeping punctuation
 off the start of a line. The remaining height is shared out as spacing so the
 composition fills the frame instead of pooling at the top.
 
+## Reasoning models
+
+A reasoning model can spend its whole token budget thinking and return an
+**empty `content`**, which is what `inclusionai/ling-3.0-flash-vl:free` did.
+Three things address it:
+
+- `max_tokens` is 4000, so there is room for the thinking *and* a ~1000-token
+  Chinese note.
+- Every request carries OpenRouter's `reasoning: {exclude: true, effort: "low"}`,
+  which keeps the thinking short and drops it from the response.
+- If `content` still comes back empty, the JSON is looked for in the reasoning
+  trace instead — `reasoning`, `reasoning_content`, or `reasoning_details`,
+  since providers differ. Note this is a safety net: with `exclude: true` the
+  trace usually isn't returned at all, so it only helps where a provider ignores
+  the flag.
+
+If a note still fails on a reasoning model, raise `XHS_MAX_TOKENS` or set
+`XHS_REASONING_EFFORT=minimal`. `XHS_MODEL` lets you point 小红书 generation at
+a non-reasoning model while the chat bot keeps using `MODEL`.
+
 ## Surviving small models
 
 Free OpenRouter models are loose about output format, so the reply is not
@@ -219,6 +239,10 @@ a free-model rate limit.
 | `XHS_TIMEZONE`        | no       | `Asia/Taipei`        | Timezone for that time                               |
 | `XHS_MODEL`           | no       | falls back to `MODEL`| Model used for notes                                 |
 | `XHS_REQUEST_TIMEOUT` | no       | `120`                | Seconds to wait for a note                           |
+| `XHS_MAX_TOKENS`      | no       | `4000`               | Token budget; reasoning models need room to think and still write |
+| `XHS_REASONING_EFFORT`| no       | `low`                | OpenRouter reasoning effort                          |
+| `XHS_REASONING_EXCLUDE`| no      | `true`               | Keep the reasoning trace out of the response         |
+| `XHS_REASONING`       | no       | `true`               | Send the reasoning block at all; auto-disables if the model rejects it |
 | `XHS_STATE_FILE`      | no       | `xhs_state.json`     | Domain rotation and topic history                    |
 | `XHS_AVOID_DAYS`      | no       | `7`                  | Don't reuse a topic from the last N days             |
 | `XHS_FONT_PATH`       | no       | `fonts/NotoSansSC-VF.ttf` | Override the bundled cover font                 |

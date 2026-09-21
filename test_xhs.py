@@ -255,4 +255,92 @@ except xhs.GenerationError as exc:
     assert "空内容" in str(exc), exc
 print("PASS an empty reply says so instead of 模型没有返回 JSON")
 
+
+
+# --- reasoning models: budget, params, and the empty-content fallback -------
+class RecordingCompletions:
+    """Captures kwargs and returns whatever message the test wants."""
+    def __init__(self, message, reject=None):
+        self.message, self.reject, self.seen = message, reject, []
+    async def create(self, **kw):
+        self.seen.append(kw)
+        if self.reject:
+            has_json = "response_format" in kw
+            has_reason = "reasoning" in (kw.get("extra_body") or {})
+            if (self.reject == "json" and has_json) or \
+               (self.reject == "reasoning" and has_reason) or \
+               (self.reject == "both" and (has_json or has_reason)):
+                raise openai.BadRequestError(
+                    self.reject_message,
+                    response=types.SimpleNamespace(status_code=400, headers={},
+                                                   request=None, text=""),
+                    body=None,
+                )
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=self.message, finish_reason="stop")])
+
+def msg(content=None, **extra):
+    m = types.SimpleNamespace(content=content, model_extra=extra)
+    for k, v in extra.items():
+        setattr(m, k, v)
+    return m
+
+def run_call(message, reject=None, reject_message="bad request"):
+    comp = RecordingCompletions(message, reject)
+    comp.reject_message = reject_message
+    xhs.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=comp))
+    xhs._json_mode_supported = True
+    xhs._reasoning_supported = True
+    return comp, asyncio.run(xhs._one_call("消费观", []))
+
+payload = json.dumps(GOOD, ensure_ascii=False)
+
+# 1. max_tokens and the reasoning block are sent
+comp, note = run_call(msg(content=payload))
+sent = comp.seen[0]
+assert sent["max_tokens"] == 4000, sent["max_tokens"]
+assert sent["extra_body"]["reasoning"] == {"exclude": True, "effort": "low"}, sent["extra_body"]
+assert sent["response_format"] == {"type": "json_object"}
+print(f"PASS request carries max_tokens={sent['max_tokens']} and reasoning={sent['extra_body']['reasoning']}")
+
+# 2. empty content -> JSON recovered from the reasoning trace
+for label, message in {
+    "reasoning": msg(content="", reasoning=f"先想一下…\n\n{payload}"),
+    "reasoning_content": msg(content=None, reasoning_content=payload),
+    "reasoning_details": msg(content="", reasoning_details=[{"type": "t", "text": payload}]),
+}.items():
+    _, note = run_call(message)
+    assert note.title == "标题", f"{label}: {note}"
+print("PASS empty content falls back to reasoning / reasoning_content / reasoning_details")
+
+# 3. empty content AND empty reasoning -> a clear error naming finish_reason
+try:
+    run_call(msg(content="", reasoning=""))
+    raise AssertionError("should have raised")
+except xhs.GenerationError as exc:
+    assert "空内容" in str(exc) and "finish_reason" in str(exc), exc
+print("PASS empty content with no reasoning reports finish_reason, not a parse error")
+
+# 4. a model rejecting only `reasoning` keeps JSON mode
+comp, note = run_call(msg(content=payload), reject="reasoning",
+                      reject_message="unsupported parameter: reasoning")
+assert len(comp.seen) == 2, comp.seen
+assert "extra_body" not in comp.seen[1], comp.seen[1]
+assert comp.seen[1]["response_format"] == {"type": "json_object"}, "json mode must survive"
+assert xhs._reasoning_supported is False and xhs._json_mode_supported is True
+print("PASS a reasoning-only rejection drops reasoning and keeps json_object")
+
+# 5. a model rejecting only response_format keeps reasoning
+comp, note = run_call(msg(content=payload), reject="json",
+                      reject_message="response_format is not supported")
+assert "response_format" not in comp.seen[1] and "extra_body" in comp.seen[1], comp.seen[1]
+assert xhs._json_mode_supported is False and xhs._reasoning_supported is True
+print("PASS a response_format-only rejection drops json mode and keeps reasoning")
+
+# 6. an unhelpful 400 drops both rather than failing the attempt
+comp, note = run_call(msg(content=payload), reject="both", reject_message="invalid request")
+assert "response_format" not in comp.seen[1] and "extra_body" not in comp.seen[1], comp.seen[1]
+assert note.title == "标题", "the degraded call must still produce a note"
+print("PASS an ambiguous 400 drops both parameters and still returns a note")
+
 print("\nALL XHS TESTS PASSED")

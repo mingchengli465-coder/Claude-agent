@@ -24,6 +24,13 @@ OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.
 # Falls back to the chat model so a single MODEL setting configures both.
 XHS_MODEL = os.environ.get("XHS_MODEL") or os.environ.get("MODEL", "deepseek/deepseek-chat-v3.1:free")
 XHS_REQUEST_TIMEOUT = float(os.environ.get("XHS_REQUEST_TIMEOUT", "120"))
+# Generous, because a reasoning model spends part of this budget thinking and
+# the note itself still needs ~1000 tokens of Chinese.
+XHS_MAX_TOKENS = int(os.environ.get("XHS_MAX_TOKENS", "4000"))
+# OpenRouter's reasoning controls: "low" keeps the thinking short, and exclude
+# drops it from the response so the token budget goes to the note itself.
+XHS_REASONING_EFFORT = os.environ.get("XHS_REASONING_EFFORT", "low")
+XHS_REASONING_EXCLUDE = os.environ.get("XHS_REASONING_EXCLUDE", "true").lower() != "false"
 XHS_STATE_FILE = Path(os.environ.get("XHS_STATE_FILE", "xhs_state.json"))
 # Topics from the last N days are shown to the model as things to avoid.
 XHS_AVOID_DAYS = int(os.environ.get("XHS_AVOID_DAYS", "7"))
@@ -49,8 +56,9 @@ WHITE = (255, 255, 255)
 MARGIN = 76
 BADGE_TEXT = "真实经历"
 
-# Flipped off for the process once a model rejects response_format.
+# Both flip off for the process once a model rejects the parameter.
 _json_mode_supported = os.environ.get("XHS_JSON_MODE", "true").lower() != "false"
+_reasoning_supported = os.environ.get("XHS_REASONING", "true").lower() != "false"
 
 client = AsyncOpenAI(
     api_key=OPENROUTER_API_KEY,
@@ -392,8 +400,49 @@ def _normalize(data: dict, domain: str) -> Note:
     )
 
 
+def _reasoning_text(message) -> str:
+    """Pull the reasoning trace off a message, wherever the provider put it.
+
+    The OpenAI SDK has no `reasoning` field, so it arrives as an extra. Some
+    providers use `reasoning`, some `reasoning_content`, some a list of
+    `reasoning_details`.
+    """
+    extra = getattr(message, "model_extra", None) or {}
+
+    for key in ("reasoning", "reasoning_content"):
+        for value in (getattr(message, key, None), extra.get(key)):
+            if isinstance(value, str) and value.strip():
+                return value
+
+    details = getattr(message, "reasoning_details", None) or extra.get("reasoning_details")
+    if isinstance(details, list):
+        parts = []
+        for item in details:
+            text = (item.get("text") or item.get("summary")) if isinstance(item, dict) else (
+                getattr(item, "text", None) or getattr(item, "summary", None)
+            )
+            if isinstance(text, str) and text.strip():
+                parts.append(text)
+        if parts:
+            return "\n".join(parts)
+    return ""
+
+
+async def _create(kwargs: dict, use_json: bool, use_reasoning: bool):
+    """One request, with the optional parameters the model may or may not accept."""
+    params = dict(kwargs)
+    if use_json:
+        params["response_format"] = {"type": "json_object"}
+    if use_reasoning:
+        # OpenRouter-specific, so it rides along in extra_body.
+        params["extra_body"] = {
+            "reasoning": {"exclude": XHS_REASONING_EXCLUDE, "effort": XHS_REASONING_EFFORT}
+        }
+    return await client.chat.completions.create(**params)
+
+
 async def _one_call(domain: str, avoid: list[str]) -> Note:
-    global _json_mode_supported
+    global _json_mode_supported, _reasoning_supported
 
     if client is None:
         raise GenerationError("OPENROUTER_API_KEY 没有设置")
@@ -405,32 +454,61 @@ async def _one_call(domain: str, avoid: list[str]) -> Note:
             {"role": "user", "content": _build_user_prompt(domain, avoid)},
         ],
         "temperature": 1.0,
+        "max_tokens": XHS_MAX_TOKENS,
     }
 
-    if _json_mode_supported:
-        try:
-            response = await client.chat.completions.create(
-                response_format={"type": "json_object"}, **kwargs
-            )
-        except BadRequestError:
-            # Plenty of free OpenRouter models don't implement JSON mode.
-            logger.warning(
-                "%s 不支持 response_format=json_object，之后都改用纯提示词约束", XHS_MODEL,
-                exc_info=True,
-            )
+    try:
+        response = await _create(kwargs, _json_mode_supported, _reasoning_supported)
+    except BadRequestError as exc:
+        # The error rarely names the offending parameter, so read what we can
+        # and otherwise drop both rather than failing the whole attempt.
+        message = str(exc).lower()
+        dropped = []
+        if _json_mode_supported and ("response_format" in message or "json" in message):
             _json_mode_supported = False
-            response = await client.chat.completions.create(**kwargs)
-    else:
-        response = await client.chat.completions.create(**kwargs)
+            dropped.append("response_format")
+        if _reasoning_supported and "reasoning" in message:
+            _reasoning_supported = False
+            dropped.append("reasoning")
+        if not dropped:
+            if _json_mode_supported:
+                _json_mode_supported = False
+                dropped.append("response_format")
+            if _reasoning_supported:
+                _reasoning_supported = False
+                dropped.append("reasoning")
+        if not dropped:
+            raise
+        logger.warning("%s 拒绝了 %s，之后不再发送。原始错误：%s",
+                       XHS_MODEL, "、".join(dropped), exc)
+        response = await _create(kwargs, _json_mode_supported, _reasoning_supported)
 
     if not response.choices:
         raise GenerationError("模型返回了空的 choices")
 
     choice = response.choices[0]
-    content = choice.message.content or ""
-    if not content.strip():
-        logger.error("模型返回空内容，finish_reason=%s", getattr(choice, "finish_reason", "?"))
-    return _normalize(_extract_json(content), domain)
+    finish = getattr(choice, "finish_reason", "?")
+    text = (choice.message.content or "").strip()
+
+    if not text:
+        # Reasoning models can burn the whole budget thinking and return an
+        # empty content field, with the JSON left in the reasoning trace.
+        reasoning = _reasoning_text(choice.message)
+        logger.error(
+            "模型 content 为空（finish_reason=%s，reasoning 长度=%d）。"
+            "如果是推理模型，可以调高 XHS_MAX_TOKENS 或降低 XHS_REASONING_EFFORT。",
+            finish, len(reasoning),
+        )
+        if reasoning.strip():
+            logger.warning("改从 reasoning 字段里提取 JSON")
+            text = reasoning.strip()
+
+    if not text:
+        raise GenerationError(
+            f"模型返回了空内容（finish_reason={finish}，reasoning 里也没有内容）"
+        )
+
+    return _normalize(_extract_json(text), domain)
 
 
 async def generate_note(domain: str | None = None, state: dict | None = None) -> Note:
