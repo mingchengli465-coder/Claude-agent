@@ -1,7 +1,7 @@
 """X (Twitter) post generation for the Telegram bot.
 
-Generates one opinionated tweet in Traditional Chinese via OpenRouter, then
-waits for approval in Telegram before anything is published.
+Generates one opinionated tweet in Traditional Chinese via OpenRouter and
+publishes it straight to X. Telegram only gets a notification afterwards.
 
 The JSON tolerance, the hard content rules and the recent-topic window are
 imported from `xhs` rather than copied, so the two features cannot drift apart.
@@ -182,6 +182,23 @@ def save_state(state: dict) -> None:
         os.replace(tmp, X_TWEET_STATE_FILE)
     except OSError:
         logger.error("寫不了 %s", X_TWEET_STATE_FILE, exc_info=True)
+
+
+def is_paused() -> bool:
+    """Whether the scheduled posting is paused.
+
+    Kept in the state file, so it survives a restart but not a redeploy on a
+    platform with an ephemeral disk. Defaulting to "running" is the safe way
+    round: a wiped file resumes posting rather than silently staying off.
+    """
+    return bool(load_state().get("paused", False))
+
+
+def set_paused(paused: bool) -> None:
+    state = load_state()
+    state["paused"] = bool(paused)
+    save_state(state)
+    logger.info("自動發推已%s", "暫停" if paused else "恢復")
 
 
 def take_domain(state: dict) -> str:
