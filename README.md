@@ -6,6 +6,7 @@ Two bots live in this repo:
 | --- | ---- | -------- | ----- |
 | Telegram chatbot | `bot.py` | Telegram DMs and groups | any [OpenRouter](https://openrouter.ai) model |
 | 小红书 note generator | `xhs.py` (via `bot.py`) | the admin's Telegram chat | any OpenRouter model |
+| X post drafter | `tweet.py` (via `bot.py`) | drafts in Telegram, posts to X | any OpenRouter model |
 | X (Twitter) bot  | `x_bot.py` | mentions on X | [Claude](https://docs.claude.com) |
 
 They share a `requirements.txt` and a `.env`, but run as separate processes —
@@ -35,6 +36,7 @@ A Telegram bot that lets you chat with an AI model through
 | `/start` | Show the welcome message                 |
 | `/reset` | Clear this chat's history                |
 | `/xhs`   | Generate a 小红书 note (admin only)        |
+| `/tweet` | Draft an X post for approval (admin only) |
 
 Any other text message is sent to the model.
 
@@ -270,6 +272,78 @@ python test_bot_wiring.py   # admin gate, the daily job, the four-message send
 ```
 
 Neither needs a token, an API key, or a network connection.
+
+---
+
+# X Post Drafter
+
+`tweet.py` writes one opinionated post in **Traditional Chinese** and sends it
+to your Telegram chat for approval. **Nothing reaches X until you press 發布.**
+
+## How it runs
+
+- **12:00 and 20:00 Asia/Taipei** (`X_DAILY_TIMES`), via `JobQueue`
+- **`/tweet`** on demand
+
+Both are gated on `ADMIN_CHAT_ID`, same as `/xhs`.
+
+## The approval step
+
+The draft arrives with its character count and X's own weighted count, and
+three buttons:
+
+| Button | What happens |
+| ------ | ------------ |
+| ✅ 發布 | Posts to X via tweepy, then replies with the tweet's URL |
+| 🔁 重寫 | Throws the draft away and generates another |
+| ✖️ 取消 | Discards it; nothing is posted |
+
+The buttons are cleared *before* posting, so a double tap cannot publish twice.
+If posting fails, the draft is kept so 發布 can be retried.
+
+## Length
+
+The limit is **140 characters**, which is exactly X's 280-weight budget since
+CJK characters count double. Over-long drafts drop whole trailing sentences
+rather than cutting mid-word — a tweet's point is usually its last line. URLs
+are stripped (the spec forbids them, and each costs 23 characters), and
+hashtags are dropped if they would push the post over.
+
+## Shared with 小红书
+
+Reused from `xhs.py` rather than copied, so the two cannot drift apart: the
+hard content rules, the JSON tolerance (fences, braces in prose, trailing
+commas, reasoning-trace fallback), the recent-topic window, and the key-alias
+lookup. `_extract_json` takes the caller's definition of a usable object,
+because a tweet's "done" looks nothing like a note's.
+
+The six rotating domains are the same areas, written in Traditional Chinese.
+
+## Configuration
+
+| Variable                 | Required | Default            | Description                                   |
+| ------------------------ | -------- | ------------------ | --------------------------------------------- |
+| `X_API_KEY`              | to post  | —                  | X app credentials, same four as `x_bot.py`    |
+| `X_API_SECRET`           | to post  | —                  |                                               |
+| `X_ACCESS_TOKEN`         | to post  | —                  | Must be regenerated after setting Read+Write  |
+| `X_ACCESS_TOKEN_SECRET`  | to post  | —                  |                                               |
+| `X_MODEL`                | no       | falls back to `MODEL` | Model used for tweets                      |
+| `X_DAILY_TIMES`          | no       | `12:00,20:00`      | Daily draft times                             |
+| `X_TIMEZONE`             | no       | `Asia/Taipei`      | Timezone for those times                      |
+| `X_TWEET_CHAR_LIMIT`     | no       | `140`              | Character limit                               |
+| `X_MAX_TOKENS`           | no       | `2000`             | Token budget for generation                   |
+| `X_TWEET_STATE_FILE`     | no       | `x_tweet_state.json` | Domain rotation and topic history           |
+| `X_AVOID_DAYS`           | no       | `7`                | Don't reuse a topic from the last N days      |
+
+Generation works without the X credentials — only 發布 needs them, and it says
+which are missing rather than failing obscurely.
+
+## Testing
+
+```bash
+python test_tweet.py        # length, URL stripping, parsing, rotation
+python test_bot_wiring.py   # the approval flow
+```
 
 ---
 

@@ -112,4 +112,126 @@ asyncio.run(bot.produce_and_send(types.SimpleNamespace(bot=AdminBot()), 424242))
 assert len(sent) == 1 and "失败" in sent[0][1] and "模型挂了" in sent[0][1], sent
 print("PASS a generation failure notifies the admin instead of raising")
 
+
+
+# ===========================================================================
+# X (Twitter): nothing may reach X without the 發布 button
+# ===========================================================================
+import tweet as tweet_mod
+
+draft = tweet_mod.Tweet(domain="消費觀", topic="t", text="一句有觀點的話。你怎麼看？",
+                        tags=["職場"])
+async def draft_ok(*a, **k): return draft
+tweet_mod.generate_tweet = draft_ok
+
+published = []
+async def fake_publish(item):
+    published.append(item)
+    return "https://x.com/someone/status/1234567890"
+tweet_mod.publish = fake_publish
+
+class BtnBot:
+    def __init__(self): self.msgs = []
+    async def send_message(self, **k): self.msgs.append(k.get("text"))
+    async def send_chat_action(self, **k): pass
+
+class Query:
+    def __init__(self, data, chat_id=424242):
+        self.data, self.answered, self.markup_cleared = data, [], False
+        self.message = types.SimpleNamespace(chat_id=chat_id)
+    async def answer(self, text=None, show_alert=False): self.answered.append(text)
+    async def edit_message_reply_markup(self, reply_markup=None):
+        self.markup_cleared = reply_markup is None
+
+def press(data, chat_id=424242):
+    q = Query(data, chat_id)
+    b = BtnBot()
+    upd = types.SimpleNamespace(callback_query=q)
+    asyncio.run(bot.tweet_button(upd, types.SimpleNamespace(bot=b)))
+    return q, b
+
+# --- /tweet drafts but must NOT publish -------------------------------------
+published.clear(); bot.pending_tweets.clear()
+sent.clear()
+asyncio.run(bot.tweet_command(AdminUpdate(), types.SimpleNamespace(bot=AdminBot())))
+assert published == [], "drafting must never publish"
+assert bot.pending_tweets.get(424242) is draft, "the draft must be held for approval"
+preview = [s[1] for s in sent if s[0] == "text"]
+assert any("待審核" in (p or "") for p in preview), preview
+labels = [b.text for row in sent[-1][2].inline_keyboard for b in row]
+assert len(labels) == 3 and any("發布" in l for l in labels) \
+    and any("重寫" in l for l in labels) and any("取消" in l for l in labels), labels
+print(f"PASS /tweet drafts only, holds it for approval, buttons {labels}")
+
+# --- 取消 discards, publishes nothing ---------------------------------------
+q, b = press("tweet:cancel")
+assert published == [] and 424242 not in bot.pending_tweets
+assert q.markup_cleared, "the buttons must be cleared so it can't be pressed again"
+print("PASS 取消 discards the draft and publishes nothing")
+
+# --- 發布 with nothing pending must not post --------------------------------
+bot.pending_tweets.clear()
+q, b = press("tweet:publish")
+assert published == [], "publishing a forgotten draft must not post"
+assert any("沒有記錄" in (a or "") for a in q.answered), q.answered
+print("PASS 發布 with no pending draft refuses instead of posting")
+
+# --- 發布 posts once and returns the link -----------------------------------
+bot.pending_tweets[424242] = draft
+q, b = press("tweet:publish")
+assert len(published) == 1 and published[0] is draft, published
+assert any("https://x.com/" in (m or "") for m in b.msgs), b.msgs
+assert 424242 not in bot.pending_tweets, "the draft must be consumed"
+assert q.markup_cleared, "buttons cleared before posting, so a double tap can't repost"
+print(f"PASS 發布 posts once and returns the link: {[m for m in b.msgs if 'x.com' in (m or '')][0]}")
+
+# a second press of the same (now stale) button posts nothing more
+q2, b2 = press("tweet:publish")
+assert len(published) == 1, f"double tap must not post twice: {len(published)}"
+print("PASS a second tap on the same draft cannot post twice")
+
+# --- a publish failure keeps the draft so it can be retried -----------------
+async def boom_publish(item): raise RuntimeError("X 拒絕了")
+tweet_mod.publish = boom_publish
+bot.pending_tweets[424242] = draft
+q, b = press("tweet:publish")
+assert bot.pending_tweets.get(424242) is draft, "a failed publish must keep the draft"
+assert any("發布失敗" in (m or "") for m in b.msgs), b.msgs
+print("PASS a failed publish reports it and keeps the draft for a retry")
+tweet_mod.publish = fake_publish
+
+# --- non-admin is refused at every door -------------------------------------
+published.clear()
+called = {"gen": 0}
+async def never_gen(*a, **k):
+    called["gen"] += 1
+    raise AssertionError("must not generate for a non-admin")
+tweet_mod.generate_tweet = never_gen
+replies.clear()
+asyncio.run(bot.tweet_command(FakeUpdate(), types.SimpleNamespace(bot=FakeBot())))
+assert called["gen"] == 0 and replies and "沒有對你開放" in replies[0] or "没有对你开放" in replies[0]
+bot.pending_tweets[999] = draft
+q, b = press("tweet:publish", chat_id=999)
+assert published == [], "a non-admin must never publish"
+print("PASS a non-admin can neither draft nor publish")
+tweet_mod.generate_tweet = draft_ok
+
+# --- both tweet times are scheduled -----------------------------------------
+app4 = Application.builder().token("123:fake").build()
+bot.X_DAILY_TIMES = "12:00,20:00"
+bot.schedule_daily_tweets(app4)
+jobs4 = sorted(app4.job_queue.jobs(), key=lambda j: j.name)
+assert len(jobs4) == 2, [j.name for j in jobs4]
+hours = sorted(str(f) for j in jobs4 for f in j.job.trigger.fields if f.name == "hour")
+assert hours == ["12", "20"], hours
+assert all(str(j.job.trigger.timezone) == "Asia/Taipei" for j in jobs4)
+print(f"PASS both daily tweet jobs scheduled at {hours} Asia/Taipei")
+
+# a malformed entry is skipped, the good one still schedules
+app5 = Application.builder().token("123:fake").build()
+bot.X_DAILY_TIMES = "12:00,nonsense"
+bot.schedule_daily_tweets(app5)
+assert len(app5.job_queue.jobs()) == 1, [j.name for j in app5.job_queue.jobs()]
+print("PASS a malformed time is skipped without losing the valid one")
+
 print("\nALL BOT WIRING TESTS PASSED")

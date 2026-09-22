@@ -347,12 +347,18 @@ def _repair(text: str) -> str:
     return _TRAILING_COMMA_RE.sub(r"\1", _escape_raw_control_chars(text))
 
 
-def _extract_json(raw: str) -> dict:
+def _extract_json(raw: str, is_usable=None) -> dict:
     """Pull a JSON object out of a reply that may be fenced, padded or malformed.
+
+    `is_usable` decides which candidate is the real one when several parse —
+    it defaults to the note test (title + body), and other callers pass their
+    own, since a tweet's "done" looks nothing like a note's.
 
     Raises GenerationError with the raw text logged, so a failure is diagnosable
     instead of just "没有返回 JSON".
     """
+    if is_usable is None:
+        is_usable = _is_usable
     text = (raw or "").strip()
     if not text:
         logger.error("模型返回了空内容（免费模型限流，或把内容放进了别的字段）")
@@ -379,7 +385,7 @@ def _extract_json(raw: str) -> dict:
                 # A reasoning trace often sketches the schema first, e.g.
                 # {"title": "", "body": ""}. That has the right keys but no
                 # content, so it must not beat the real note further down.
-                if _is_usable(data):
+                if is_usable(data):
                     return data
                 if _EXPECTED_KEYS & set(data):
                     keyed.append(data)
