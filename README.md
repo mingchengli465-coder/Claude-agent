@@ -215,6 +215,12 @@ trusted to be clean JSON:
   for balanced `{...}` spans and takes the first that parses and looks like a
   note. Scanning every candidate rather than the first brace matters when the
   model writes something like `这里有个 { 花括号` before the real object.
+- A candidate is only accepted once it has a **non-empty** title and body. A
+  reasoning trace often sketches the schema first (`{"title": "", "body": ""}`),
+  and that skeleton has the right keys — it must not beat the real note that
+  follows.
+- Alternate key names are accepted: `标题`/`正文`/`content`, a `{"note": {...}}`
+  wrapper, and a comma-separated tag string instead of a list.
 - Two common malformations are repaired before giving up: trailing commas, and
   real line breaks inside a string where `\n` was meant — the usual cause of
   "Invalid control character" on a multi-paragraph 正文.
@@ -224,6 +230,10 @@ trusted to be clean JSON:
 A failed generation — a transport error, or a reply that isn't usable JSON — is
 retried once. If the second attempt also fails, the error is sent to
 `ADMIN_CHAT_ID` rather than disappearing into the log.
+
+Errors name what actually came back — the keys present, the title and body
+lengths, and whether `finish_reason` was `length` (truncated output, meaning
+`XHS_MAX_TOKENS` is too low).
 
 **When parsing fails, the first 300 characters of the raw reply go to the log**
 (`RAW_LOG_CHARS`). An empty reply is reported as 模型返回了空内容 rather than

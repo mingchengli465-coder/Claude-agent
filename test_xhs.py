@@ -343,4 +343,67 @@ assert "response_format" not in comp.seen[1] and "extra_body" not in comp.seen[1
 assert note.title == "标题", "the degraded call must still produce a note"
 print("PASS an ambiguous 400 drops both parameters and still returns a note")
 
+
+
+# --- the empty-skeleton bug: a schema sketch must not beat the real note ----
+skeleton = '{"topic": "", "title": "", "body": "", "tags": [], "cover": {}}'
+real = json.dumps(GOOD, ensure_ascii=False)
+
+# This is the shape a reasoning trace actually produces: plan, then output.
+trace = f"我先想一下结构：\n{skeleton}\n\n好，现在正式写：\n{real}"
+got = xhs._extract_json(trace)
+assert got["title"] == "标题" and got["body"].strip(), f"picked the skeleton: {got}"
+print("PASS a schema sketch before the real note no longer wins")
+
+# Reversed order: the real note first, skeleton after, still picks the real one.
+got = xhs._extract_json(f"{real}\n\n（模板留档）{skeleton}")
+assert got["title"] == "标题", got
+print("PASS a trailing skeleton doesn't override an earlier real note")
+
+# Only a skeleton available: returned, but the error must name the keys.
+try:
+    xhs._normalize(xhs._extract_json(skeleton), "消费观")
+    raise AssertionError("an empty skeleton must not normalize")
+except xhs.GenerationError as exc:
+    assert "标题或正文为空" in str(exc) and "键" in str(exc), exc
+    assert "title" in str(exc), f"the error must list what came back: {exc}"
+    skeleton_error = str(exc)   # `exc` is unbound once the block exits
+print(f"PASS a bare skeleton fails with the keys named: {skeleton_error}")
+
+# --- alternate key names ----------------------------------------------------
+chinese = {"选题": "t", "标题": "中文键标题", "正文": "中文键正文",
+           "标签": ["一", "二"], "封面": {"主标": ["甲", "乙"], "问句": "问？",
+                                          "小字": ["s1", "s2", "s3"]}}
+n = xhs._normalize(chinese, "消费观")
+assert n.title == "中文键标题" and n.body == "中文键正文", n
+assert n.cover_main == ["甲", "乙"] and n.cover_question == "问？", n
+print("PASS Chinese key names are accepted")
+
+alt = {"title": "x", "content": "用 content 当正文", "hashtags": "标签一, 标签二 标签三"}
+n = xhs._normalize(alt, "消费观")
+assert n.body == "用 content 当正文", n.body
+assert "标签一" in n.tags and "标签三" in n.tags, n.tags
+print("PASS 'content' as body and a comma-separated tag string both work")
+
+# --- wrapper objects --------------------------------------------------------
+wrapped = json.dumps({"note": GOOD}, ensure_ascii=False)
+assert xhs._extract_json(wrapped)["title"] == "标题"
+print("PASS a {\"note\": {...}} wrapper is unwrapped")
+
+# --- truncation is named ----------------------------------------------------
+class TruncatedCompletions:
+    async def create(self, **kw):
+        m = types.SimpleNamespace(content='{"title": "有标题", "body": ""',
+                                  model_extra={})
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=m, finish_reason="length")])
+xhs.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=TruncatedCompletions()))
+xhs._json_mode_supported = xhs._reasoning_supported = False
+try:
+    asyncio.run(xhs._one_call("消费观", []))
+    raise AssertionError("truncated output should raise")
+except xhs.GenerationError as exc:
+    assert "截断" in str(exc) and "XHS_MAX_TOKENS" in str(exc), exc
+print("PASS finish_reason=length is reported as truncation, pointing at XHS_MAX_TOKENS")
+
 print("\nALL XHS TESTS PASSED")

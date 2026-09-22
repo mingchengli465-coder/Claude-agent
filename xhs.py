@@ -225,9 +225,45 @@ def _strip_fences(text: str) -> str:
     return text.replace("```", " ")
 
 
-# Top-level keys we expect, used to tell the real object apart from a stray
-# "{}" that happened to appear in the model's preamble.
-_EXPECTED_KEYS = {"topic", "title", "body", "tags", "cover"}
+# Models rename these often enough to be worth accepting. First match wins.
+TITLE_KEYS = ("title", "标题", "headline")
+BODY_KEYS = ("body", "正文", "content", "内容", "text")
+TAGS_KEYS = ("tags", "话题标签", "标签", "hashtags")
+TOPIC_KEYS = ("topic", "选题", "主题")
+COVER_KEYS = ("cover", "封面", "封面文案")
+COVER_MAIN_KEYS = ("main", "主标", "主标题")
+COVER_QUESTION_KEYS = ("question", "问句", "争议问句")
+COVER_SMALL_KEYS = ("small", "小字", "小字文案")
+
+# Used to tell the real object apart from a stray "{}" in the preamble.
+_EXPECTED_KEYS = set(TITLE_KEYS + BODY_KEYS + TAGS_KEYS + TOPIC_KEYS + COVER_KEYS)
+
+
+def _pick(data: dict, keys: tuple[str, ...]):
+    """First present, non-empty value among `keys`."""
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _unwrap(data: dict) -> dict:
+    """Unwrap {"note": {...}} / {"result": {...}} so the real object is used."""
+    if _EXPECTED_KEYS & set(data):
+        return data
+    for value in data.values():
+        if isinstance(value, dict) and _EXPECTED_KEYS & set(value):
+            return value
+    return data
+
+
+def _is_usable(data: dict) -> bool:
+    """A note we could actually send: both a title and a body with text in them."""
+    title = _pick(data, TITLE_KEYS)
+    body = _pick(data, BODY_KEYS)
+    return bool(isinstance(title, str) and title.strip()
+                and isinstance(body, str) and body.strip())
 # Cap the candidate scan so a pathological reply can't make this quadratic.
 _MAX_CANDIDATES = 20
 
@@ -328,7 +364,8 @@ def _extract_json(raw: str) -> dict:
                      RAW_LOG_CHARS, text[:RAW_LOG_CHARS])
         raise GenerationError("模型没有返回 JSON")
 
-    parsed: list[dict] = []
+    keyed: list[dict] = []     # right shape, but empty title/body
+    parsed: list[dict] = []    # parsed, but not note-shaped at all
     last_error: Exception | None = None
     for candidate in candidates:
         for attempt in (candidate, _repair(candidate)):
@@ -338,13 +375,24 @@ def _extract_json(raw: str) -> dict:
                 last_error = exc
                 continue
             if isinstance(data, dict):
-                # A stray "{}" in the preamble parses too, so prefer the object
-                # that actually looks like a note.
-                if _EXPECTED_KEYS & set(data):
+                data = _unwrap(data)
+                # A reasoning trace often sketches the schema first, e.g.
+                # {"title": "", "body": ""}. That has the right keys but no
+                # content, so it must not beat the real note further down.
+                if _is_usable(data):
                     return data
-                parsed.append(data)
+                if _EXPECTED_KEYS & set(data):
+                    keyed.append(data)
+                else:
+                    parsed.append(data)
             break
 
+    if keyed:
+        logger.warning(
+            "只找到了空的 JSON 骨架（键：%s）。原始回复前 %d 字：\n%s",
+            sorted(keyed[0]), RAW_LOG_CHARS, text[:RAW_LOG_CHARS],
+        )
+        return keyed[0]
     if parsed:
         return parsed[0]
 
@@ -363,22 +411,37 @@ def _normalize(data: dict, domain: str) -> Note:
     Soft violations (a 22-character title, 9 tags) are trimmed rather than
     retried — a retry costs a call and usually returns the same shape.
     """
-    title = str(data.get("title") or "").strip()
-    body = str(data.get("body") or "").strip()
+    title = str(_pick(data, TITLE_KEYS) or "").strip()
+    body = str(_pick(data, BODY_KEYS) or "").strip()
     if not title or not body:
-        raise GenerationError("标题或正文为空")
+        # Name what did come back, so the next failure diagnoses itself.
+        raise GenerationError(
+            f"标题或正文为空（模型返回的键：{sorted(data)}，"
+            f"标题 {len(title)} 字，正文 {len(body)} 字）"
+        )
 
     if len(title) > 20:
         title = title[:20]
 
-    tags = [t for t in (_clean_tag(t) for t in (data.get("tags") or [])) if t][:8]
+    raw_tags = _pick(data, TAGS_KEYS) or []
+    if isinstance(raw_tags, str):  # some models return "a,b,c" instead of a list
+        raw_tags = re.split(r"[,，\s]+", raw_tags)
+    tags = [t for t in (_clean_tag(t) for t in raw_tags) if t][:8]
     while len(tags) < 6:
         tags.append(domain.replace(" ", ""))
 
-    cover = data.get("cover") or {}
-    main = [str(x).strip() for x in (cover.get("main") or []) if str(x).strip()][:2]
-    small = [str(x).strip() for x in (cover.get("small") or []) if str(x).strip()][:3]
-    question = str(cover.get("question") or "").strip()
+    cover = _pick(data, COVER_KEYS) or {}
+    if not isinstance(cover, dict):
+        cover = {}
+    raw_main = _pick(cover, COVER_MAIN_KEYS) or []
+    if isinstance(raw_main, str):
+        raw_main = raw_main.splitlines()
+    raw_small = _pick(cover, COVER_SMALL_KEYS) or []
+    if isinstance(raw_small, str):
+        raw_small = raw_small.splitlines()
+    main = [str(x).strip() for x in raw_main if str(x).strip()][:2]
+    small = [str(x).strip() for x in raw_small if str(x).strip()][:3]
+    question = str(_pick(cover, COVER_QUESTION_KEYS) or "").strip()
 
     # The cover must always have something to draw, even on a lazy reply.
     if not main:
@@ -390,7 +453,7 @@ def _normalize(data: dict, domain: str) -> Note:
 
     return Note(
         domain=domain,
-        topic=str(data.get("topic") or title).strip(),
+        topic=str(_pick(data, TOPIC_KEYS) or title).strip(),
         title=title,
         body=body,
         tags=tags,
@@ -508,7 +571,14 @@ async def _one_call(domain: str, avoid: list[str]) -> Note:
             f"模型返回了空内容（finish_reason={finish}，reasoning 里也没有内容）"
         )
 
-    return _normalize(_extract_json(text), domain)
+    try:
+        return _normalize(_extract_json(text), domain)
+    except GenerationError as exc:
+        if finish == "length":
+            raise GenerationError(
+                f"{exc}。finish_reason=length，说明输出被截断了，建议调高 XHS_MAX_TOKENS"
+            ) from exc
+        raise
 
 
 async def generate_note(domain: str | None = None, state: dict | None = None) -> Note:
