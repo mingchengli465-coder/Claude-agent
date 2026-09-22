@@ -30,6 +30,7 @@ from telegram.ext import (
     filters,
 )
 
+import tweet as tweet_mod
 import xhs
 
 logging.basicConfig(
@@ -54,6 +55,9 @@ REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
 ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "").strip()
 XHS_DAILY_TIME = os.environ.get("XHS_DAILY_TIME", "09:00")
 XHS_TIMEZONE = os.environ.get("XHS_TIMEZONE", "Asia/Taipei")
+# Tweets go out twice a day by default, in the same timezone.
+X_DAILY_TIMES = os.environ.get("X_DAILY_TIMES", "12:00,20:00")
+X_TIMEZONE = os.environ.get("X_TIMEZONE", "Asia/Taipei")
 
 # One "round" is a user message plus the assistant's reply.
 MAX_HISTORY_ROUNDS = int(os.environ.get("MAX_HISTORY_ROUNDS", "20"))
@@ -315,6 +319,124 @@ async def xhs_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await query.answer()
 
 
+# --------------------------------------------------------------------------- #
+# X (Twitter) posts — generated here, published only after approval
+# --------------------------------------------------------------------------- #
+
+TWEET_WORKING_TEXT = "正在生成推文…"
+TWEET_FAILED_TEXT = "😵 推文生成失敗了（已經重試過一次）。\n\n{error}"
+TWEET_PREVIEW_TEXT = "📝 待審核推文（{domain}）\n\n{text}\n\n———\n{count} 字 · X 計數 {weighted}/280"
+
+# chat_id -> the tweet awaiting a decision there.
+pending_tweets: dict[int, tweet_mod.Tweet] = {}
+
+
+def tweet_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[
+            InlineKeyboardButton("✅ 發布", callback_data="tweet:publish"),
+            InlineKeyboardButton("🔁 重寫", callback_data="tweet:rewrite"),
+            InlineKeyboardButton("✖️ 取消", callback_data="tweet:cancel"),
+        ]]
+    )
+
+
+async def send_tweet_preview(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
+                             item: tweet_mod.Tweet) -> None:
+    """Show the draft and wait — nothing reaches X until the button is pressed."""
+    full = item.full_text()
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=TWEET_PREVIEW_TEXT.format(
+            domain=item.domain, text=full, count=len(full),
+            weighted=tweet_mod.weighted_length(full),
+        ),
+        reply_markup=tweet_keyboard(),
+    )
+    pending_tweets[chat_id] = item
+
+
+async def produce_tweet(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
+    """Generate a draft and put it up for approval."""
+    try:
+        item = await tweet_mod.generate_tweet()
+    except Exception as exc:  # noqa: BLE001 - already retried inside generate_tweet
+        logger.exception("推文生成失敗")
+        await context.bot.send_message(chat_id=chat_id, text=TWEET_FAILED_TEXT.format(error=exc))
+        return
+
+    logger.info("生成了推文：[%s] %s", item.domain, item.topic)
+    await send_tweet_preview(context, chat_id, item)
+
+
+async def tweet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/tweet - draft a tweet on demand."""
+    chat_id = update.effective_chat.id
+    if not is_admin(chat_id):
+        logger.info("拒絕了來自 chat %s 的 /tweet", chat_id)
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+
+    await update.effective_message.reply_text(TWEET_WORKING_TEXT)
+    await produce_tweet(context, chat_id)
+
+
+async def tweet_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """The 12:00 and 20:00 Asia/Taipei runs."""
+    chat_id = int(ADMIN_CHAT_ID)
+    logger.info("每日推文任務觸發，送到 chat %s", chat_id)
+    await produce_tweet(context, chat_id)
+
+
+async def tweet_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """發布 / 重寫 / 取消."""
+    query = update.callback_query
+    chat_id = query.message.chat_id
+
+    if not is_admin(chat_id):
+        await query.answer(XHS_DENIED_TEXT, show_alert=True)
+        return
+
+    action = (query.data or "").split(":", 1)[-1]
+
+    if action == "cancel":
+        pending_tweets.pop(chat_id, None)
+        await query.answer("已取消")
+        await query.edit_message_reply_markup(reply_markup=None)
+        await context.bot.send_message(chat_id=chat_id, text="🗑 這則不發了。")
+        return
+
+    if action == "rewrite":
+        pending_tweets.pop(chat_id, None)
+        await query.answer("重寫中…")
+        await query.edit_message_reply_markup(reply_markup=None)
+        await produce_tweet(context, chat_id)
+        return
+
+    if action == "publish":
+        item = pending_tweets.get(chat_id)
+        if item is None:
+            await query.answer("這則我這邊已經沒有記錄了，重新 /tweet 一次吧", show_alert=True)
+            return
+        await query.answer("發布中…")
+        # Clear the buttons first, so a double tap can't post twice.
+        await query.edit_message_reply_markup(reply_markup=None)
+        pending_tweets.pop(chat_id, None)
+        try:
+            url = await tweet_mod.publish(item)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("推文發布失敗")
+            pending_tweets[chat_id] = item  # Keep it so 發布 can be retried.
+            await context.bot.send_message(
+                chat_id=chat_id, text=f"😵 發布失敗：{exc}", reply_markup=tweet_keyboard()
+            )
+            return
+        await context.bot.send_message(chat_id=chat_id, text=f"🚀 已發布\n{url}")
+        return
+
+    await query.answer()
+
+
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Catch-all so an unexpected failure never takes the bot down."""
     logger.exception("Unhandled exception while processing update", exc_info=context.error)
@@ -354,6 +476,45 @@ def schedule_daily_note(application: Application) -> None:
                 XHS_DAILY_TIME, XHS_TIMEZONE, ADMIN_CHAT_ID)
 
 
+def schedule_daily_tweets(application: Application) -> None:
+    """Run the tweet job at each time in X_DAILY_TIMES, every day."""
+    if not ADMIN_CHAT_ID:
+        logger.warning("ADMIN_CHAT_ID 沒有設定，/tweet 和每日推文都不會啟用")
+        return
+    if application.job_queue is None:
+        logger.error("JobQueue 不可用，每日推文無法排程。"
+                     "請安裝 python-telegram-bot[job-queue]（見 requirements.txt）。")
+        return
+
+    try:
+        tz = ZoneInfo(X_TIMEZONE)
+    except (ValueError, KeyError):
+        logger.error("X_TIMEZONE=%r 無法解析，每日推文跳過", X_TIMEZONE, exc_info=True)
+        return
+
+    scheduled = []
+    for chunk in X_DAILY_TIMES.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            hour, minute = (int(part) for part in chunk.split(":"))
+            when = dt.time(hour=hour, minute=minute, tzinfo=tz)
+        except ValueError:
+            logger.error("X_DAILY_TIMES 裡的 %r 無法解析，略過這一項", chunk)
+            continue
+        application.job_queue.run_daily(
+            tweet_daily_job, time=when, name=f"tweet-daily-{hour:02d}{minute:02d}"
+        )
+        scheduled.append(f"{hour:02d}:{minute:02d}")
+
+    if scheduled:
+        logger.info("每日推文已排程：%s %s，送到 chat %s",
+                    "、".join(scheduled), tz.key, ADMIN_CHAT_ID)
+    else:
+        logger.error("X_DAILY_TIMES=%r 沒有任何有效時間，每日推文未排程", X_DAILY_TIMES)
+
+
 def main() -> None:
     missing = [
         name
@@ -376,10 +537,13 @@ def main() -> None:
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(CommandHandler("xhs", xhs_command))
     application.add_handler(CallbackQueryHandler(xhs_button, pattern=r"^xhs:"))
+    application.add_handler(CommandHandler("tweet", tweet_command))
+    application.add_handler(CallbackQueryHandler(tweet_button, pattern=r"^tweet:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
     application.add_error_handler(on_error)
 
     schedule_daily_note(application)
+    schedule_daily_tweets(application)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
