@@ -6,7 +6,7 @@ Two bots live in this repo:
 | --- | ---- | -------- | ----- |
 | Telegram chatbot | `bot.py` | Telegram DMs and groups | any [OpenRouter](https://openrouter.ai) model |
 | 小红书 note generator | `xhs.py` (via `bot.py`) | the admin's Telegram chat | any OpenRouter model |
-| X auto-poster | `tweet.py` (via `bot.py`) | posts to X, notifies Telegram | any OpenRouter model |
+| X auto-poster | `tweet.py` (via `bot.py`) | AI takes, posted to X | any OpenRouter model |
 | X (Twitter) bot  | `x_bot.py` | mentions on X | [Claude](https://docs.claude.com) |
 
 They share a `requirements.txt` and a `.env`, but run as separate processes —
@@ -279,9 +279,9 @@ Neither needs a token, an API key, or a network connection.
 
 # X Auto-Poster
 
-`tweet.py` writes one opinionated post in **Traditional Chinese** and publishes
-it straight to X. There is no approval step — Telegram only gets told
-afterwards.
+`tweet.py` writes one short, opinionated post about **AI and AI agents** in
+Traditional Chinese and publishes it straight to X. There is no approval step —
+Telegram only gets told afterwards.
 
 ## How it runs
 
@@ -328,15 +328,47 @@ rather than cutting mid-word — a tweet's point is usually its last line. URLs
 are stripped (the spec forbids them, and each costs 23 characters), and
 hashtags are dropped if they would push the post over.
 
+## What it writes about
+
+Six sub-areas rotate, one per post:
+
+> AI agent 的實際能力與限制 · 用 AI 寫程式的體驗和踩坑 · AI 工具比較與選擇 ·
+> AI 對工作和職業的影響 · 自動化工作流的想法 · 對 AI 產業趨勢的觀察
+
+The prompt pushes for something **specific** — how an agent differed from its
+pitch, a mistake a model keeps making, a concrete difference between two tools —
+rather than general commentary.
+
+## Style
+
+- **2 to 4 sentences.** Not a three-part story; no scene-setting.
+- The opinion or finding goes in the first sentence.
+- The ending doesn't have to be a question — an assertion often lands harder.
+- Traditional Chinese, with technical terms left in English (agent, context,
+  prompt, token, API, MCP).
+- At most **2 hashtags**, preferring the usual English ones (`AI`, `AIAgent`,
+  `LLM`, `Claude`, `Cursor`, `vibecoding`).
+
+Three worked examples are embedded in the prompt. A test asserts they obey the
+same 2–4 sentence and 2-tag rules they teach, and that they don't all end on a
+question — otherwise the model would copy whatever the examples actually do.
+
+## Content rules
+
+No fabricated benchmark numbers, market shares, funding figures, product
+capabilities, or quotes attributed to anyone. Nothing political. No medical or
+investment advice, and no attacks on people, companies or groups.
+
+**These are this module's own rules, not `xhs.py`'s.** The 小红书 set requires
+every detail to be a personal life experience, which would rule out exactly the
+hands-on tooling findings this account exists to post.
+
 ## Shared with 小红书
 
-Reused from `xhs.py` rather than copied, so the two cannot drift apart: the
-hard content rules, the JSON tolerance (fences, braces in prose, trailing
-commas, reasoning-trace fallback), the recent-topic window, and the key-alias
-lookup. `_extract_json` takes the caller's definition of a usable object,
-because a tweet's "done" looks nothing like a note's.
-
-The six rotating domains are the same areas, written in Traditional Chinese.
+Still reused from `xhs.py` rather than copied: the JSON tolerance (fences,
+braces in prose, trailing commas, reasoning-trace fallback), the recent-topic
+window, and the key-alias lookup. `_extract_json` takes the caller's definition
+of a usable object, because a tweet's "done" looks nothing like a note's.
 
 ## Configuration
 
@@ -353,6 +385,7 @@ The six rotating domains are the same areas, written in Traditional Chinese.
 | `X_MAX_TOKENS`           | no       | `2000`             | Token budget for generation                   |
 | `X_TWEET_STATE_FILE`     | no       | `x_tweet_state.json` | Rotation, topic history and the pause flag  |
 | `X_AVOID_DAYS`           | no       | `7`                | Don't reuse a topic from the last N days      |
+| `X_MAX_TAGS`             | no       | `2`                | Hashtag cap                                   |
 
 Since posting is now unattended, the X credentials are needed for it to work at
 all. A missing credential is named in the failure message.

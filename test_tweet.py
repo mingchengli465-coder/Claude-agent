@@ -5,6 +5,7 @@ No credentials, no network: run `python test_tweet.py`.
 import asyncio
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -59,9 +60,9 @@ assert n.tags == ["職場", "通勤"] and n.text.endswith("你怎麼看？")
 assert "#職場" in n.full_text() and n.full_text().startswith("觀點")
 print("PASS normalize cleans tags and composes the posted text")
 
-n = tw._normalize({"text": "內容", "tags": "一, 二 三, 四"}, "消費觀")
-assert n.tags == ["一", "二", "三"], n.tags
-print("PASS a comma-separated tag string is split and capped at 3")
+n = tw._normalize({"text": "內容", "tags": "AI, AIAgent LLM, Claude"}, "消費觀")
+assert n.tags == ["AI", "AIAgent"], n.tags
+print(f"PASS a tag string is split and capped at {tw.MAX_TAGS}: {n.tags}")
 
 n = tw._normalize({"內容": "用中文鍵的正文"}, "消費觀")
 assert n.text == "用中文鍵的正文", n.text
@@ -83,9 +84,34 @@ print(f"PASS hashtags are dropped when they would overflow ({len(n.tags)} kept)"
 st = {"domain_index": 0}
 seen = [tw.take_domain(st) for _ in range(len(tw.DOMAINS) + 1)]
 assert seen[:len(tw.DOMAINS)] == tw.DOMAINS and seen[-1] == tw.DOMAINS[0]
-assert all("一" <= c <= "鿿" or not c.isalpha() or c.isascii()
-           for c in "".join(tw.DOMAINS))
-print("PASS domains rotate and wrap:", " → ".join(seen[:3]), "…")
+assert len(tw.DOMAINS) == 6, tw.DOMAINS
+assert all("AI" in d or "自動化" in d or "寫程式" in d for d in tw.DOMAINS), tw.DOMAINS
+print("PASS the 6 AI domains rotate and wrap:", seen[0], "→", seen[1], "…")
+
+# --- the prompt's own worked examples must obey the spec they teach --------
+prompt = tw._build_prompt(tw.DOMAINS[0], ["昨天寫過的"])
+blocks = [json.loads(b) for b in re.findall(r'\{\s*\n  "topic".*?\n\}', prompt, re.S)]
+schema, examples = blocks[0], blocks[1:]
+assert set(schema) == {"topic", "text", "tags"} and len(examples) == 3, len(examples)
+for i, d in enumerate(examples, 1):
+    sentences = [s for s in re.split(r"[。！？]", d["text"].replace("\n", "")) if s.strip()]
+    assert 2 <= len(sentences) <= 4, f"example {i} has {len(sentences)} sentences, spec says 2-4"
+    assert len(d["text"]) <= tw.TWEET_CHAR_LIMIT
+    assert len(d["tags"]) <= tw.MAX_TAGS and all(x.isascii() for x in d["tags"]), d["tags"]
+    assert "http" not in d["text"]
+lengths = [len(d["text"]) for d in examples]
+assert max(lengths) < 100, f"examples must model the shorter style, got {lengths}"
+print(f"PASS the 3 worked examples parse and obey 2-4 sentences, {lengths} chars")
+
+assert not all(d["text"].rstrip()[-1] in "？?" for d in examples)
+print("PASS the examples don't all end on a question")
+
+# The 小红书 rule requiring personal life experience must not apply here: it
+# would forbid exactly the hands-on tooling findings this account is for.
+assert "個人化的生活經歷" not in prompt and "个人化的生活经历" not in prompt
+assert "不編造" in prompt and "不涉及政治" in prompt
+assert "benchmark" in prompt, "no-fabrication should name the AI-specific traps"
+print("PASS rules keep no-fabrication / no-politics without the life-experience clause")
 
 # --- generation reuses the xhs JSON tolerance ------------------------------
 GOOD = {"topic": "選題", "text": "一句很有觀點的話。你同意嗎？", "tags": ["職場"]}
