@@ -6,7 +6,7 @@ Two bots live in this repo:
 | --- | ---- | -------- | ----- |
 | Telegram chatbot | `bot.py` | Telegram DMs and groups | any [OpenRouter](https://openrouter.ai) model |
 | 小红书 note generator | `xhs.py` (via `bot.py`) | the admin's Telegram chat | any OpenRouter model |
-| X post drafter | `tweet.py` (via `bot.py`) | drafts in Telegram, posts to X | any OpenRouter model |
+| X auto-poster | `tweet.py` (via `bot.py`) | posts to X, notifies Telegram | any OpenRouter model |
 | X (Twitter) bot  | `x_bot.py` | mentions on X | [Claude](https://docs.claude.com) |
 
 They share a `requirements.txt` and a `.env`, but run as separate processes —
@@ -36,7 +36,9 @@ A Telegram bot that lets you chat with an AI model through
 | `/start` | Show the welcome message                 |
 | `/reset` | Clear this chat's history                |
 | `/xhs`   | Generate a 小红书 note (admin only)        |
-| `/tweet` | Draft an X post for approval (admin only) |
+| `/tweet` | Generate and post to X now (admin only)   |
+| `/pause` | Stop the scheduled posting (admin only)   |
+| `/resume`| Start it again (admin only)               |
 
 Any other text message is sent to the model.
 
@@ -275,31 +277,48 @@ Neither needs a token, an API key, or a network connection.
 
 ---
 
-# X Post Drafter
+# X Auto-Poster
 
-`tweet.py` writes one opinionated post in **Traditional Chinese** and sends it
-to your Telegram chat for approval. **Nothing reaches X until you press 發布.**
+`tweet.py` writes one opinionated post in **Traditional Chinese** and publishes
+it straight to X. There is no approval step — Telegram only gets told
+afterwards.
 
 ## How it runs
 
 - **12:00 and 20:00 Asia/Taipei** (`X_DAILY_TIMES`), via `JobQueue`
-- **`/tweet`** on demand
+- **`/tweet`** posts one immediately
 
-Both are gated on `ADMIN_CHAT_ID`, same as `/xhs`.
+## Commands
 
-## The approval step
+| Command  | What it does                                              |
+| -------- | --------------------------------------------------------- |
+| `/tweet` | Generates and posts one now, even while paused             |
+| `/pause` | Stops the scheduled posting                                |
+| `/resume`| Starts it again                                            |
 
-The draft arrives with its character count and X's own weighted count, and
-three buttons:
+All three are gated on `ADMIN_CHAT_ID`.
 
-| Button | What happens |
-| ------ | ------------ |
-| ✅ 發布 | Posts to X via tweepy, then replies with the tweet's URL |
-| 🔁 重寫 | Throws the draft away and generates another |
-| ✖️ 取消 | Discards it; nothing is posted |
+`/pause` stops the **schedule**. `/tweet` is a deliberate manual action, so it
+still posts while paused — and says so in its reply, rather than looking like
+pause did nothing.
 
-The buttons are cleared *before* posting, so a double tap cannot publish twice.
-If posting fails, the draft is kept so 發布 can be retried.
+## What you get told
+
+After a successful post, a plain notification with the text and the tweet's
+URL. No buttons.
+
+If posting fails, the error comes through **with the generated text included**,
+so a tweet that cost a model call isn't lost — it can be posted by hand. A
+generation failure is reported too, and posts nothing.
+
+## Pause and restarts
+
+The pause flag lives in `x_tweet_state.json`, so it survives a restart. On a
+platform with an ephemeral disk (Railway) a redeploy wipes it.
+
+**The default is "running"**, which is the safe way round: a wiped file resumes
+posting rather than silently staying off forever. Re-issue `/pause` after a
+redeploy if you want it to stay off.
 
 ## Length
 
@@ -328,21 +347,21 @@ The six rotating domains are the same areas, written in Traditional Chinese.
 | `X_ACCESS_TOKEN`         | to post  | —                  | Must be regenerated after setting Read+Write  |
 | `X_ACCESS_TOKEN_SECRET`  | to post  | —                  |                                               |
 | `X_MODEL`                | no       | falls back to `MODEL` | Model used for tweets                      |
-| `X_DAILY_TIMES`          | no       | `12:00,20:00`      | Daily draft times                             |
+| `X_DAILY_TIMES`          | no       | `12:00,20:00`      | Daily posting times                           |
 | `X_TIMEZONE`             | no       | `Asia/Taipei`      | Timezone for those times                      |
 | `X_TWEET_CHAR_LIMIT`     | no       | `140`              | Character limit                               |
 | `X_MAX_TOKENS`           | no       | `2000`             | Token budget for generation                   |
-| `X_TWEET_STATE_FILE`     | no       | `x_tweet_state.json` | Domain rotation and topic history           |
+| `X_TWEET_STATE_FILE`     | no       | `x_tweet_state.json` | Rotation, topic history and the pause flag  |
 | `X_AVOID_DAYS`           | no       | `7`                | Don't reuse a topic from the last N days      |
 
-Generation works without the X credentials — only 發布 needs them, and it says
-which are missing rather than failing obscurely.
+Since posting is now unattended, the X credentials are needed for it to work at
+all. A missing credential is named in the failure message.
 
 ## Testing
 
 ```bash
 python test_tweet.py        # length, URL stripping, parsing, rotation
-python test_bot_wiring.py   # the approval flow
+python test_bot_wiring.py   # auto-posting, pause/resume, the admin gate
 ```
 
 ---

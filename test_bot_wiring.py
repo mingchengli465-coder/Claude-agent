@@ -2,7 +2,7 @@
 
 No network, no token needed: run `python test_bot_wiring.py`.
 """
-import asyncio, datetime as dt, os, sys, tempfile, types
+import asyncio, datetime as dt, os, pathlib, sys, tempfile, types
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.update({
@@ -115,7 +115,7 @@ print("PASS a generation failure notifies the admin instead of raising")
 
 
 # ===========================================================================
-# X (Twitter): nothing may reach X without the 發布 button
+# X (Twitter): generate and publish automatically, no approval step
 # ===========================================================================
 import tweet as tweet_mod
 
@@ -130,90 +130,133 @@ async def fake_publish(item):
     return "https://x.com/someone/status/1234567890"
 tweet_mod.publish = fake_publish
 
-class BtnBot:
+# Pause state lives in a temp file for the test.
+tweet_mod.X_TWEET_STATE_FILE = pathlib.Path(tempfile.mkdtemp()) / "tw.json"
+
+class NoteBot:
     def __init__(self): self.msgs = []
-    async def send_message(self, **k): self.msgs.append(k.get("text"))
+    async def send_message(self, **k):
+        self.msgs.append((k.get("text"), k.get("reply_markup")))
     async def send_chat_action(self, **k): pass
 
-class Query:
-    def __init__(self, data, chat_id=424242):
-        self.data, self.answered, self.markup_cleared = data, [], False
-        self.message = types.SimpleNamespace(chat_id=chat_id)
-    async def answer(self, text=None, show_alert=False): self.answered.append(text)
-    async def edit_message_reply_markup(self, reply_markup=None):
-        self.markup_cleared = reply_markup is None
+class AdminUpd:
+    def __init__(self):
+        self.effective_chat = types.SimpleNamespace(id=424242)
+        self.replies = []
+        outer = self
+        class M:
+            async def reply_text(self, text, **k): outer.replies.append(text)
+        self.effective_message = M()
 
-def press(data, chat_id=424242):
-    q = Query(data, chat_id)
-    b = BtnBot()
-    upd = types.SimpleNamespace(callback_query=q)
-    asyncio.run(bot.tweet_button(upd, types.SimpleNamespace(bot=b)))
-    return q, b
+def run_cmd(fn, upd=None):
+    upd = upd or AdminUpd()
+    b = NoteBot()
+    asyncio.run(fn(upd, types.SimpleNamespace(bot=b)))
+    return upd, b
 
-# --- /tweet drafts but must NOT publish -------------------------------------
-published.clear(); bot.pending_tweets.clear()
-sent.clear()
-asyncio.run(bot.tweet_command(AdminUpdate(), types.SimpleNamespace(bot=AdminBot())))
-assert published == [], "drafting must never publish"
-assert bot.pending_tweets.get(424242) is draft, "the draft must be held for approval"
-preview = [s[1] for s in sent if s[0] == "text"]
-assert any("待審核" in (p or "") for p in preview), preview
-labels = [b.text for row in sent[-1][2].inline_keyboard for b in row]
-assert len(labels) == 3 and any("發布" in l for l in labels) \
-    and any("重寫" in l for l in labels) and any("取消" in l for l in labels), labels
-print(f"PASS /tweet drafts only, holds it for approval, buttons {labels}")
+# --- the approval path must be gone -----------------------------------------
+for gone in ("pending_tweets", "tweet_keyboard", "tweet_button", "send_tweet_preview"):
+    assert not hasattr(bot, gone), f"{gone} should have been deleted"
+print("PASS the approval flow is gone from bot.py")
 
-# --- 取消 discards, publishes nothing ---------------------------------------
-q, b = press("tweet:cancel")
-assert published == [] and 424242 not in bot.pending_tweets
-assert q.markup_cleared, "the buttons must be cleared so it can't be pressed again"
-print("PASS 取消 discards the draft and publishes nothing")
-
-# --- 發布 with nothing pending must not post --------------------------------
-bot.pending_tweets.clear()
-q, b = press("tweet:publish")
-assert published == [], "publishing a forgotten draft must not post"
-assert any("沒有記錄" in (a or "") for a in q.answered), q.answered
-print("PASS 發布 with no pending draft refuses instead of posting")
-
-# --- 發布 posts once and returns the link -----------------------------------
-bot.pending_tweets[424242] = draft
-q, b = press("tweet:publish")
+# --- /tweet generates AND publishes, no buttons anywhere --------------------
+published.clear()
+tweet_mod.set_paused(False)
+upd, b = run_cmd(bot.tweet_command)
 assert len(published) == 1 and published[0] is draft, published
-assert any("https://x.com/" in (m or "") for m in b.msgs), b.msgs
-assert 424242 not in bot.pending_tweets, "the draft must be consumed"
-assert q.markup_cleared, "buttons cleared before posting, so a double tap can't repost"
-print(f"PASS 發布 posts once and returns the link: {[m for m in b.msgs if 'x.com' in (m or '')][0]}")
+texts = [m for m, _ in b.msgs]
+assert any("已發推" in (x or "") for x in texts), texts
+assert any("https://x.com/" in (x or "") for x in texts), texts
+assert all(mk is None for _, mk in b.msgs), "notifications must carry no buttons"
+print("PASS /tweet publishes straight away and notifies with the link, no buttons")
 
-# a second press of the same (now stale) button posts nothing more
-q2, b2 = press("tweet:publish")
-assert len(published) == 1, f"double tap must not post twice: {len(published)}"
-print("PASS a second tap on the same draft cannot post twice")
+# --- the scheduled job publishes too ----------------------------------------
+published.clear()
+b = NoteBot()
+asyncio.run(bot.tweet_daily_job(types.SimpleNamespace(bot=b)))
+assert len(published) == 1, published
+assert all(mk is None for _, mk in b.msgs)
+print("PASS the scheduled job publishes without asking")
 
-# --- a publish failure keeps the draft so it can be retried -----------------
-async def boom_publish(item): raise RuntimeError("X 拒絕了")
+# --- a publish failure is reported, with the text so it isn't lost ----------
+async def boom_publish(item): raise RuntimeError("X 拒絕了這則")
 tweet_mod.publish = boom_publish
-bot.pending_tweets[424242] = draft
-q, b = press("tweet:publish")
-assert bot.pending_tweets.get(424242) is draft, "a failed publish must keep the draft"
-assert any("發布失敗" in (m or "") for m in b.msgs), b.msgs
-print("PASS a failed publish reports it and keeps the draft for a retry")
+published.clear()
+upd, b = run_cmd(bot.tweet_command)
+texts = [m for m, _ in b.msgs]
+assert any("發布失敗" in (x or "") for x in texts), texts
+assert any("X 拒絕了這則" in (x or "") for x in texts), "the error must be relayed"
+assert any(draft.text in (x or "") for x in texts), "the text must survive a failed post"
+print("PASS a publish failure relays the error and keeps the text recoverable")
 tweet_mod.publish = fake_publish
 
-# --- non-admin is refused at every door -------------------------------------
+# --- a generation failure is reported ---------------------------------------
+async def boom_gen(*a, **k): raise tweet_mod.GenerationError("模型掛了")
+tweet_mod.generate_tweet = boom_gen
 published.clear()
+upd, b = run_cmd(bot.tweet_command)
+assert published == [], "a failed generation must not publish"
+assert any("模型掛了" in (m or "") for m, _ in b.msgs), b.msgs
+print("PASS a generation failure is reported and publishes nothing")
+tweet_mod.generate_tweet = draft_ok
+
+# --- /pause and /resume ------------------------------------------------------
+tweet_mod.set_paused(False)
+upd, b = run_cmd(bot.pause_command)
+assert tweet_mod.is_paused() is True
+assert any("暫停" in r for r in upd.replies), upd.replies
+upd, b = run_cmd(bot.pause_command)
+assert any("本來就是暫停" in r for r in upd.replies), upd.replies
+print("PASS /pause pauses, and says so when already paused")
+
+# paused: the schedule skips and publishes nothing
+published.clear()
+b = NoteBot()
+asyncio.run(bot.tweet_daily_job(types.SimpleNamespace(bot=b)))
+assert published == [], "the schedule must not publish while paused"
+assert any("已暫停" in (m or "") for m, _ in b.msgs), b.msgs
+print("PASS while paused the scheduled job skips and publishes nothing")
+
+# paused: /tweet is a deliberate manual action, so it still posts
+published.clear()
+upd, b = run_cmd(bot.tweet_command)
+assert len(published) == 1, "manual /tweet should still work while paused"
+assert any("暫停" in r for r in upd.replies), upd.replies
+print("PASS /tweet still posts while paused, and says the schedule is paused")
+
+upd, b = run_cmd(bot.resume_command)
+assert tweet_mod.is_paused() is False
+assert any("恢復" in r for r in upd.replies), upd.replies
+upd, b = run_cmd(bot.resume_command)
+assert any("本來就在跑" in r for r in upd.replies), upd.replies
+print("PASS /resume resumes, and says so when already running")
+
+# --- pause survives a restart, and a wiped file defaults to running ---------
+tweet_mod.set_paused(True)
+assert tweet_mod.is_paused() is True, "pause must be readable back from the file"
+tweet_mod.X_TWEET_STATE_FILE.unlink()
+assert tweet_mod.is_paused() is False, "a wiped file must default to running"
+print("PASS pause persists in the file; a wiped file (Railway redeploy) resumes")
+
+# --- non-admin is refused at every door -------------------------------------
+class NonAdmin(AdminUpd):
+    def __init__(self):
+        super().__init__()
+        self.effective_chat = types.SimpleNamespace(id=999)
+
 called = {"gen": 0}
 async def never_gen(*a, **k):
     called["gen"] += 1
     raise AssertionError("must not generate for a non-admin")
 tweet_mod.generate_tweet = never_gen
-replies.clear()
-asyncio.run(bot.tweet_command(FakeUpdate(), types.SimpleNamespace(bot=FakeBot())))
-assert called["gen"] == 0 and replies and "沒有對你開放" in replies[0] or "没有对你开放" in replies[0]
-bot.pending_tweets[999] = draft
-q, b = press("tweet:publish", chat_id=999)
-assert published == [], "a non-admin must never publish"
-print("PASS a non-admin can neither draft nor publish")
+published.clear()
+tweet_mod.set_paused(False)
+for fn in (bot.tweet_command, bot.pause_command, bot.resume_command):
+    upd, b = run_cmd(fn, NonAdmin())
+    assert upd.replies and ("沒有對你開放" in upd.replies[0] or "没有对你开放" in upd.replies[0]), upd.replies
+assert called["gen"] == 0 and published == []
+assert tweet_mod.is_paused() is False, "a non-admin must not be able to pause"
+print("PASS a non-admin can't post, pause or resume")
 tweet_mod.generate_tweet = draft_ok
 
 # --- both tweet times are scheduled -----------------------------------------
@@ -227,7 +270,6 @@ assert hours == ["12", "20"], hours
 assert all(str(j.job.trigger.timezone) == "Asia/Taipei" for j in jobs4)
 print(f"PASS both daily tweet jobs scheduled at {hours} Asia/Taipei")
 
-# a malformed entry is skipped, the good one still schedules
 app5 = Application.builder().token("123:fake").build()
 bot.X_DAILY_TIMES = "12:00,nonsense"
 bot.schedule_daily_tweets(app5)
