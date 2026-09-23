@@ -3,8 +3,10 @@
 Generates one opinionated tweet in Traditional Chinese via OpenRouter and
 publishes it straight to X. Telegram only gets a notification afterwards.
 
-The JSON tolerance, the hard content rules and the recent-topic window are
-imported from `xhs` rather than copied, so the two features cannot drift apart.
+The JSON tolerance and the recent-topic window are imported from `xhs` rather
+than copied. The content rules are this module's own: the 小红书 ones require
+every detail to be a personal life experience, which rules out the hands-on
+tooling findings this account is for.
 Publishing uses tweepy with the same four X credentials as `x_bot.py`.
 """
 
@@ -35,6 +37,8 @@ X_AVOID_DAYS = int(os.environ.get("X_AVOID_DAYS", "7"))
 # 140 CJK characters is exactly X's 280-weight budget, since CJK counts double.
 TWEET_CHAR_LIMIT = int(os.environ.get("X_TWEET_CHAR_LIMIT", "140"))
 X_WEIGHTED_LIMIT = 280
+# Two at most, and English ones read better on an AI timeline.
+MAX_TAGS = int(os.environ.get("X_MAX_TAGS", "2"))
 
 # X credentials — the same four x_bot.py uses.
 X_API_KEY = os.environ.get("X_API_KEY", "")
@@ -42,14 +46,14 @@ X_API_SECRET = os.environ.get("X_API_SECRET", "")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", "")
 X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", "")
 
-# Same six areas as the 小红书 rotation, written in Traditional Chinese.
+# Six sub-areas of AI / AI agents, rotated one per post.
 DOMAINS = [
-    "搞錢與職場",
-    "消費觀",
-    "感情與生活選擇",
-    "AI 與未來",
-    "年輕人現狀",
-    "反常識觀點",
+    "AI agent 的實際能力與限制",
+    "用 AI 寫程式的體驗和踩坑",
+    "AI 工具比較與選擇",
+    "AI 對工作和職業的影響",
+    "自動化工作流的想法",
+    "對 AI 產業趨勢的觀察",
 ]
 
 _json_mode_supported = os.environ.get("X_JSON_MODE", "true").lower() != "false"
@@ -211,53 +215,92 @@ def take_domain(state: dict) -> str:
 # Generation
 # --------------------------------------------------------------------------- #
 
-SYSTEM_PROMPT = """你是一個觀點鮮明的 X（Twitter）帳號寫手，擅長寫出會被轉發和爭論的短貼文。
+SYSTEM_PROMPT = """你是一個在 X（Twitter）上寫 AI 和 AI agent 的帳號。
+你自己在用這些工具寫程式、搭自動化流程，所以寫的是實際用過之後的看法，
+不是轉述新聞，也不是喊口號。
+
+語氣：直接、具體、有立場。可以吐槽，可以講反常識的觀察，可以講踩過的坑。
+不要寫成教學文，不要寫成心靈雞湯，不要用「在這個 AI 時代」這種開場。
 
 你的輸出會被程式直接用 json.loads() 解析，所以：
 - 第一個字元必須是 {，最後一個字元必須是 }
 - 不要寫 ```json，不要寫任何程式碼區塊標記
 - 不要在 JSON 前後加「好的」「以下是」之類的話
-- 貼文內容用繁體中文
+- 貼文用繁體中文，技術名詞保留英文（agent、context、prompt、token、API、MCP…）
 
 只輸出那一個 JSON 物件，其他什麼都不要輸出。"""
+
+# This account's own rules. The 小红书 set is not reused: its rule 2 requires
+# every detail to be a personal life experience, which would forbid exactly the
+# hands-on tooling findings this account exists to post.
+HARD_RULES = """【必須遵守的硬性規則，違反即視為失敗】
+1. 不編造事實。具體來說：
+   - 不編造 benchmark 數字、市佔率、使用者數、融資金額這類數據
+   - 不編造某個產品「有什麼功能」或「不能做什麼」——不確定就不要寫具體規格
+   - 不編造任何人說過的話，不假託業界人士、研究報告、某公司內部消息
+   - 可以寫你自己動手用過之後的感受和觀察，這不算編造
+2. 不攻擊、不貶低任何群體或任何具名的人、公司、團隊。
+   可以對「某種做法」「某個工具的某個設計」表達強烈態度，但不要人身攻擊。
+3. 不涉及政治、時政、政策評價、國際關係。
+4. 不給醫療建議，不給投資理財建議（包括叫人買賣任何公司的股票）。"""
 
 
 def _build_prompt(domain: str, avoid: list[str]) -> str:
     avoid_block = "\n".join(f"- {t}" for t in avoid) if avoid else "（暫無，隨便挑）"
-    return f"""請就下面這個領域，寫一則 X（Twitter）貼文。
+    return f"""請就下面這個方向，寫一則 X（Twitter）貼文。
 
-【領域】{domain}
+【方向】{domain}
 
-【最近 {X_AVOID_DAYS} 天已經寫過的選題，不要重複，也不要換個說法寫同一件事】
+【最近 {X_AVOID_DAYS} 天已經寫過的，不要重複，也不要換個說法寫同一件事】
 {avoid_block}
 
-【選題要求】
-挑一個觀點對立、留言區會吵起來的話題。要具體到一個場景或一個決定，不要空泛的大道理。
+【內容要求】
+挑一個**具體**的點，不要泛泛而談。好的題材長這樣：
+- 某個 agent 實際跑起來之後，跟宣傳差在哪
+- 用 AI 寫某類程式碼時，它反覆犯的某個錯
+- 兩個工具在某件具體事情上的差別
+- 某個大家都在講但你覺得講錯了的說法
+- 某個自動化流程做完才發現的事
 
-【貼文要求】
-- 繁體中文，**不超過 {TWEET_CHAR_LIMIT} 個字**（這是硬限制，超過就沒用了）
-- 立場鮮明，第一句就要把觀點丟出來，不要鋪陳
-- 可以有一個具體細節（金額、時間、場景），但整則要短
-- 結尾留一個讓人想回話的鉤子：一個反問，或一個二選一
-- 不要放網址、不要放任何連結
-- 標籤最多 3 個，放在 tags 欄位，不要帶 # 號，也不要寫進 text 裡
+【寫法】
+- **2 到 4 句話**，這是重點。不要寫三段式的長故事，不要鋪陳背景。
+- 第一句就要有觀點或發現，不要暖場
+- 要有具體的東西：一個場景、一個行為、一個對比。不要只有形容詞
+- 結尾**不一定要問句**。有時候一句斷言更有力，
+  例如「這不是模型不夠強，是任務本來就沒定義清楚。」
+- 繁體中文為主，技術名詞保留英文
+- 不要放網址
+- 標籤最多 {MAX_TAGS} 個，放 tags 欄位，不要帶 # 號。
+  優先用常見英文標籤，例如 AI、AIAgent、LLM、Claude、Cursor、vibecoding
 
-{xhs.HARD_RULES}
+{HARD_RULES}
 
 【輸出格式】只輸出這個 JSON：
 
 {{
-  "topic": "這則的選題，一句話",
-  "text": "貼文正文，繁體中文，{TWEET_CHAR_LIMIT} 字以內",
-  "tags": ["標籤一", "標籤二"]
+  "topic": "這則在講什麼，一句話",
+  "text": "貼文正文，2 到 4 句",
+  "tags": ["AI", "AIAgent"]
 }}
 
-下面是一個好例子的長度和語氣（內容不要抄）：
+下面是三個示範，抓它們的長度和語氣（內容不要抄）：
 
 {{
-  "topic": "加薪 3000 但要每天多通勤一小時，值不值得",
-  "text": "同事為了加薪三千，換到一個單程多四十分鐘的公司。\\n\\n一年多賺三萬六，換掉三百個小時。算下來一小時一百二，比他的時薪還低。\\n\\n他說這是往上走的必經之路。我覺得他只是把自己賣便宜了。\\n\\n你會換嗎？",
-  "tags": ["職場", "通勤"]
+  "topic": "agent 的失敗多半是任務沒定義清楚，不是模型不夠強",
+  "text": "我發現 agent 跑失敗的時候，八成不是它笨，是我根本沒把「做完」定義清楚。\\n\\n換更強的模型解決不了這件事。你自己都說不出驗收條件，它當然只能一直繞。",
+  "tags": ["AIAgent", "AI"]
+}}
+
+{{
+  "topic": "AI 寫的程式碼最花時間的是讀不是寫",
+  "text": "用 AI 寫程式一個月，真正省下的是打字，不是思考。\\n\\n現在我花在讀它寫了什麼的時間，比以前自己寫還多。只是累的地方換了。",
+  "tags": ["vibecoding", "AI"]
+}}
+
+{{
+  "topic": "工具比較的結論通常取決於任務類型而不是工具本身",
+  "text": "同一個需求丟給兩個 coding agent，一個把整個檔案重寫，一個只改三行。\\n\\n後者不是比較聰明，是它願意先問清楚。這個差別比 benchmark 分數有用多了。",
+  "tags": ["AIAgent", "LLM"]
 }}
 
 現在就【{domain}】寫一則新的。只輸出 JSON。"""
@@ -276,7 +319,7 @@ def _normalize(data: dict, domain: str) -> Tweet:
     raw_tags = xhs._pick(data, TAGS_KEYS) or []
     if isinstance(raw_tags, str):
         raw_tags = re.split(r"[,，\s]+", raw_tags)
-    tags = [t for t in (xhs._clean_tag(t) for t in raw_tags) if t][:3]
+    tags = [t for t in (xhs._clean_tag(t) for t in raw_tags) if t][:MAX_TAGS]
 
     tweet = Tweet(
         domain=domain,
