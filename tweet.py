@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -29,15 +30,24 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-# Falls back to the chat model, so one MODEL setting still configures everything.
-X_MODEL = os.environ.get("X_MODEL") or os.environ.get("MODEL", "deepseek/deepseek-chat-v3.1:free")
+# No fallback to MODEL any more: MODEL is the Telegram chat model and is
+# normally set, so falling back to it would quietly stop tweets using this one.
+X_MODEL = os.environ.get("X_MODEL", "google/gemma-4-26b-a4b-it:free")
 X_REQUEST_TIMEOUT = float(os.environ.get("X_REQUEST_TIMEOUT", "120"))
 X_MAX_TOKENS = int(os.environ.get("X_MAX_TOKENS", "2000"))
 X_TWEET_STATE_FILE = Path(os.environ.get("X_TWEET_STATE_FILE", "x_tweet_state.json"))
 X_AVOID_DAYS = int(os.environ.get("X_AVOID_DAYS", "7"))
-# The prompt asks for under 270 characters including hashtags; English weighs
-# 1 per character, so this sits just inside X's 280 budget.
+# The prompt sets a different ceiling per language, so the trim needs both.
+# 270 English characters weigh 270; 130 Chinese characters weigh 260. Both sit
+# inside X's 280 budget.
 TWEET_CHAR_LIMIT = int(os.environ.get("X_TWEET_CHAR_LIMIT", "270"))
+CHINESE_CHAR_LIMIT = int(os.environ.get("X_TWEET_CHAR_LIMIT_ZH", "130"))
+
+ENGLISH = "English"
+CHINESE = "Simplified Chinese"
+LANGUAGE_LIMITS = {ENGLISH: TWEET_CHAR_LIMIT, CHINESE: CHINESE_CHAR_LIMIT}
+# Share of tweets written in English; the rest are Simplified Chinese.
+ENGLISH_RATIO = float(os.environ.get("X_ENGLISH_RATIO", "0.7"))
 X_WEIGHTED_LIMIT = 280
 # Two at most, and English ones read better on an AI timeline.
 MAX_TAGS = int(os.environ.get("X_MAX_TAGS", "2"))
@@ -121,14 +131,15 @@ def weighted_length(text: str) -> int:
     return total
 
 
-def fit_tweet(text: str) -> str:
-    """Trim to the limit at a sentence boundary, so the tweet still lands.
+def fit_tweet(text: str, limit: int | None = None) -> str:
+    """Trim to `limit` at a sentence boundary, so the tweet still lands.
 
     A tweet's point is usually its last line, so whole trailing sentences are
     dropped rather than cutting mid-word.
     """
+    limit = TWEET_CHAR_LIMIT if limit is None else limit
     text = text.strip()
-    if len(text) <= TWEET_CHAR_LIMIT and weighted_length(text) <= X_WEIGHTED_LIMIT:
+    if len(text) <= limit and weighted_length(text) <= X_WEIGHTED_LIMIT:
         return text
 
     # Split keeping the punctuation attached to its sentence.
@@ -136,7 +147,7 @@ def fit_tweet(text: str) -> str:
     kept: list[str] = []
     for part in parts:
         candidate = "".join(kept + [part])
-        if len(candidate) > TWEET_CHAR_LIMIT or weighted_length(candidate) > X_WEIGHTED_LIMIT:
+        if len(candidate) > limit or weighted_length(candidate) > X_WEIGHTED_LIMIT:
             break
         kept.append(part)
 
@@ -146,7 +157,7 @@ def fit_tweet(text: str) -> str:
         return trimmed
 
     # A single sentence longer than the whole budget: hard cut, flagged.
-    hard = text[:TWEET_CHAR_LIMIT - 1].rstrip() + "…"
+    hard = text[:limit - 1].rstrip() + "…"
     logger.warning("推文是一整句且超長，硬截到 %d 字", len(hard))
     return hard
 
@@ -235,19 +246,20 @@ def take_domain(state: dict) -> str:
 # Generation
 # --------------------------------------------------------------------------- #
 
-# The account's prompt, kept verbatim. {recent_tweets} is the only placeholder;
-# it is filled by str.replace rather than str.format so nothing else in the text
-# has to be escaped.
-TWEET_PROMPT = """You are a sharp, independent builder who posts on X about AI and AI agents. Write ONE original tweet in English.
+# The account's prompt, kept verbatim. {language} and {recent_tweets} are the
+# only placeholders; they are filled by str.replace rather than str.format so
+# nothing else in the text has to be escaped.
+TWEET_PROMPT = """You are a sharp, independent builder who posts on X about AI and AI agents. Write ONE original tweet in {language}.
 
 Rules:
-- English only. No Chinese characters, no translation-style phrasing.
-- Under 270 characters total, including hashtags.
+- Write entirely in {language}. Do not mix languages, except for common technical terms like "AI agent", "LLM", "prompt".
+- If English: under 270 characters total, including hashtags.
+- If Chinese: under 130 Chinese characters total, including hashtags. Natural, conversational Chinese, not translated-sounding.
 - Sound like a real person sharing a thought, not a brand or a press release.
 - Pick ONE angle per tweet: a practical tip, a hot take, a lesson from building with AI agents, a tool you find useful, or a prediction.
-- Be specific. Concrete examples beat vague hype. Avoid words like "revolutionary", "game-changer", "unlock", "delve".
+- Be specific. Concrete examples beat vague hype.
 - Short sentences. Line breaks are fine. At most 1 emoji, or none.
-- 0\u20132 relevant hashtags at the end (e.g. #AI #AIAgents). Never more than 2.
+- 0\u20132 relevant hashtags at the end. Never more than 2.
 - No links, no @mentions, no quotation marks around the whole tweet.
 
 Recent tweets (do not repeat these topics or openings):
@@ -256,10 +268,17 @@ Recent tweets (do not repeat these topics or openings):
 Output ONLY the tweet text. No explanation, no preamble."""
 
 
-def _build_prompt(recent: list[str]) -> str:
-    """Fill {recent_tweets} with the recent posts, newest first."""
+def pick_language() -> str:
+    """Draw the language: ENGLISH_RATIO of the time English, otherwise Chinese."""
+    return ENGLISH if random.random() < ENGLISH_RATIO else CHINESE
+
+
+def _build_prompt(language: str, recent: list[str]) -> str:
+    """Fill {language} and {recent_tweets}; leave the rest of the prompt alone."""
     block = "\n".join(f"- {t}" for t in recent) if recent else "(none yet)"
-    return TWEET_PROMPT.replace("{recent_tweets}", block)
+    return (TWEET_PROMPT
+            .replace("{language}", language)
+            .replace("{recent_tweets}", block))
 
 
 _HASHTAG_RE = re.compile(r"#\w+")
@@ -276,7 +295,7 @@ def _enforce_hashtag_cap(text: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", text).strip()
 
 
-def _parse_tweet(raw: str, domain: str) -> Tweet:
+def _parse_tweet(raw: str, domain: str, language: str = ENGLISH) -> Tweet:
     """Turn the model's plain-text reply into a Tweet.
 
     The prompt asks for bare text, so that is the main path. A model that wraps
@@ -299,14 +318,15 @@ def _parse_tweet(raw: str, domain: str) -> Tweet:
     if not text:
         raise GenerationError("模型回傳了空的貼文內容")
 
-    text = fit_tweet(_enforce_hashtag_cap(strip_urls(text)))
+    limit = LANGUAGE_LIMITS.get(language, TWEET_CHAR_LIMIT)
+    text = fit_tweet(_enforce_hashtag_cap(strip_urls(text)), limit)
 
     # Hashtags now live inside the text, so `tags` stays empty and full_text()
     # returns the tweet exactly as the model wrote it.
     return Tweet(domain=domain, topic=text[:60], text=text, tags=[])
 
 
-async def _one_call(domain: str, recent: list[str]) -> Tweet:
+async def _one_call(domain: str, recent: list[str], language: str) -> Tweet:
     if client is None:
         raise GenerationError("OPENROUTER_API_KEY 沒有設定")
 
@@ -314,7 +334,7 @@ async def _one_call(domain: str, recent: list[str]) -> Tweet:
     # would fight it.
     response = await client.chat.completions.create(
         model=X_MODEL,
-        messages=[{"role": "user", "content": _build_prompt(recent)}],
+        messages=[{"role": "user", "content": _build_prompt(language, recent)}],
         temperature=1.0,
         max_tokens=X_MAX_TOKENS,
     )
@@ -335,7 +355,7 @@ async def _one_call(domain: str, recent: list[str]) -> Tweet:
         raise GenerationError(f"模型回傳了空內容（finish_reason={finish}）")
 
     try:
-        return _parse_tweet(text, domain)
+        return _parse_tweet(text, domain, language)
     except GenerationError as exc:
         if finish == "length":
             raise GenerationError(f"{exc}。finish_reason=length，輸出被截斷，建議調高 X_MAX_TOKENS") from exc
@@ -347,11 +367,13 @@ async def generate_tweet(domain: str | None = None) -> Tweet:
     state = load_state()
     chosen = domain or take_domain(state)
     recent = recent_tweet_texts(state)
+    language = pick_language()
+    logger.info("這則用 %s 生成", language)
 
     last_error: Exception | None = None
     for attempt in (1, 2):
         try:
-            tweet = await _one_call(chosen, recent)
+            tweet = await _one_call(chosen, recent, language)
         except Exception as exc:  # noqa: BLE001 - retry once, then report
             last_error = exc
             logger.warning("推文生成第 %d 次失敗：%s", attempt, exc, exc_info=True)
@@ -361,6 +383,7 @@ async def generate_tweet(domain: str | None = None) -> Tweet:
             {
                 "date": date.today().isoformat(),
                 "domain": chosen,
+                "language": language,
                 "topic": tweet.topic,
                 # Full text, so {recent_tweets} can show real openings.
                 "text": tweet.text,

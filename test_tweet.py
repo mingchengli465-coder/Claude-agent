@@ -54,16 +54,17 @@ assert tw.strip_urls("沒有網址的文字") == "沒有網址的文字"
 print("PASS URLs are removed, plain text untouched")
 
 # --- the prompt is stored verbatim ------------------------------------------
-SUPPLIED = """You are a sharp, independent builder who posts on X about AI and AI agents. Write ONE original tweet in English.
+SUPPLIED = """You are a sharp, independent builder who posts on X about AI and AI agents. Write ONE original tweet in {language}.
 
 Rules:
-- English only. No Chinese characters, no translation-style phrasing.
-- Under 270 characters total, including hashtags.
+- Write entirely in {language}. Do not mix languages, except for common technical terms like "AI agent", "LLM", "prompt".
+- If English: under 270 characters total, including hashtags.
+- If Chinese: under 130 Chinese characters total, including hashtags. Natural, conversational Chinese, not translated-sounding.
 - Sound like a real person sharing a thought, not a brand or a press release.
 - Pick ONE angle per tweet: a practical tip, a hot take, a lesson from building with AI agents, a tool you find useful, or a prediction.
-- Be specific. Concrete examples beat vague hype. Avoid words like "revolutionary", "game-changer", "unlock", "delve".
+- Be specific. Concrete examples beat vague hype.
 - Short sentences. Line breaks are fine. At most 1 emoji, or none.
-- 0\u20132 relevant hashtags at the end (e.g. #AI #AIAgents). Never more than 2.
+- 0\u20132 relevant hashtags at the end. Never more than 2.
 - No links, no @mentions, no quotation marks around the whole tweet.
 
 Recent tweets (do not repeat these topics or openings):
@@ -74,15 +75,42 @@ Output ONLY the tweet text. No explanation, no preamble."""
 assert tw.TWEET_PROMPT == SUPPLIED, "the stored prompt must stay byte-identical"
 print("PASS TWEET_PROMPT matches the supplied prompt exactly")
 
-built = tw._build_prompt(["Agents fail on undefined tasks.", "AI code review is the bottleneck."])
-assert "{recent_tweets}" not in built, "the placeholder must be filled"
-assert built.replace(
-    "- Agents fail on undefined tasks.\n- AI code review is the bottleneck.",
-    "{recent_tweets}") == SUPPLIED, "only the placeholder may differ"
-print("PASS {recent_tweets} is filled from history and nothing else is altered")
+built = tw._build_prompt(tw.ENGLISH, ["Agents fail on undefined tasks.", "Review is the bottleneck."])
+assert "{language}" not in built and "{recent_tweets}" not in built, "placeholders must be filled"
+assert built.count("English") >= 2, "both {language} slots must be filled"
+restored = (built
+            .replace("- Agents fail on undefined tasks.\n- Review is the bottleneck.", "{recent_tweets}")
+            .replace("Write ONE original tweet in English.", "Write ONE original tweet in {language}.")
+            .replace("- Write entirely in English.", "- Write entirely in {language}."))
+assert restored == SUPPLIED, "only the two placeholders may differ"
+print("PASS {language} and {recent_tweets} are filled, nothing else altered")
 
-assert "(none yet)" in tw._build_prompt([])
-print("PASS an empty history renders '(none yet)', not a bare placeholder")
+zh = tw._build_prompt(tw.CHINESE, [])
+assert "Write ONE original tweet in Simplified Chinese." in zh
+assert "- Write entirely in Simplified Chinese." in zh
+assert "(none yet)" in zh
+print("PASS the Chinese draw renders 'Simplified Chinese' in both slots")
+
+# --- the 70/30 language draw ------------------------------------------------
+import random as _random
+_random.seed(11)
+draws = [tw.pick_language() for _ in range(4000)]
+share = draws.count(tw.ENGLISH) / len(draws)
+assert set(draws) == {tw.ENGLISH, tw.CHINESE}, set(draws)
+assert 0.67 < share < 0.73, f"English share {share:.3f} is not ~0.70"
+print(f"PASS pick_language draws {share:.1%} English over 4000 samples (target 70%)")
+
+saved = tw.ENGLISH_RATIO
+tw.ENGLISH_RATIO = 0.0
+assert {tw.pick_language() for _ in range(50)} == {tw.CHINESE}
+tw.ENGLISH_RATIO = 1.0
+assert {tw.pick_language() for _ in range(50)} == {tw.ENGLISH}
+tw.ENGLISH_RATIO = saved
+print("PASS X_ENGLISH_RATIO at 0 and 1 pins the draw to one language")
+
+# --- the model -------------------------------------------------------------
+assert tw.X_MODEL == "google/gemma-4-26b-a4b-it:free", tw.X_MODEL
+print(f"PASS the tweet model is {tw.X_MODEL}")
 
 # --- plain-text parsing ------------------------------------------------------
 raw = "Most agent failures aren't reasoning failures.\n\nThey're underspecified tasks.\n\n#AIAgents"
@@ -106,9 +134,23 @@ assert tw._parse_tweet(wrapped, "d").text == "Unwrapped from JSON. #AI"
 print("PASS a model that returns JSON anyway is still unwrapped")
 
 long_en = " ".join(f"Sentence number {i} here." for i in range(1, 40))
-fitted = tw._parse_tweet(long_en, "d").text
+fitted = tw._parse_tweet(long_en, "d", tw.ENGLISH).text
 assert len(fitted) <= tw.TWEET_CHAR_LIMIT and fitted.endswith("."), len(fitted)
-print(f"PASS an over-long English tweet trims to {len(fitted)} chars on a sentence end")
+print(f"PASS an over-long English tweet trims to {len(fitted)} chars (limit {tw.TWEET_CHAR_LIMIT})")
+
+# Chinese has its own, lower ceiling.
+long_zh = "。".join(f"这是第{i}句话用来测试中文的裁切" for i in range(1, 30)) + "。"
+fitted_zh = tw._parse_tweet(long_zh, "d", tw.CHINESE).text
+assert len(fitted_zh) <= tw.CHINESE_CHAR_LIMIT, (len(fitted_zh), tw.CHINESE_CHAR_LIMIT)
+assert tw.weighted_length(fitted_zh) <= 280, tw.weighted_length(fitted_zh)
+assert fitted_zh.endswith("。")
+print(f"PASS a Chinese tweet trims to {len(fitted_zh)} chars (limit {tw.CHINESE_CHAR_LIMIT}), "
+      f"weight {tw.weighted_length(fitted_zh)}/280")
+
+# The same over-long Chinese text would be left far too long under the English
+# limit, which is why the limit is per language rather than global.
+assert len(tw._parse_tweet(long_zh, "d", tw.ENGLISH).text) > tw.CHINESE_CHAR_LIMIT
+print("PASS the English limit would not have caught it — the split matters")
 
 for bad in ("", "   ", '""'):
     try:
@@ -153,15 +195,16 @@ def with_model(content, reasoning=None):
     return c
 
 c = with_model(payload)
-t1 = asyncio.run(tw._one_call("d", []))
+t1 = asyncio.run(tw._one_call("d", [], tw.ENGLISH))
 assert t1.text == payload, t1.text
-assert c.seen["max_tokens"] == tw.X_MAX_TOKENS and c.seen["model"] == tw.X_MODEL
+assert c.seen["max_tokens"] == tw.X_MAX_TOKENS
+assert c.seen["model"] == "google/gemma-4-26b-a4b-it:free", c.seen["model"]
 assert "response_format" not in c.seen, "JSON mode would fight a bare-text prompt"
 print("PASS a plain-text reply is used as-is, and no response_format is sent")
 
 # empty content -> reasoning trace
 c = with_model("", reasoning=payload)
-t2 = asyncio.run(tw._one_call("d", []))
+t2 = asyncio.run(tw._one_call("d", [], tw.ENGLISH))
 assert t2.text == payload
 print("PASS empty content still falls back to the reasoning trace")
 
