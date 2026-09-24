@@ -339,6 +339,14 @@ The prompt pushes for something **specific** — how an agent differed from its
 pitch, a mistake a model keeps making, a concrete difference between two tools —
 rather than general commentary.
 
+## Language
+
+Each tweet draws its language before generation: **70% English, 30% Simplified
+Chinese** (`X_ENGLISH_RATIO`). The draw fills the prompt's `{language}` slot and
+picks the character ceiling — **270 for English, 130 for Chinese**, since a
+Chinese character weighs 2 against X's 280 budget. The chosen language is logged
+and recorded in the history row.
+
 ## Style
 
 - **2 to 4 sentences.** Not a three-part story; no scene-setting.
@@ -378,7 +386,7 @@ of a usable object, because a tweet's "done" looks nothing like a note's.
 | `X_API_SECRET`           | to post  | —                  |                                               |
 | `X_ACCESS_TOKEN`         | to post  | —                  | Must be regenerated after setting Read+Write  |
 | `X_ACCESS_TOKEN_SECRET`  | to post  | —                  |                                               |
-| `X_MODEL`                | no       | falls back to `MODEL` | Model used for tweets                      |
+| `X_MODEL`                | no       | `google/gemma-4-26b-a4b-it:free` | Model used for tweets. No longer falls back to `MODEL` |
 | `X_DAILY_TIMES`          | no       | `12:00,20:00`      | Daily posting times                           |
 | `X_TIMEZONE`             | no       | `Asia/Taipei`      | Timezone for those times                      |
 | `X_TWEET_CHAR_LIMIT`     | no       | `140`              | Character limit                               |
