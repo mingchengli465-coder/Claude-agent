@@ -1,12 +1,13 @@
 """X (Twitter) post generation for the Telegram bot.
 
-Generates one opinionated tweet in Traditional Chinese via OpenRouter and
-publishes it straight to X. Telegram only gets a notification afterwards.
+Generates one tweet in English via OpenRouter and publishes it straight to X.
+Telegram only gets a notification afterwards.
 
-The JSON tolerance and the recent-topic window are imported from `xhs` rather
-than copied. The content rules are this module's own: the 小红书 ones require
-every detail to be a personal life experience, which rules out the hands-on
-tooling findings this account is for.
+The model is asked for bare tweet text, not JSON, so the reply is used as-is
+after URL stripping, a hashtag cap and a length trim.
+
+The content rules live in the prompt itself. `xhs` is still used for the
+reasoning-trace fallback and for unwrapping a stray JSON reply.
 Publishing uses tweepy with the same four X credentials as `x_bot.py`.
 """
 
@@ -16,11 +17,11 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import tweepy
-from openai import AsyncOpenAI, BadRequestError
+from openai import AsyncOpenAI
 
 import xhs
 
@@ -34,8 +35,9 @@ X_REQUEST_TIMEOUT = float(os.environ.get("X_REQUEST_TIMEOUT", "120"))
 X_MAX_TOKENS = int(os.environ.get("X_MAX_TOKENS", "2000"))
 X_TWEET_STATE_FILE = Path(os.environ.get("X_TWEET_STATE_FILE", "x_tweet_state.json"))
 X_AVOID_DAYS = int(os.environ.get("X_AVOID_DAYS", "7"))
-# 140 CJK characters is exactly X's 280-weight budget, since CJK counts double.
-TWEET_CHAR_LIMIT = int(os.environ.get("X_TWEET_CHAR_LIMIT", "140"))
+# The prompt asks for under 270 characters including hashtags; English weighs
+# 1 per character, so this sits just inside X's 280 budget.
+TWEET_CHAR_LIMIT = int(os.environ.get("X_TWEET_CHAR_LIMIT", "270"))
 X_WEIGHTED_LIMIT = 280
 # Two at most, and English ones read better on an AI timeline.
 MAX_TAGS = int(os.environ.get("X_MAX_TAGS", "2"))
@@ -56,21 +58,18 @@ DOMAINS = [
     "對 AI 產業趨勢的觀察",
 ]
 
-_json_mode_supported = os.environ.get("X_JSON_MODE", "true").lower() != "false"
-
 client = AsyncOpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url=OPENROUTER_BASE_URL,
     timeout=X_REQUEST_TIMEOUT,
 ) if OPENROUTER_API_KEY else None
 
+# Only used when a model wraps the tweet in JSON despite the prompt.
 TEXT_KEYS = ("text", "tweet", "正文", "內容", "内容", "content")
-TOPIC_KEYS = ("topic", "選題", "选题", "主題", "主题")
-TAGS_KEYS = ("tags", "hashtags", "標籤", "标签")
 
 _URL_RE = re.compile(r"(https?://\S+|www\.\S+)", re.I)
 # Sentence ends, used to trim a too-long tweet without cutting mid-thought.
-_SENTENCE_END = "。！？!?…"
+_SENTENCE_END = ".。！？!?…"
 
 
 def _is_usable(data: dict) -> bool:
@@ -205,6 +204,27 @@ def set_paused(paused: bool) -> None:
     logger.info("自動發推已%s", "暫停" if paused else "恢復")
 
 
+def recent_tweet_texts(state: dict, days: int = X_AVOID_DAYS) -> list[str]:
+    """Recent tweets, newest first, for the {recent_tweets} placeholder.
+
+    Falls back to the truncated `title` written by older versions so history
+    from before this change is still useful.
+    """
+    cutoff = date.today() - timedelta(days=days)
+    out: list[str] = []
+    for entry in reversed(state.get("history") or []):
+        try:
+            when = date.fromisoformat(entry.get("date", ""))
+        except ValueError:
+            continue
+        if when < cutoff:
+            continue
+        text = entry.get("text") or entry.get("title") or ""
+        if text:
+            out.append(" ".join(str(text).split()))
+    return out
+
+
 def take_domain(state: dict) -> str:
     index = int(state.get("domain_index", 0)) % len(DOMAINS)
     state["domain_index"] = (index + 1) % len(DOMAINS)
@@ -215,158 +235,89 @@ def take_domain(state: dict) -> str:
 # Generation
 # --------------------------------------------------------------------------- #
 
-SYSTEM_PROMPT = """你是一個在 X（Twitter）上寫 AI 和 AI agent 的帳號。
-你自己在用這些工具寫程式、搭自動化流程，所以寫的是實際用過之後的看法，
-不是轉述新聞，也不是喊口號。
+# The account's prompt, kept verbatim. {recent_tweets} is the only placeholder;
+# it is filled by str.replace rather than str.format so nothing else in the text
+# has to be escaped.
+TWEET_PROMPT = """You are a sharp, independent builder who posts on X about AI and AI agents. Write ONE original tweet in English.
 
-語氣：直接、具體、有立場。可以吐槽，可以講反常識的觀察，可以講踩過的坑。
-不要寫成教學文，不要寫成心靈雞湯，不要用「在這個 AI 時代」這種開場。
+Rules:
+- English only. No Chinese characters, no translation-style phrasing.
+- Under 270 characters total, including hashtags.
+- Sound like a real person sharing a thought, not a brand or a press release.
+- Pick ONE angle per tweet: a practical tip, a hot take, a lesson from building with AI agents, a tool you find useful, or a prediction.
+- Be specific. Concrete examples beat vague hype. Avoid words like "revolutionary", "game-changer", "unlock", "delve".
+- Short sentences. Line breaks are fine. At most 1 emoji, or none.
+- 0\u20132 relevant hashtags at the end (e.g. #AI #AIAgents). Never more than 2.
+- No links, no @mentions, no quotation marks around the whole tweet.
 
-你的輸出會被程式直接用 json.loads() 解析，所以：
-- 第一個字元必須是 {，最後一個字元必須是 }
-- 不要寫 ```json，不要寫任何程式碼區塊標記
-- 不要在 JSON 前後加「好的」「以下是」之類的話
-- 貼文用繁體中文，技術名詞保留英文（agent、context、prompt、token、API、MCP…）
+Recent tweets (do not repeat these topics or openings):
+{recent_tweets}
 
-只輸出那一個 JSON 物件，其他什麼都不要輸出。"""
-
-# This account's own rules. The 小红书 set is not reused: its rule 2 requires
-# every detail to be a personal life experience, which would forbid exactly the
-# hands-on tooling findings this account exists to post.
-HARD_RULES = """【必須遵守的硬性規則，違反即視為失敗】
-1. 不編造事實。具體來說：
-   - 不編造 benchmark 數字、市佔率、使用者數、融資金額這類數據
-   - 不編造某個產品「有什麼功能」或「不能做什麼」——不確定就不要寫具體規格
-   - 不編造任何人說過的話，不假託業界人士、研究報告、某公司內部消息
-   - 可以寫你自己動手用過之後的感受和觀察，這不算編造
-2. 不攻擊、不貶低任何群體或任何具名的人、公司、團隊。
-   可以對「某種做法」「某個工具的某個設計」表達強烈態度，但不要人身攻擊。
-3. 不涉及政治、時政、政策評價、國際關係。
-4. 不給醫療建議，不給投資理財建議（包括叫人買賣任何公司的股票）。"""
+Output ONLY the tweet text. No explanation, no preamble."""
 
 
-def _build_prompt(domain: str, avoid: list[str]) -> str:
-    avoid_block = "\n".join(f"- {t}" for t in avoid) if avoid else "（暫無，隨便挑）"
-    return f"""請就下面這個方向，寫一則 X（Twitter）貼文。
-
-【方向】{domain}
-
-【最近 {X_AVOID_DAYS} 天已經寫過的，不要重複，也不要換個說法寫同一件事】
-{avoid_block}
-
-【內容要求】
-挑一個**具體**的點，不要泛泛而談。好的題材長這樣：
-- 某個 agent 實際跑起來之後，跟宣傳差在哪
-- 用 AI 寫某類程式碼時，它反覆犯的某個錯
-- 兩個工具在某件具體事情上的差別
-- 某個大家都在講但你覺得講錯了的說法
-- 某個自動化流程做完才發現的事
-
-【寫法】
-- **2 到 4 句話**，這是重點。不要寫三段式的長故事，不要鋪陳背景。
-- 第一句就要有觀點或發現，不要暖場
-- 要有具體的東西：一個場景、一個行為、一個對比。不要只有形容詞
-- 結尾**不一定要問句**。有時候一句斷言更有力，
-  例如「這不是模型不夠強，是任務本來就沒定義清楚。」
-- 繁體中文為主，技術名詞保留英文
-- 不要放網址
-- 標籤最多 {MAX_TAGS} 個，放 tags 欄位，不要帶 # 號。
-  優先用常見英文標籤，例如 AI、AIAgent、LLM、Claude、Cursor、vibecoding
-
-{HARD_RULES}
-
-【輸出格式】只輸出這個 JSON：
-
-{{
-  "topic": "這則在講什麼，一句話",
-  "text": "貼文正文，2 到 4 句",
-  "tags": ["AI", "AIAgent"]
-}}
-
-下面是三個示範，抓它們的長度和語氣（內容不要抄）：
-
-{{
-  "topic": "agent 的失敗多半是任務沒定義清楚，不是模型不夠強",
-  "text": "我發現 agent 跑失敗的時候，八成不是它笨，是我根本沒把「做完」定義清楚。\\n\\n換更強的模型解決不了這件事。你自己都說不出驗收條件，它當然只能一直繞。",
-  "tags": ["AIAgent", "AI"]
-}}
-
-{{
-  "topic": "AI 寫的程式碼最花時間的是讀不是寫",
-  "text": "用 AI 寫程式一個月，真正省下的是打字，不是思考。\\n\\n現在我花在讀它寫了什麼的時間，比以前自己寫還多。只是累的地方換了。",
-  "tags": ["vibecoding", "AI"]
-}}
-
-{{
-  "topic": "工具比較的結論通常取決於任務類型而不是工具本身",
-  "text": "同一個需求丟給兩個 coding agent，一個把整個檔案重寫，一個只改三行。\\n\\n後者不是比較聰明，是它願意先問清楚。這個差別比 benchmark 分數有用多了。",
-  "tags": ["AIAgent", "LLM"]
-}}
-
-現在就【{domain}】寫一則新的。只輸出 JSON。"""
+def _build_prompt(recent: list[str]) -> str:
+    """Fill {recent_tweets} with the recent posts, newest first."""
+    block = "\n".join(f"- {t}" for t in recent) if recent else "(none yet)"
+    return TWEET_PROMPT.replace("{recent_tweets}", block)
 
 
-def _normalize(data: dict, domain: str) -> Tweet:
-    """Coerce the model's JSON into a Tweet, trimming soft violations."""
-    text = str(xhs._pick(data, TEXT_KEYS) or "").strip()
+_HASHTAG_RE = re.compile(r"#\w+")
+
+
+def _enforce_hashtag_cap(text: str) -> str:
+    """Keep at most MAX_TAGS hashtags, dropping the extras from the end."""
+    tags = _HASHTAG_RE.findall(text)
+    if len(tags) <= MAX_TAGS:
+        return text
+    for extra in tags[MAX_TAGS:]:
+        text = text.replace(extra, "", 1)
+        logger.warning("超過 %d 個標籤，移除 %s", MAX_TAGS, extra)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
+def _parse_tweet(raw: str, domain: str) -> Tweet:
+    """Turn the model's plain-text reply into a Tweet.
+
+    The prompt asks for bare text, so that is the main path. A model that wraps
+    it in JSON anyway is still unwrapped, since that costs one cheap check and
+    saves a whole generation.
+    """
+    text = (raw or "").strip()
+    if text.startswith("{"):
+        try:
+            text = str(xhs._pick(xhs._extract_json(text, is_usable=_is_usable),
+                                 TEXT_KEYS) or "").strip()
+            logger.info("模型仍然回傳了 JSON，已取出 text 欄位")
+        except xhs.GenerationError:
+            pass  # Not JSON after all; treat the whole thing as the tweet.
+
+    # The prompt forbids wrapping the tweet in quotes; models do it anyway.
+    if len(text) > 1 and text[0] in "\"'\u201c\u2018" and text[-1] in "\"'\u201d\u2019":
+        text = text[1:-1].strip()
+
     if not text:
-        raise GenerationError(
-            f"貼文內容為空（模型回傳的鍵：{sorted(data)}）"
-        )
+        raise GenerationError("模型回傳了空的貼文內容")
 
-    text = fit_tweet(strip_urls(text))
+    text = fit_tweet(_enforce_hashtag_cap(strip_urls(text)))
 
-    raw_tags = xhs._pick(data, TAGS_KEYS) or []
-    if isinstance(raw_tags, str):
-        raw_tags = re.split(r"[,，\s]+", raw_tags)
-    tags = [t for t in (xhs._clean_tag(t) for t in raw_tags) if t][:MAX_TAGS]
-
-    tweet = Tweet(
-        domain=domain,
-        topic=str(xhs._pick(data, TOPIC_KEYS) or text[:20]).strip(),
-        text=text,
-        tags=tags,
-    )
-
-    # Hashtags count too, so drop them rather than overflow the post.
-    while tweet.tags and weighted_length(tweet.full_text()) > X_WEIGHTED_LIMIT:
-        dropped = tweet.tags.pop()
-        logger.warning("加上標籤會超長，移除 #%s", dropped)
-    return tweet
+    # Hashtags now live inside the text, so `tags` stays empty and full_text()
+    # returns the tweet exactly as the model wrote it.
+    return Tweet(domain=domain, topic=text[:60], text=text, tags=[])
 
 
-async def _create(kwargs: dict, use_json: bool):
-    params = dict(kwargs)
-    if use_json:
-        params["response_format"] = {"type": "json_object"}
-    return await client.chat.completions.create(**params)
-
-
-async def _one_call(domain: str, avoid: list[str]) -> Tweet:
-    global _json_mode_supported
-
+async def _one_call(domain: str, recent: list[str]) -> Tweet:
     if client is None:
         raise GenerationError("OPENROUTER_API_KEY 沒有設定")
 
-    kwargs = {
-        "model": X_MODEL,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": _build_prompt(domain, avoid)},
-        ],
-        "temperature": 1.0,
-        "max_tokens": X_MAX_TOKENS,
-    }
-
-    try:
-        response = await _create(kwargs, _json_mode_supported)
-    except BadRequestError as exc:
-        if not _json_mode_supported:
-            raise
-        logger.warning("%s 不支援 response_format=json_object，之後改用純提示詞約束：%s",
-                       X_MODEL, exc)
-        _json_mode_supported = False
-        response = await _create(kwargs, False)
+    # No response_format here: the prompt asks for bare text, and JSON mode
+    # would fight it.
+    response = await client.chat.completions.create(
+        model=X_MODEL,
+        messages=[{"role": "user", "content": _build_prompt(recent)}],
+        temperature=1.0,
+        max_tokens=X_MAX_TOKENS,
+    )
 
     if not response.choices:
         raise GenerationError("模型回傳了空的 choices")
@@ -375,16 +326,17 @@ async def _one_call(domain: str, avoid: list[str]) -> Tweet:
     finish = getattr(choice, "finish_reason", "?")
     text = (choice.message.content or "").strip()
     if not text:
-        # Same trick as 小红书: a reasoning model may leave the JSON in its trace.
+        # A reasoning model can burn the budget thinking and return empty
+        # content, leaving the tweet in its trace.
         text = xhs._reasoning_text(choice.message).strip()
         if text:
-            logger.warning("content 為空，改從 reasoning 欄位取 JSON")
+            logger.warning("content 為空，改從 reasoning 欄位取內容")
     if not text:
         raise GenerationError(f"模型回傳了空內容（finish_reason={finish}）")
 
     try:
-        return _normalize(xhs._extract_json(text, is_usable=_is_usable), domain)
-    except xhs.GenerationError as exc:
+        return _parse_tweet(text, domain)
+    except GenerationError as exc:
         if finish == "length":
             raise GenerationError(f"{exc}。finish_reason=length，輸出被截斷，建議調高 X_MAX_TOKENS") from exc
         raise
@@ -394,12 +346,12 @@ async def generate_tweet(domain: str | None = None) -> Tweet:
     """Generate one tweet, retrying once before giving up."""
     state = load_state()
     chosen = domain or take_domain(state)
-    avoid = xhs.recent_topics(state, days=X_AVOID_DAYS)
+    recent = recent_tweet_texts(state)
 
     last_error: Exception | None = None
     for attempt in (1, 2):
         try:
-            tweet = await _one_call(chosen, avoid)
+            tweet = await _one_call(chosen, recent)
         except Exception as exc:  # noqa: BLE001 - retry once, then report
             last_error = exc
             logger.warning("推文生成第 %d 次失敗：%s", attempt, exc, exc_info=True)
@@ -410,7 +362,8 @@ async def generate_tweet(domain: str | None = None) -> Tweet:
                 "date": date.today().isoformat(),
                 "domain": chosen,
                 "topic": tweet.topic,
-                "title": tweet.text[:30],
+                # Full text, so {recent_tweets} can show real openings.
+                "text": tweet.text,
                 "at": datetime.now().isoformat(timespec="seconds"),
             }
         )
