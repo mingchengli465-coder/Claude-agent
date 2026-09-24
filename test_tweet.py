@@ -53,69 +53,87 @@ assert "www." not in tw.strip_urls("去 www.example.com 看看")
 assert tw.strip_urls("沒有網址的文字") == "沒有網址的文字"
 print("PASS URLs are removed, plain text untouched")
 
-# --- normalising ------------------------------------------------------------
-n = tw._normalize({"topic": "t", "text": "觀點很明確的一句話。你怎麼看？",
-                   "tags": ["#職場", "通勤"]}, "消費觀")
-assert n.tags == ["職場", "通勤"] and n.text.endswith("你怎麼看？")
-assert "#職場" in n.full_text() and n.full_text().startswith("觀點")
-print("PASS normalize cleans tags and composes the posted text")
+# --- the prompt is stored verbatim ------------------------------------------
+SUPPLIED = """You are a sharp, independent builder who posts on X about AI and AI agents. Write ONE original tweet in English.
 
-n = tw._normalize({"text": "內容", "tags": "AI, AIAgent LLM, Claude"}, "消費觀")
-assert n.tags == ["AI", "AIAgent"], n.tags
-print(f"PASS a tag string is split and capped at {tw.MAX_TAGS}: {n.tags}")
+Rules:
+- English only. No Chinese characters, no translation-style phrasing.
+- Under 270 characters total, including hashtags.
+- Sound like a real person sharing a thought, not a brand or a press release.
+- Pick ONE angle per tweet: a practical tip, a hot take, a lesson from building with AI agents, a tool you find useful, or a prediction.
+- Be specific. Concrete examples beat vague hype. Avoid words like "revolutionary", "game-changer", "unlock", "delve".
+- Short sentences. Line breaks are fine. At most 1 emoji, or none.
+- 0\u20132 relevant hashtags at the end (e.g. #AI #AIAgents). Never more than 2.
+- No links, no @mentions, no quotation marks around the whole tweet.
 
-n = tw._normalize({"內容": "用中文鍵的正文"}, "消費觀")
-assert n.text == "用中文鍵的正文", n.text
-print("PASS Chinese key names work (reusing xhs._pick)")
+Recent tweets (do not repeat these topics or openings):
+{recent_tweets}
 
-try:
-    tw._normalize({"topic": "x"}, "消費觀")
-    raise AssertionError("empty text must raise")
-except tw.GenerationError as exc:
-    assert "為空" in str(exc) and "鍵" in str(exc), exc
-print("PASS empty text fails with the returned keys named")
+Output ONLY the tweet text. No explanation, no preamble."""
 
-# tags are dropped rather than overflowing the post
-n = tw._normalize({"text": "中" * 138, "tags": ["一個很長的標籤", "另一個"]}, "消費觀")
-assert tw.weighted_length(n.full_text()) <= 280, tw.weighted_length(n.full_text())
-print(f"PASS hashtags are dropped when they would overflow ({len(n.tags)} kept)")
+assert tw.TWEET_PROMPT == SUPPLIED, "the stored prompt must stay byte-identical"
+print("PASS TWEET_PROMPT matches the supplied prompt exactly")
 
-# --- domain rotation --------------------------------------------------------
-st = {"domain_index": 0}
-seen = [tw.take_domain(st) for _ in range(len(tw.DOMAINS) + 1)]
-assert seen[:len(tw.DOMAINS)] == tw.DOMAINS and seen[-1] == tw.DOMAINS[0]
-assert len(tw.DOMAINS) == 6, tw.DOMAINS
-assert all("AI" in d or "自動化" in d or "寫程式" in d for d in tw.DOMAINS), tw.DOMAINS
-print("PASS the 6 AI domains rotate and wrap:", seen[0], "→", seen[1], "…")
+built = tw._build_prompt(["Agents fail on undefined tasks.", "AI code review is the bottleneck."])
+assert "{recent_tweets}" not in built, "the placeholder must be filled"
+assert built.replace(
+    "- Agents fail on undefined tasks.\n- AI code review is the bottleneck.",
+    "{recent_tweets}") == SUPPLIED, "only the placeholder may differ"
+print("PASS {recent_tweets} is filled from history and nothing else is altered")
 
-# --- the prompt's own worked examples must obey the spec they teach --------
-prompt = tw._build_prompt(tw.DOMAINS[0], ["昨天寫過的"])
-blocks = [json.loads(b) for b in re.findall(r'\{\s*\n  "topic".*?\n\}', prompt, re.S)]
-schema, examples = blocks[0], blocks[1:]
-assert set(schema) == {"topic", "text", "tags"} and len(examples) == 3, len(examples)
-for i, d in enumerate(examples, 1):
-    sentences = [s for s in re.split(r"[。！？]", d["text"].replace("\n", "")) if s.strip()]
-    assert 2 <= len(sentences) <= 4, f"example {i} has {len(sentences)} sentences, spec says 2-4"
-    assert len(d["text"]) <= tw.TWEET_CHAR_LIMIT
-    assert len(d["tags"]) <= tw.MAX_TAGS and all(x.isascii() for x in d["tags"]), d["tags"]
-    assert "http" not in d["text"]
-lengths = [len(d["text"]) for d in examples]
-assert max(lengths) < 100, f"examples must model the shorter style, got {lengths}"
-print(f"PASS the 3 worked examples parse and obey 2-4 sentences, {lengths} chars")
+assert "(none yet)" in tw._build_prompt([])
+print("PASS an empty history renders '(none yet)', not a bare placeholder")
 
-assert not all(d["text"].rstrip()[-1] in "？?" for d in examples)
-print("PASS the examples don't all end on a question")
+# --- plain-text parsing ------------------------------------------------------
+raw = "Most agent failures aren't reasoning failures.\n\nThey're underspecified tasks.\n\n#AIAgents"
+t1 = tw._parse_tweet(raw, "d")
+assert t1.text == raw and t1.tags == [] and t1.full_text() == raw
+print("PASS bare text passes through untouched, hashtags stay inline")
 
-# The 小红书 rule requiring personal life experience must not apply here: it
-# would forbid exactly the hands-on tooling findings this account is for.
-assert "個人化的生活經歷" not in prompt and "个人化的生活经历" not in prompt
-assert "不編造" in prompt and "不涉及政治" in prompt
-assert "benchmark" in prompt, "no-fabrication should name the AI-specific traps"
-print("PASS rules keep no-fabrication / no-politics without the life-experience clause")
+assert tw._parse_tweet('"Quoted whole tweet."', "d").text == "Quoted whole tweet."
+assert tw._parse_tweet("\u201cSmart quotes too.\u201d", "d").text == "Smart quotes too."
+print("PASS surrounding quotes are stripped (the prompt forbids them)")
+
+got = tw._parse_tweet("Tip. #AI #AIAgents #LLM #MLOps", "d").text
+assert got.count("#") == tw.MAX_TAGS and "#LLM" not in got, got
+print(f"PASS hashtags capped at {tw.MAX_TAGS}: {got!r}")
+
+assert "http" not in tw._parse_tweet("See https://example.com for more. #AI", "d").text
+print("PASS URLs are stripped")
+
+wrapped = json.dumps({"text": "Unwrapped from JSON. #AI"}, ensure_ascii=False)
+assert tw._parse_tweet(wrapped, "d").text == "Unwrapped from JSON. #AI"
+print("PASS a model that returns JSON anyway is still unwrapped")
+
+long_en = " ".join(f"Sentence number {i} here." for i in range(1, 40))
+fitted = tw._parse_tweet(long_en, "d").text
+assert len(fitted) <= tw.TWEET_CHAR_LIMIT and fitted.endswith("."), len(fitted)
+print(f"PASS an over-long English tweet trims to {len(fitted)} chars on a sentence end")
+
+for bad in ("", "   ", '""'):
+    try:
+        tw._parse_tweet(bad, "d")
+        raise AssertionError(f"{bad!r} should raise")
+    except tw.GenerationError:
+        pass
+print("PASS empty content still raises")
+
+# --- recent_tweet_texts ------------------------------------------------------
+from datetime import date, timedelta
+st = {"history": [
+    {"date": (date.today() - timedelta(days=1)).isoformat(), "text": "New style entry."},
+    {"date": (date.today() - timedelta(days=2)).isoformat(), "title": "Old style entry"},
+    {"date": (date.today() - timedelta(days=99)).isoformat(), "text": "Too old."},
+    {"date": "garbage", "text": "Bad row."},
+]}
+got = tw.recent_tweet_texts(st, days=7)
+assert "New style entry." in got and "Old style entry" in got, got
+assert "Too old." not in got and "Bad row." not in got, got
+assert got[0] == "Old style entry", f"newest first: {got}"
+print("PASS recent_tweet_texts honours the window, reads pre-change rows, skips bad dates")
 
 # --- generation reuses the xhs JSON tolerance ------------------------------
-GOOD = {"topic": "選題", "text": "一句很有觀點的話。你同意嗎？", "tags": ["職場"]}
-payload = json.dumps(GOOD, ensure_ascii=False)
+payload = "Agents don't fail on reasoning. They fail on tasks nobody defined. #AIAgents"
 
 class Comp:
     def __init__(self, content, reasoning=None): self.content, self.reasoning = content, reasoning
@@ -134,23 +152,17 @@ def with_model(content, reasoning=None):
     tw._json_mode_supported = True
     return c
 
-# fenced + preamble, the usual small-model output
-c = with_model(f"好的：\n```json\n{payload}\n```")
-t1 = asyncio.run(tw._one_call("消費觀", []))
-assert t1.text.startswith("一句很有觀點"), t1
+c = with_model(payload)
+t1 = asyncio.run(tw._one_call("d", []))
+assert t1.text == payload, t1.text
 assert c.seen["max_tokens"] == tw.X_MAX_TOKENS and c.seen["model"] == tw.X_MODEL
-print("PASS fenced+chatty output parses, and X_MODEL / max_tokens are sent")
-
-# the schema-skeleton trap that bit 小红书
-c = with_model(f'先想一下：{{"text": ""}}\n\n正式寫：{payload}')
-t2 = asyncio.run(tw._one_call("消費觀", []))
-assert t2.text.startswith("一句很有觀點"), f"picked the skeleton: {t2.text!r}"
-print("PASS an empty skeleton before the real tweet doesn't win")
+assert "response_format" not in c.seen, "JSON mode would fight a bare-text prompt"
+print("PASS a plain-text reply is used as-is, and no response_format is sent")
 
 # empty content -> reasoning trace
 c = with_model("", reasoning=payload)
-t3 = asyncio.run(tw._one_call("消費觀", []))
-assert t3.text.startswith("一句很有觀點")
-print("PASS empty content falls back to the reasoning trace")
+t2 = asyncio.run(tw._one_call("d", []))
+assert t2.text == payload
+print("PASS empty content still falls back to the reasoning trace")
 
 print("\nALL TWEET TESTS PASSED")
