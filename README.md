@@ -103,6 +103,18 @@ vars, then scale the worker to one instance. The bot uses long polling, so it
 needs no public URL or webhook — but run only **one** instance, since Telegram
 allows a single polling client per bot.
 
+Type each value in by hand — don't paste the whole of `.env.example` into the
+dashboard. The bot refuses to start on an empty or placeholder value and names
+the variable in the error, e.g.:
+
+```
+環境變數有問題，無法啟動：
+  - TELEGRAM_BOT_TOKEN 還是範例裡的佔位字串 'your-telegram-bot-token'，請換成真正的值
+```
+
+A `telegram.error.InvalidToken` on a platform like Railway means
+`TELEGRAM_BOT_TOKEN` there is not the real @BotFather token.
+
 ## How it works
 
 - Each `chat_id` gets its own `deque` of messages, capped at 20 rounds, so old
