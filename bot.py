@@ -8,6 +8,7 @@ import asyncio
 import datetime as dt
 import logging
 import os
+import re
 from collections import defaultdict, deque
 from zoneinfo import ZoneInfo
 
@@ -40,8 +41,10 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+# .strip() because a value pasted into a hosting dashboard often carries a
+# trailing newline or space, which the Telegram API rejects as a bad token.
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 MODEL = os.environ.get("MODEL", "deepseek/deepseek-chat-v3.1:free")
 SYSTEM_PROMPT = os.environ.get(
@@ -497,19 +500,47 @@ def schedule_daily_tweets(application: Application) -> None:
         logger.error("X_DAILY_TIMES=%r 沒有任何有效時間，每日推文未排程", X_DAILY_TIMES)
 
 
-def main() -> None:
-    missing = [
-        name
-        for name, value in (
-            ("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN),
-            ("OPENROUTER_API_KEY", OPENROUTER_API_KEY),
+# A variable left at its .env.example value ("your-telegram-bot-token") is worse
+# than a missing one: it looks set, so the failure surfaces deep inside a library
+# instead of at startup. Catch both here and name the variable in the message.
+PLACEHOLDER_PATTERN = re.compile(
+    r"^(your[-_ ]|<|xxx|changeme|change[-_]me|replace[-_ ]me|todo|dummy|placeholder)",
+    re.IGNORECASE,
+)
+# Same shape python-telegram-bot requires before it raises InvalidToken.
+TELEGRAM_TOKEN_PATTERN = re.compile(r"^\d+:[\w-]{20,}$")
+
+
+def check_env(name: str, value: str) -> str:
+    """Return a human-readable problem with this variable, or "" when it looks fine."""
+    value = (value or "").strip()
+    if not value:
+        return f"{name} 沒有設定（環境變數是空的）"
+    if PLACEHOLDER_PATTERN.match(value):
+        return f"{name} 還是範例裡的佔位字串 {value!r}，請換成真正的值"
+    if name == "TELEGRAM_BOT_TOKEN" and not TELEGRAM_TOKEN_PATTERN.match(value):
+        # Never log the whole value here: it may be a real, merely mistyped token.
+        return (
+            f"{name}（開頭是 {value[:6]!r}）不像 Telegram token。"
+            "正確格式是 @BotFather 給的 123456789:AA... （數字、冒號、一長串英數字）"
         )
-        if not value
+    return ""
+
+
+def main() -> None:
+    problems = [
+        problem
+        for problem in (
+            check_env("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN),
+            check_env("OPENROUTER_API_KEY", OPENROUTER_API_KEY),
+        )
+        if problem
     ]
-    if missing:
+    if problems:
         raise SystemExit(
-            f"Missing required environment variable(s): {', '.join(missing)}. "
-            "See .env.example for the full list."
+            "環境變數有問題，無法啟動：\n  - "
+            + "\n  - ".join(problems)
+            + "\n請到部署平台（Railway → 專案 → Variables）把上面列出的變數設成真正的值。"
         )
 
     logger.info("Starting bot with model %s via %s", MODEL, OPENROUTER_BASE_URL)

@@ -276,4 +276,31 @@ bot.schedule_daily_tweets(app5)
 assert len(app5.job_queue.jobs()) == 1, [j.name for j in app5.job_queue.jobs()]
 print("PASS a malformed time is skipped without losing the valid one")
 
+# --- startup env check ------------------------------------------------------
+# The Railway outage this guards against: the placeholder from .env.example was
+# pasted into the dashboard, so the token looked set and telegram raised
+# InvalidToken far from the cause.
+real = "123456789:AAH_fake_looking_but_well_formed_token"
+assert bot.check_env("TELEGRAM_BOT_TOKEN", real) == ""
+for bad in ("", "   ", "your-telegram-bot-token", "YOUR_TELEGRAM_BOT_TOKEN",
+            "<token>", "changeme", "sk-not-a-telegram-token"):
+    problem = bot.check_env("TELEGRAM_BOT_TOKEN", bad)
+    assert problem, f"{bad!r} should have been rejected"
+    assert "TELEGRAM_BOT_TOKEN" in problem, problem
+# a real-looking token must never be echoed in full
+assert real not in bot.check_env("TELEGRAM_BOT_TOKEN", real + " oops")
+assert bot.check_env("OPENROUTER_API_KEY", "sk-or-v1-abc") == ""
+assert "OPENROUTER_API_KEY" in bot.check_env("OPENROUTER_API_KEY", "your-openrouter-api-key")
+assert "OPENROUTER_API_KEY" in bot.check_env("OPENROUTER_API_KEY", "")
+print("PASS startup check rejects empty and placeholder values, naming the variable")
+
+# .env.example must not hand anyone a placeholder to paste into Railway
+example = pathlib.Path(__file__).with_name(".env.example").read_text()
+for line in example.splitlines():
+    if line.startswith(("TELEGRAM_BOT_TOKEN=", "OPENROUTER_API_KEY=", "ANTHROPIC_API_KEY=",
+                        "X_API_KEY=", "X_API_SECRET=", "X_ACCESS_TOKEN=",
+                        "X_ACCESS_TOKEN_SECRET=")):
+        assert line.split("=", 1)[1] == "", f".env.example still ships a value: {line}"
+print("PASS .env.example ships every secret blank")
+
 print("\nALL BOT WIRING TESTS PASSED")
