@@ -34,6 +34,7 @@ WEB_PORT = int(os.environ.get("WEB_PORT") or os.environ.get("PORT") or "8080")
 WEB_CHAT = os.environ.get("WEB_CHAT", "true").lower() != "false"
 MAX_TEXT = 1000
 _VISITOR = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+_FONT = re.compile(r"^[a-z0-9-]+\.woff2$")
 # Per IP address: messages a minute, and new visitor ids an hour (each new
 # visitor pings the owner, so this is what keeps a script from spamming them).
 IP_MESSAGES_PER_MINUTE = int(os.environ.get("WEB_IP_MESSAGES_PER_MINUTE", "20"))
@@ -100,6 +101,7 @@ class WebChat:
         app.router.add_get("/", self.site)
         app.router.add_get("/demo", self.page)
         app.router.add_get("/widget.js", self.widget)
+        app.router.add_get("/fonts/{name}", self.font)
         app.router.add_get("/healthz", self.health)
         app.router.add_post("/api/chat", self.chat)
         app.router.add_get("/api/messages", self.messages)
@@ -138,6 +140,14 @@ class WebChat:
         body = (_STATIC / "widget.js").read_text(encoding="utf-8")
         return web.Response(text=body, content_type="application/javascript",
                             headers={**CORS, "Cache-Control": "public, max-age=300"})
+
+    async def font(self, request: web.Request) -> web.Response:
+        name = request.match_info["name"]
+        path = _STATIC / "fonts" / name
+        if not _FONT.match(name) or not path.is_file():
+            raise web.HTTPNotFound()
+        return web.Response(body=path.read_bytes(), content_type="font/woff2",
+                            headers={**CORS, "Cache-Control": "public, max-age=2592000"})
 
     async def health(self, request: web.Request) -> web.Response:
         return web.Response(text="ok")

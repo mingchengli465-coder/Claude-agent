@@ -63,6 +63,13 @@ async def main():
         assert r.headers["Access-Control-Allow-Origin"] == "*"
         assert "textContent" in js and "innerHTML = text" not in js, "messages are never parsed as HTML"
         assert (await client.get("/healthz")).status == 200
+        for font in ("instrument-serif-latin-400-italic.woff2", "barlow-latin-300-normal.woff2", "serif-sc.woff2", "serif-tc.woff2"):
+            assert f"/fonts/{font}" in site, font
+            r = await client.get(f"/fonts/{font}")
+            assert r.status == 200 and r.headers["Content-Type"] == "font/woff2" and len(await r.read()) > 1000, font
+        for bad in ("../web.py", "LICENSE.txt", "nope.woff2", "..%2Fweb.py"):
+            assert (await client.get(f"/fonts/{bad}")).status == 404, bad
+        assert "fonts.googleapis.com" not in site, "Google Fonts doesn't load in mainland China"
         r = await client.options("/api/chat")
         assert r.status == 204 and r.headers["Access-Control-Allow-Origin"] == "*"
     print("PASS the personal site, the demo page, the widget script and CORS are served; the shop name is escaped")
