@@ -298,7 +298,7 @@ payload = json.dumps(GOOD, ensure_ascii=False)
 # 1. max_tokens and the reasoning block are sent
 comp, note = run_call(msg(content=payload))
 sent = comp.seen[0]
-assert sent["max_tokens"] == 4000, sent["max_tokens"]
+assert sent["max_tokens"] == 8000, sent["max_tokens"]
 assert sent["extra_body"]["reasoning"] == {"exclude": True, "effort": "low"}, sent["extra_body"]
 assert sent["response_format"] == {"type": "json_object"}
 print(f"PASS request carries max_tokens={sent['max_tokens']} and reasoning={sent['extra_body']['reasoning']}")
@@ -405,6 +405,30 @@ try:
 except xhs.GenerationError as exc:
     assert "截断" in str(exc) and "XHS_MAX_TOKENS" in str(exc), exc
 print("PASS finish_reason=length is reported as truncation, pointing at XHS_MAX_TOKENS")
+
+# --- a failed first model retries on the fallback, and the SDK doesn't pile on --
+# The 2:29 PM hang: a slow free model plus the SDK's own two retries at 120 s
+# each kept /xhs silent for minutes.
+assert xhs.XHS_FALLBACK_MODEL == "openrouter/free", xhs.XHS_FALLBACK_MODEL
+assert xhs.XHS_REQUEST_TIMEOUT == 90
+import inspect
+client_src = inspect.getsource(xhs).split("client = AsyncOpenAI(", 1)[1].split("if OPENROUTER_API_KEY else None", 1)[0]
+assert "max_retries=0" in client_src, client_src
+
+class FirstModelEmpty:
+    def __init__(self): self.models = []
+    async def create(self, **kw):
+        self.models.append(kw["model"])
+        content = "" if kw["model"] == xhs.XHS_MODEL else json.dumps(GOOD, ensure_ascii=False)
+        m = types.SimpleNamespace(content=content, model_extra={})
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=m, finish_reason="stop")])
+fm = FirstModelEmpty()
+xhs.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=fm))
+got = asyncio.run(xhs.generate_note("课程汇报 PPT", state={}))
+assert got.title == GOOD["title"], got.title
+assert fm.models == [xhs.XHS_MODEL, "openrouter/free"], fm.models
+print("PASS an empty reply from XHS_MODEL is retried once on openrouter/free")
 
 # --- the notes promote the 代做 service, and the example obeys its own rules --
 ex = xhs.EXAMPLE_NOTE

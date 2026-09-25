@@ -218,7 +218,7 @@ A reasoning model can spend its whole token budget thinking and return an
 **empty `content`**, which is what `inclusionai/ling-3.0-flash-vl:free` did.
 Three things address it:
 
-- `max_tokens` is 4000, so there is room for the thinking *and* a ~1000-token
+- `max_tokens` is 8000, so there is room for the thinking *and* a ~1000-token
   Chinese note.
 - Every request carries OpenRouter's `reasoning: {exclude: true, effort: "low"}`,
   which keeps the thinking short and drops it from the response.
@@ -280,8 +280,9 @@ a free-model rate limit.
 | `XHS_DAILY_TIME`      | no       | `09:00`              | Daily generation time                                |
 | `XHS_TIMEZONE`        | no       | `Asia/Taipei`        | Timezone for that time                               |
 | `XHS_MODEL`           | no       | falls back to `MODEL`| Model used for notes                                 |
-| `XHS_REQUEST_TIMEOUT` | no       | `120`                | Seconds to wait for a note                           |
-| `XHS_MAX_TOKENS`      | no       | `4000`               | Token budget; reasoning models need room to think and still write |
+| `XHS_FALLBACK_MODEL`  | no       | `openrouter/free`    | Model the one retry uses, so a flaky first model can't fail both attempts |
+| `XHS_REQUEST_TIMEOUT` | no       | `90`                 | Seconds to wait per attempt; the SDK does not retry on top, so /xhs answers within ~3 min |
+| `XHS_MAX_TOKENS`      | no       | `8000`               | Token budget; reasoning models need room to think and still write |
 | `XHS_REASONING_EFFORT`| no       | `low`                | OpenRouter reasoning effort                          |
 | `XHS_REASONING_EXCLUDE`| no      | `true`               | Keep the reasoning trace out of the response         |
 | `XHS_REASONING`       | no       | `true`               | Send the reasoning block at all; auto-disables if the model rejects it |

@@ -23,10 +23,13 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 # Falls back to the chat model so a single MODEL setting configures both.
 XHS_MODEL = os.environ.get("XHS_MODEL") or os.environ.get("MODEL", "deepseek/deepseek-chat-v3.1:free")
-XHS_REQUEST_TIMEOUT = float(os.environ.get("XHS_REQUEST_TIMEOUT", "120"))
-# Generous, because a reasoning model spends part of this budget thinking and
-# the note itself still needs ~1000 tokens of Chinese.
-XHS_MAX_TOKENS = int(os.environ.get("XHS_MAX_TOKENS", "4000"))
+# The retry goes here rather than back to XHS_MODEL, so one overloaded or
+# flaky free model can't fail both attempts. Same idea as X_FALLBACK_MODEL.
+XHS_FALLBACK_MODEL = os.environ.get("XHS_FALLBACK_MODEL", "openrouter/free").strip() or XHS_MODEL
+XHS_REQUEST_TIMEOUT = float(os.environ.get("XHS_REQUEST_TIMEOUT", "90"))
+# Generous, because a reasoning model (which openrouter/free may route to)
+# spends part of this budget thinking and the note still needs ~1000 tokens.
+XHS_MAX_TOKENS = int(os.environ.get("XHS_MAX_TOKENS", "8000"))
 # OpenRouter's reasoning controls: "low" keeps the thinking short, and exclude
 # drops it from the response so the token budget goes to the note itself.
 XHS_REASONING_EFFORT = os.environ.get("XHS_REASONING_EFFORT", "low")
@@ -85,6 +88,9 @@ client = AsyncOpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url=OPENROUTER_BASE_URL,
     timeout=XHS_REQUEST_TIMEOUT,
+    # generate_note() already retries once on another model. The SDK's own two
+    # retries on top of that let a slow free model hold /xhs silent for minutes.
+    max_retries=0,
 ) if OPENROUTER_API_KEY else None
 
 
@@ -566,14 +572,14 @@ async def _create(kwargs: dict, use_json: bool, use_reasoning: bool):
     return await client.chat.completions.create(**params)
 
 
-async def _one_call(domain: str, avoid: list[str]) -> Note:
+async def _one_call(domain: str, avoid: list[str], model: str = XHS_MODEL) -> Note:
     global _json_mode_supported, _reasoning_supported
 
     if client is None:
         raise GenerationError("OPENROUTER_API_KEY 没有设置")
 
     kwargs = {
-        "model": XHS_MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": _build_user_prompt(domain, avoid)},
@@ -605,7 +611,7 @@ async def _one_call(domain: str, avoid: list[str]) -> Note:
         if not dropped:
             raise
         logger.warning("%s 拒绝了 %s，之后不再发送。原始错误：%s",
-                       XHS_MODEL, "、".join(dropped), exc)
+                       model, "、".join(dropped), exc)
         response = await _create(kwargs, _json_mode_supported, _reasoning_supported)
 
     if not response.choices:
@@ -644,7 +650,7 @@ async def _one_call(domain: str, avoid: list[str]) -> Note:
 
 
 async def generate_note(domain: str | None = None, state: dict | None = None) -> Note:
-    """Generate one note, retrying once before giving up.
+    """Generate one note, retrying once (on XHS_FALLBACK_MODEL) before giving up.
 
     A malformed reply counts as a failure just like a transport error, since
     both leave us without a usable note.
@@ -655,13 +661,15 @@ async def generate_note(domain: str | None = None, state: dict | None = None) ->
     avoid = recent_topics(state)
 
     last_error: Exception | None = None
-    for attempt in (1, 2):
+    for attempt, model in enumerate((XHS_MODEL, XHS_FALLBACK_MODEL), start=1):
         try:
-            note = await _one_call(chosen, avoid)
+            note = await _one_call(chosen, avoid, model)
         except Exception as exc:  # noqa: BLE001 - retry on anything, then report
             last_error = exc
-            logger.warning("小红书生成第 %d 次失败：%s", attempt, exc, exc_info=True)
+            logger.warning("小红书生成第 %d 次失败（%s）：%s", attempt, model, exc, exc_info=True)
             continue
+        if attempt > 1:
+            logger.info("改用备用模型 %s 生成成功", model)
 
         state.setdefault("history", []).append(
             {
