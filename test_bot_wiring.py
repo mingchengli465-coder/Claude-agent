@@ -564,4 +564,26 @@ assert tweet_mod.x_length("see https://" + "a" * 100 + ".com") == 4 + 23, "a lin
 tweet_mod.publish, tweet_mod.post_reply, tweet_mod.post_link_reply = saved_fns
 print("PASS /post publishes the owner's text as written, with their reply or the bot link underneath")
 
+# --- X_POST_ON_START: a prepared post goes out once after startup, and the owner hears about it ------
+app7 = Application.builder().token("123:fake").build()
+bot.X_POST_ON_START = ""
+bot.schedule_post_on_start(app7)
+assert not [j for j in app7.job_queue.jobs() if j.name == "x-post-on-start"], "unset: nothing scheduled"
+bot.X_POST_ON_START = "Launch post\n---\nDemo: https://t.me/emilyhanbot"
+bot.schedule_post_on_start(app7)
+assert [j.name for j in app7.job_queue.jobs() if j.name == "x-post-on-start"] == ["x-post-on-start"]
+
+posted, replies_x = [], []
+async def fake_pub2(item): posted.append(item.text); return "https://x.com/me/status/77"
+async def fake_reply2(url, text): replies_x.append(text); return "78"
+saved_fns = tweet_mod.publish, tweet_mod.post_reply
+tweet_mod.publish, tweet_mod.post_reply = fake_pub2, fake_reply2
+b = CSBot()
+asyncio.run(bot.post_on_start_job(types.SimpleNamespace(bot=b)))
+assert posted == ["Launch post"] and replies_x == ["Demo: https://t.me/emilyhanbot"]
+assert b.sent and b.sent[0]["chat_id"] == 424242 and "https://x.com/me/status/77" in b.sent[0]["text"]
+tweet_mod.publish, tweet_mod.post_reply = saved_fns
+bot.X_POST_ON_START = ""
+print("PASS X_POST_ON_START posts once after startup and reports to the owner")
+
 print("\nALL BOT WIRING TESTS PASSED")
