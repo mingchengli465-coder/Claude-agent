@@ -106,7 +106,8 @@
 </div>
 
 <script>
-  if (!/^zh/i.test(navigator.language || "")) {
+  // Chinese by default; /demo?lang=en shows the English version.
+  if (/[?&]lang=en\b/.test(location.search)) {
     document.documentElement.setAttribute("data-en", "");
     document.documentElement.lang = "en";
   }
