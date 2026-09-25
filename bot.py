@@ -68,6 +68,9 @@ XHS_TIMEZONE = os.environ.get("XHS_TIMEZONE", "Asia/Taipei")
 # Tweets go out twice a day by default, in the same timezone.
 X_DAILY_TIMES = os.environ.get("X_DAILY_TIMES", "12:00,20:00")
 X_TIMEZONE = os.environ.get("X_TIMEZONE", "Asia/Taipei")
+# A one-off tweet (same format as /post) published a few seconds after startup,
+# for when the post is prepared without the owner at the keyboard.
+X_POST_ON_START = os.environ.get("X_POST_ON_START", "").strip()
 
 # One "round" is a user message plus the assistant's reply.
 MAX_HISTORY_ROUNDS = int(os.environ.get("MAX_HISTORY_ROUNDS", "20"))
@@ -468,24 +471,26 @@ async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     body = re.sub(r"^/post(@\w+)?", "", message.text or "", count=1).strip()
+    await message.reply_text(await publish_manual(body))
+
+
+async def publish_manual(body: str) -> str:
+    """Post the owner's own text (optionally '---' + a reply). Returns the report for the owner."""
     main, reply = split_post(body)
     if not main:
-        await message.reply_text(POST_USAGE_TEXT)
-        return
+        return POST_USAGE_TEXT
     for label, text in (("推文", main), ("底下的回复", reply)):
         if text and tweet_mod.x_length(text) > tweet_mod.X_WEIGHTED_LIMIT:
-            await message.reply_text(
+            return (
                 f"⚠️ {label}太长了：{tweet_mod.x_length(text)}/{tweet_mod.X_WEIGHTED_LIMIT}"
                 "（中文一个字算 2，链接一条算 23）。删短一点再发。"
             )
-            return
 
     try:
         url = await tweet_mod.publish(tweet_mod.Tweet(domain="手動", topic=main[:60], text=main))
     except Exception as exc:  # noqa: BLE001 - tell the owner exactly why
         logger.exception("手動推文發布失敗")
-        await message.reply_text(TWEET_PUBLISH_FAILED_TEXT.format(error=exc, text=main))
-        return
+        return TWEET_PUBLISH_FAILED_TEXT.format(error=exc, text=main)
     logger.info("手動推文已發布：%s", url)
 
     note = ""
@@ -498,7 +503,16 @@ async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except Exception as exc:  # noqa: BLE001 - the tweet itself is already out
         logger.exception("手動推文的回覆失敗")
         note = TWEET_LINK_REPLY_FAILED.format(error=exc)
-    await message.reply_text(f"🚀 已发推\n\n{main}\n\n———\n{url}{note}")
+    return f"🚀 已发推\n\n{main}\n\n———\n{url}{note}"
+
+
+async def post_on_start_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Publish X_POST_ON_START once, then tell the owner. Clear the variable afterwards;
+    a restart before that can't double-post, since X rejects duplicate text."""
+    report = await publish_manual(X_POST_ON_START)
+    logger.info("X_POST_ON_START 处理完毕")
+    if ADMIN_CHAT_ID:
+        await context.bot.send_message(chat_id=int(ADMIN_CHAT_ID), text=report)
 
 
 async def tweet_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -869,10 +883,18 @@ async def post_init(application: Application) -> None:
         me = await application.bot.get_me()
     except TelegramError:
         logger.exception("拿不到机器人自己的用户名，X_TELEGRAM_LINK=bot 暂时不会生效")
+        schedule_post_on_start(application)
         return
     tweet_mod.set_bot_username(me.username)
     link = tweet_mod.telegram_link()
     logger.info("机器人是 @%s；推文底下的 Telegram 链接：%s", me.username, link or "（没设置）")
+    schedule_post_on_start(application)
+
+
+def schedule_post_on_start(application: Application) -> None:
+    if X_POST_ON_START and application.job_queue is not None:
+        application.job_queue.run_once(post_on_start_job, when=10, name="x-post-on-start")
+        logger.info("X_POST_ON_START 已设置，10 秒后发布")
 
 
 def main() -> None:
