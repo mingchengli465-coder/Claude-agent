@@ -255,8 +255,36 @@ try:
     raise AssertionError("should have failed")
 except tw.GenerationError:
     pass
-assert down.models == [tw.X_MODEL, "openrouter/free"], "still exactly two calls"
-print("PASS when both fail it still stops after two calls")
+assert down.models == [tw.X_MODEL, "openrouter/free", "openrouter/free"], down.models
+print("PASS when every model fails it stops after three calls: X_MODEL, then openrouter/free twice")
+
+# --- reasoning is kept short, the budget is roomy, the SDK doesn't pile on ------
+assert tw.X_MAX_TOKENS == 8000
+import inspect
+client_src = inspect.getsource(tw).split("client = AsyncOpenAI(", 1)[1].split("if OPENROUTER_API_KEY else None", 1)[0]
+assert "max_retries=0" in client_src
+c = with_model(payload)
+tw._reasoning_supported = True
+asyncio.run(tw._one_call("d", [], tw.ENGLISH))
+assert c.seen["extra_body"] == {"reasoning": {"effort": "low", "exclude": True}}, c.seen.get("extra_body")
+
+import openai, httpx
+class RejectsReasoning:
+    def __init__(self): self.calls = []
+    async def create(self, **kw):
+        self.calls.append(kw)
+        if "extra_body" in kw:
+            raise openai.BadRequestError("reasoning not supported",
+                response=httpx.Response(400, request=httpx.Request("POST", "http://x")), body=None)
+        m = types.SimpleNamespace(content=payload, model_extra={})
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=m, finish_reason="stop")])
+rr = RejectsReasoning()
+tw.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=rr))
+tw._reasoning_supported = True
+assert asyncio.run(tw._one_call("d", [], tw.ENGLISH)).text == payload
+assert len(rr.calls) == 2 and "extra_body" not in rr.calls[1] and tw._reasoning_supported is False
+tw._reasoning_supported = True
+print("PASS reasoning is capped at low effort, and a model that rejects it is retried without")
 
 # --- the Telegram link reply --------------------------------------------------
 for raw in ("https://t.me/vinc_design", "t.me/vinc_design", "@vinc_design", "vinc_design",

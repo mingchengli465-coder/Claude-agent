@@ -428,7 +428,8 @@ of a usable object, because a tweet's "done" looks nothing like a note's.
 | `X_DAILY_TIMES`          | no       | `12:00,20:00`      | Daily posting times                           |
 | `X_TIMEZONE`             | no       | `Asia/Taipei`      | Timezone for those times                      |
 | `X_TWEET_CHAR_LIMIT`     | no       | `140`              | Character limit                               |
-| `X_MAX_TOKENS`           | no       | `2000`             | Token budget for generation                   |
+| `X_MAX_TOKENS`           | no       | `8000`             | Token budget; roomy so a reasoning fallback can still write |
+| `X_FALLBACK_TRIES`       | no       | `2`                | Tries on `X_FALLBACK_MODEL` after `X_MODEL` fails |
 | `X_TWEET_STATE_FILE`     | no       | `x_tweet_state.json` | Rotation, topic history and the pause flag  |
 | `X_AVOID_DAYS`           | no       | `7`                | Don't reuse a topic from the last N days      |
 | `X_MAX_TAGS`             | no       | `2`                | Hashtag cap                                   |
