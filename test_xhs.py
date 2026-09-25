@@ -481,4 +481,26 @@ assert hx.models == [xhs.XHS_MODEL, "openrouter/free"], hx.models
 xhs.XHS_REQUEST_TIMEOUT = saved_t
 print("PASS a hung 小红书 model is dropped at the deadline and the fallback writes the note")
 
+# --- DeepSeek first for 小红书 too ----------------------------------------------------------------------
+class XRec:
+    def __init__(self, fail=False): self.fail, self.calls = fail, []
+    async def create(self, **kw):
+        self.calls.append(kw)
+        if self.fail:
+            raise RuntimeError("down")
+        m = types.SimpleNamespace(content=json.dumps(GOOD, ensure_ascii=False), model_extra={})
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=m, finish_reason="stop")])
+xds, xor = XRec(), XRec()
+xhs.ds_client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=xds))
+xhs.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=xor))
+xhs._json_mode_supported = xhs._reasoning_supported = True
+assert asyncio.run(xhs.generate_note("做 PPT", state={})).title == GOOD["title"]
+assert [c["model"] for c in xds.calls] == ["deepseek-flash"] and xor.calls == []
+assert "extra_body" not in xds.calls[0] and xds.calls[0]["response_format"] == {"type": "json_object"}
+xds.fail = True
+assert asyncio.run(xhs.generate_note("做 PPT", state={})).title == GOOD["title"]
+assert [c["model"] for c in xor.calls] == ["openrouter/free"] and "extra_body" in xor.calls[0]
+xhs.ds_client = None
+print("PASS 小红书 uses DeepSeek first and falls back to OpenRouter's free models")
+
 print("\nALL XHS TESTS PASSED")

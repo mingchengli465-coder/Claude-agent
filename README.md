@@ -447,6 +447,13 @@ python test_bot_wiring.py   # auto-posting, pause/resume, the admin gate
 
 ---
 
+# 用哪个 AI
+
+设了 `DEEPSEEK_API_KEY`，你跟机器人聊天、小红书笔记、推文都**先用 DeepSeek**
+（`deepseek-flash`，`DEEPSEEK_MODEL`），调用失败或余额用完时自动退回 OpenRouter
+的免费模型，不会停摆。`USE_DEEPSEEK=false` 可以只用 OpenRouter。客服模式也用同一把
+钥匙（见下）。逻辑在 `llm.py`。
+
 # 客服模式（Customer Service）
 
 `OWNER_CHAT_ID` 之外的人私聊机器人，就进入客服模式：Claude 按 `products.yaml`

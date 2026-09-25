@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import llm
 from openai import AsyncOpenAI, BadRequestError
 from PIL import Image, ImageDraw, ImageFont
 
@@ -92,6 +93,14 @@ client = AsyncOpenAI(
     # retries on top of that let a slow free model hold /xhs silent for minutes.
     max_retries=0,
 ) if OPENROUTER_API_KEY else None
+# DeepSeek, when DEEPSEEK_API_KEY is set: tried first, OpenRouter behind it.
+ds_client = llm.deepseek_client(XHS_REQUEST_TIMEOUT)
+
+
+def _attempts() -> list[tuple]:
+    """(client, model, is_openrouter) in the order to try them."""
+    first = (ds_client, llm.DEEPSEEK_MODEL, False) if ds_client is not None else (client, XHS_MODEL, True)
+    return [first, (client, XHS_FALLBACK_MODEL, True)]
 
 
 @dataclass
@@ -559,25 +568,28 @@ def _reasoning_text(message) -> str:
     return ""
 
 
-async def _create(kwargs: dict, use_json: bool, use_reasoning: bool):
+async def _create(kwargs: dict, use_json: bool, use_reasoning: bool, api=None, openrouter: bool = True):
     """One request, with the optional parameters the model may or may not accept."""
+    api = api if api is not None else client
     params = dict(kwargs)
     if use_json:
         params["response_format"] = {"type": "json_object"}
-    if use_reasoning:
+    if use_reasoning and openrouter:
         # OpenRouter-specific, so it rides along in extra_body.
         params["extra_body"] = {
             "reasoning": {"exclude": XHS_REASONING_EXCLUDE, "effort": XHS_REASONING_EFFORT}
         }
     # Hard deadline: OpenRouter trickles whitespace to keep slow requests open,
     # so the SDK's socket timeout alone would let /xhs hang for minutes.
-    return await asyncio.wait_for(client.chat.completions.create(**params), XHS_REQUEST_TIMEOUT)
+    return await asyncio.wait_for(api.chat.completions.create(**params), XHS_REQUEST_TIMEOUT)
 
 
-async def _one_call(domain: str, avoid: list[str], model: str = XHS_MODEL) -> Note:
+async def _one_call(domain: str, avoid: list[str], model: str = XHS_MODEL,
+                    api=None, openrouter: bool = True) -> Note:
     global _json_mode_supported, _reasoning_supported
 
-    if client is None:
+    api = api if api is not None else client
+    if api is None:
         raise GenerationError("OPENROUTER_API_KEY 没有设置")
 
     kwargs = {
@@ -590,8 +602,9 @@ async def _one_call(domain: str, avoid: list[str], model: str = XHS_MODEL) -> No
         "max_tokens": XHS_MAX_TOKENS,
     }
 
+    use_reasoning = _reasoning_supported and openrouter
     try:
-        response = await _create(kwargs, _json_mode_supported, _reasoning_supported)
+        response = await _create(kwargs, _json_mode_supported, use_reasoning, api, openrouter)
     except BadRequestError as exc:
         # The error rarely names the offending parameter, so read what we can
         # and otherwise drop both rather than failing the whole attempt.
@@ -600,21 +613,22 @@ async def _one_call(domain: str, avoid: list[str], model: str = XHS_MODEL) -> No
         if _json_mode_supported and ("response_format" in message or "json" in message):
             _json_mode_supported = False
             dropped.append("response_format")
-        if _reasoning_supported and "reasoning" in message:
+        if use_reasoning and "reasoning" in message:
             _reasoning_supported = False
             dropped.append("reasoning")
         if not dropped:
             if _json_mode_supported:
                 _json_mode_supported = False
                 dropped.append("response_format")
-            if _reasoning_supported:
+            if use_reasoning:
                 _reasoning_supported = False
                 dropped.append("reasoning")
         if not dropped:
             raise
         logger.warning("%s 拒绝了 %s，之后不再发送。原始错误：%s",
                        model, "、".join(dropped), exc)
-        response = await _create(kwargs, _json_mode_supported, _reasoning_supported)
+        response = await _create(kwargs, _json_mode_supported, _reasoning_supported and openrouter,
+                                 api, openrouter)
 
     if not response.choices:
         raise GenerationError("模型返回了空的 choices")
@@ -652,7 +666,7 @@ async def _one_call(domain: str, avoid: list[str], model: str = XHS_MODEL) -> No
 
 
 async def generate_note(domain: str | None = None, state: dict | None = None) -> Note:
-    """Generate one note, retrying once (on XHS_FALLBACK_MODEL) before giving up.
+    """Generate one note: DeepSeek (or XHS_MODEL) first, then once on XHS_FALLBACK_MODEL.
 
     A malformed reply counts as a failure just like a transport error, since
     both leave us without a usable note.
@@ -663,9 +677,9 @@ async def generate_note(domain: str | None = None, state: dict | None = None) ->
     avoid = recent_topics(state)
 
     last_error: Exception | None = None
-    for attempt, model in enumerate((XHS_MODEL, XHS_FALLBACK_MODEL), start=1):
+    for attempt, (api, model, is_openrouter) in enumerate(_attempts(), start=1):
         try:
-            note = await _one_call(chosen, avoid, model)
+            note = await _one_call(chosen, avoid, model, api, is_openrouter)
         except Exception as exc:  # noqa: BLE001 - retry on anything, then report
             last_error = exc
             logger.warning("小红书生成第 %d 次失败（%s）：%s", attempt, model, exc, exc_info=True)
