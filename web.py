@@ -102,6 +102,33 @@ def owner_contacts(path: Path = cs.CS_PRODUCTS_PATH) -> tuple[str, list[str]]:
             [w for w in (str(x).strip() for x in wechat) if _WECHAT_ID.match(w)])
 
 
+_OTHER_LINKS = {
+    # key in products.yaml: (label, pattern, how to turn the value into a link)
+    "X": ("X", re.compile(r"^https://(x|twitter)\.com/[A-Za-z0-9_]{1,15}/?$"), lambda v: v),
+    "Facebook": ("Facebook", re.compile(r"^https://(www\.|m\.)?facebook\.com/[A-Za-z0-9_.?=&/-]{1,120}$"), lambda v: v),
+    "邮箱": ("Email", re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,120}\.[A-Za-z]{2,24}$"), lambda v: "mailto:" + v),
+}
+
+
+def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
+    """[(label, href, text)] for the owner's X / Facebook / email in 联系本人,
+    in that order; empty or malformed entries are left out."""
+    try:
+        import yaml
+
+        data = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("联系本人") or {}
+    except Exception:  # noqa: BLE001 - the page still works without them
+        return []
+    links = []
+    for key, (label, pattern, href) in _OTHER_LINKS.items():
+        value = str(data.get(key) or "").strip()
+        if pattern.match(value):
+            handle = value.rstrip("/").rsplit("/", 1)[-1]
+            text = value if key == "邮箱" else "" if "?" in handle else "@" + handle
+            links.append((label, href(value), text))
+    return links
+
+
 class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
                  clock=time.time):
@@ -156,6 +183,11 @@ class WebChat:
         body = (_STATIC / name).read_text(encoding="utf-8")
         contact = html.escape(self.contact_link, quote=True)
         telegram, wechat = owner_contacts()
+        links = owner_links()
+        links_html = "".join(
+            f'<a class="social glass" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener">'
+            f'<b>{html.escape(label)}</b><span>{html.escape(text)}</span></a>'
+            for label, href, text in links)
         wechat_html = "".join(
             f'<button type="button" class="wx" data-copy="{w}"><span>{w}</span><small data-i="wxCopy">复制</small></button>'
             for w in (html.escape(w, quote=True) for w in wechat))
@@ -168,7 +200,9 @@ class WebChat:
                     .replace("{{OWNER_TG_DISPLAY}}", "" if telegram else "none")
                     .replace("{{WECHAT_IDS}}", wechat_html)
                     .replace("{{WECHAT_TEXT}}", html.escape(" / ".join(wechat)))
-                    .replace("{{WECHAT_DISPLAY}}", "" if wechat else "none"))
+                    .replace("{{WECHAT_DISPLAY}}", "" if wechat else "none")
+                    .replace("{{SOCIAL_LINKS}}", links_html)
+                    .replace("{{SOCIAL_DISPLAY}}", "" if links else "none"))
         return web.Response(text=body, content_type="text/html", headers={"Cache-Control": "no-cache"})
 
     async def widget(self, request: web.Request) -> web.Response:
