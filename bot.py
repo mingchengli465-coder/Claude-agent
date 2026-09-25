@@ -31,6 +31,7 @@ from telegram.ext import (
     filters,
 )
 
+import customer_service as cs
 import tweet as tweet_mod
 import xhs
 
@@ -56,6 +57,10 @@ REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "60"))
 
 # Only this chat may use /xhs and the note buttons; everyone else just chats.
 ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "").strip()
+# The owner: their messages and every scheduled job behave as before; anyone else
+# gets customer-service mode. Falls back to ADMIN_CHAT_ID, which is the same person.
+OWNER_CHAT_ID = os.environ.get("OWNER_CHAT_ID", "").strip() or ADMIN_CHAT_ID
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 XHS_DAILY_TIME = os.environ.get("XHS_DAILY_TIME", "09:00")
 XHS_TIMEZONE = os.environ.get("XHS_TIMEZONE", "Asia/Taipei")
 # Tweets go out twice a day by default, in the same timezone.
@@ -148,6 +153,9 @@ async def ask_model(chat_id: int, user_text: str) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     logger.info("/start from chat %s", chat_id)
+    if customer_mode_for(update):
+        await update.effective_message.reply_text(CS_WELCOME_TEXT)
+        return
     await update.effective_message.reply_text(WELCOME_TEXT)
 
 
@@ -156,6 +164,19 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     histories.pop(chat_id, None)
     logger.info("/reset cleared history for chat %s", chat_id)
     await update.effective_message.reply_text("🧹 Conversation history cleared. Let's start fresh!")
+
+
+async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Every plain text message lands here first."""
+    if is_owner(update.effective_chat.id):
+        if await forward_owner_reply(update, context):
+            return
+        await chat(update, context)
+        return
+    if customer_mode_for(update):
+        await customer_message(update, context)
+        return
+    await chat(update, context)
 
 
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -224,6 +245,11 @@ cover_variants: dict[int, int] = defaultdict(int)
 def is_admin(chat_id: int | str | None) -> bool:
     """True only for ADMIN_CHAT_ID. With it unset, nobody is admin."""
     return bool(ADMIN_CHAT_ID) and str(chat_id) == ADMIN_CHAT_ID
+
+
+def is_owner(chat_id: int | str | None) -> bool:
+    """True only for OWNER_CHAT_ID (or ADMIN_CHAT_ID when that is unset)."""
+    return bool(OWNER_CHAT_ID) and str(chat_id) == OWNER_CHAT_ID
 
 
 def note_keyboard() -> InlineKeyboardMarkup:
@@ -434,13 +460,202 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.effective_message.reply_text(TWEET_RESUMED_TEXT)
 
 
+# --------------------------------------------------------------------------- #
+# Customer-service mode — the Telegram entry. The logic lives in customer_service.py
+# --------------------------------------------------------------------------- #
+
+CS_WELCOME_TEXT = (
+    "你好呀～我是博主的助理 👋\n\n"
+    "想做 PPT、写代码、写文案还是做个简单网站？跟我说说要做什么、什么时候要、预算大概多少，"
+    "我帮你问清楚，再请本人给你报价～"
+)
+CS_ERROR_TEXT = "不好意思，我这边出了点小问题，我请本人来跟你确认，稍等哦"
+OWNER_NOTICE_LIMIT = 4000
+
+# Set in main() (or by tests). None means customer-service mode is off.
+service: cs.CustomerService | None = None
+
+
+def customer_mode_for(update: Update) -> bool:
+    """Customer mode is for private chats with anyone who isn't the owner."""
+    chat = update.effective_chat
+    return (
+        service is not None
+        and chat is not None
+        and chat.type == "private"
+        and not is_owner(chat.id)
+    )
+
+
+def _inbound(update: Update, text: str) -> cs.Inbound:
+    user = update.effective_user
+    return cs.Inbound(
+        channel="telegram",
+        chat_id=str(update.effective_chat.id),
+        text=text,
+        username=(user.username or "") if user else "",
+        display_name=(user.full_name or "") if user else "",
+    )
+
+
+async def customer_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if message is None or not message.text:
+        return
+    try:
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    except TelegramError:
+        logger.debug("Could not send typing action", exc_info=True)
+    reply = await service.handle(_inbound(update, message.text))
+    if reply:
+        for chunk in split_message(reply):
+            await message.reply_text(chunk)
+
+
+def _attachment_kind(message) -> str:
+    for attr, label in (("photo", "图片"), ("document", "文件"), ("voice", "语音"),
+                        ("video", "视频"), ("audio", "音频"), ("sticker", "表情"),
+                        ("video_note", "视频"), ("animation", "动图")):
+        if getattr(message, attr, None):
+            return label
+    return "附件"
+
+
+async def route_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Photos, files, voice: the owner's go to a customer, a customer's go to the owner."""
+    message = update.effective_message
+    if message is None:
+        return
+    if is_owner(update.effective_chat.id):
+        await forward_owner_reply(update, context)
+        return
+    if not customer_mode_for(update):
+        return
+    reply, owner_message_id = await service.handle_attachment(
+        _inbound(update, message.caption or ""), _attachment_kind(message)
+    )
+    if owner_message_id is not None:
+        try:
+            copied = await context.bot.copy_message(
+                chat_id=int(OWNER_CHAT_ID), from_chat_id=update.effective_chat.id,
+                message_id=message.message_id, reply_to_message_id=owner_message_id,
+            )
+            service.link_owner_message(copied.message_id, "telegram", str(update.effective_chat.id))
+        except TelegramError:
+            logger.exception("客户文件转给本人失败")
+    await message.reply_text(reply)
+
+
+async def forward_owner_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """If the owner replied to a customer notice, pass the reply on. True if handled."""
+    message = update.effective_message
+    target = message.reply_to_message if message else None
+    if service is None or target is None:
+        return False
+    key = service.lookup_owner_message(target.message_id)
+    if key is None:
+        return False
+    try:
+        if message.text:
+            await service.deliver_owner_reply(target.message_id, message.text)
+        elif key[0] == "telegram":
+            await context.bot.copy_message(chat_id=int(key[1]), from_chat_id=message.chat_id,
+                                           message_id=message.message_id)
+            service.record_owner_message(*key, f"[{_attachment_kind(message)}]")
+        else:
+            await message.reply_text(f"⚠️ {key[0]} 渠道暂时只能转文字")
+            return True
+    except Exception as exc:  # noqa: BLE001 - tell the owner rather than fail silently
+        logger.exception("转发给客户失败")
+        await message.reply_text(f"⚠️ 没转成功：{exc}")
+        return True
+    ref = key[1] if key[0] == "telegram" else f"{key[0]}:{key[1]}"
+    await message.reply_text(f"✅ 已转给客户 {ref}")
+    return True
+
+
+async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/ai <chat_id> on|off — pause or resume AI replies for one customer."""
+    if not is_owner(update.effective_chat.id):
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+    if service is None:
+        await update.effective_message.reply_text("客服模式没有启用。")
+        return
+    args = context.args or []
+    if len(args) != 2 or args[1].lower() not in ("on", "off"):
+        await update.effective_message.reply_text("用法：/ai <chat_id> on 或 /ai <chat_id> off")
+        return
+    enabled = args[1].lower() == "on"
+    found, key = service.set_ai(args[0], enabled)
+    if not found:
+        await update.effective_message.reply_text(f"找不到客户 {args[0]}，用 /customers 看看 chat ID")
+        return
+    state = "恢复" if enabled else "暂停"
+    extra = "" if enabled else "\n之后这位客户的消息会直接转给你，回复那条消息就能回客户。"
+    await update.effective_message.reply_text(f"✅ 已{state}对客户 {args[0]} 的 AI 回复{extra}")
+
+
+async def customers_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/customers — recent customers, what they want, when they last wrote."""
+    if not is_owner(update.effective_chat.id):
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+    if service is None:
+        await update.effective_message.reply_text("客服模式没有启用。")
+        return
+    for chunk in split_message(service.customers_report()):
+        await update.effective_message.reply_text(chunk)
+
+
+def _fit_notice(text: str) -> str:
+    """Owner notices carry a transcript; keep the head (who/why) and the newest lines."""
+    if len(text) <= OWNER_NOTICE_LIMIT:
+        return text
+    return text[:1200] + "\n…（中间省略）…\n" + text[-(OWNER_NOTICE_LIMIT - 1300):]
+
+
+def build_customer_service(bot) -> cs.CustomerService | None:
+    """Wire customer_service.py to Telegram. None (mode off) without an owner to hand off to."""
+    if not OWNER_CHAT_ID:
+        logger.warning("OWNER_CHAT_ID 和 ADMIN_CHAT_ID 都没设置，客服模式关闭，所有人照旧聊天")
+        return None
+
+    try:
+        catalog = cs.load_catalog()
+    except Exception:  # noqa: BLE001 - a typo in products.yaml must not take the bot down
+        logger.exception("products.yaml 读取失败，客服 AI 停用，客户消息会全部转给你")
+        catalog = ""
+
+    responder = None
+    if not ANTHROPIC_API_KEY:
+        logger.warning("没有 ANTHROPIC_API_KEY，客服 AI 停用，客户消息会全部转给你")
+    elif catalog:
+        responder = cs.ClaudeResponder(ANTHROPIC_API_KEY)
+
+    async def notify_owner(text: str) -> int | None:
+        sent = await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=_fit_notice(text))
+        return sent.message_id
+
+    async def send_telegram(chat_id: str, text: str) -> None:
+        for chunk in split_message(text):
+            await bot.send_message(chat_id=int(chat_id), text=chunk)
+
+    svc = cs.CustomerService(cs.Store(), catalog, responder, owner_notify=notify_owner)
+    svc.register_channel("telegram", send_telegram)
+    logger.info("客服模式已启用：模型 %s，AI %s，本人 chat %s",
+                cs.CS_MODEL, "开" if responder else "关（只转人工）", OWNER_CHAT_ID)
+    return svc
+
+
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Catch-all so an unexpected failure never takes the bot down."""
     logger.exception("Unhandled exception while processing update", exc_info=context.error)
 
     if isinstance(update, Update) and update.effective_message is not None:
+        text = CS_ERROR_TEXT if customer_mode_for(update) else GENERIC_ERROR_TEXT
         try:
-            await update.effective_message.reply_text(GENERIC_ERROR_TEXT)
+            await update.effective_message.reply_text(text)
         except TelegramError:
             logger.debug("Could not report the error back to the chat", exc_info=True)
 
@@ -565,8 +780,14 @@ def main() -> None:
     application.add_handler(CommandHandler("tweet", tweet_command))
     application.add_handler(CommandHandler("pause", pause_command))
     application.add_handler(CommandHandler("resume", resume_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
+    application.add_handler(CommandHandler("ai", ai_command))
+    application.add_handler(CommandHandler("customers", customers_command))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, route_text))
+    application.add_handler(MessageHandler(filters.ATTACHMENT & ~filters.COMMAND, route_media))
     application.add_error_handler(on_error)
+
+    global service
+    service = build_customer_service(application.bot)
 
     schedule_daily_note(application)
     schedule_daily_tweets(application)

@@ -323,4 +323,147 @@ for line in example.splitlines():
         assert line.split("=", 1)[1] == "", f".env.example still ships a value: {line}"
 print("PASS .env.example ships every secret blank")
 
+
+# ===========================================================================
+# Customer-service mode: routing only (the logic is tested in test_customer_service.py)
+# ===========================================================================
+import customer_service as cs_mod
+
+assert bot.OWNER_CHAT_ID == "424242", "OWNER_CHAT_ID falls back to ADMIN_CHAT_ID"
+assert bot.is_owner(424242) and not bot.is_owner(555)
+
+class CSModel:
+    def __init__(self): self.calls = 0
+    async def __call__(self, system, messages):
+        self.calls += 1
+        return cs_mod.Decision(reply="你好呀～想做什么呢？", summary="未说明｜未说明｜未说明")
+
+owner_inbox = []
+async def owner_notify(text):
+    owner_inbox.append(text)
+    return 7000 + len(owner_inbox)
+
+cs_model = CSModel()
+bot.service = cs_mod.CustomerService(cs_mod.Store(":memory:"), "服务: 测试", cs_model, owner_notify=owner_notify)
+delivered = []
+async def tg_send(chat_id, text): delivered.append((chat_id, text))
+bot.service.register_channel("telegram", tg_send)
+
+old_chat_calls = []
+real_chat = bot.chat
+async def fake_chat(update, context): old_chat_calls.append(update.effective_chat.id)
+bot.chat = fake_chat
+
+class Msg:
+    def __init__(self, text=None, reply_to=None, message_id=1, photo=None, caption=None, chat_id=0):
+        self.text, self.reply_to_message, self.message_id = text, reply_to, message_id
+        self.photo, self.caption, self.chat_id = photo, caption, chat_id
+        self.document = self.voice = self.video = self.audio = self.sticker = None
+        self.video_note = self.animation = None
+        self.replies = []
+    async def reply_text(self, text, **k): self.replies.append(text)
+
+class Upd:
+    def __init__(self, chat_id, text=None, chat_type="private", reply_to=None, photo=None, caption=None):
+        self.effective_chat = types.SimpleNamespace(id=chat_id, type=chat_type)
+        self.effective_user = types.SimpleNamespace(username="xiaohong", full_name="小红")
+        self.effective_message = Msg(text, reply_to, photo=photo, caption=caption, chat_id=chat_id)
+
+class CSBot:
+    def __init__(self): self.sent, self.copied = [], []
+    async def send_chat_action(self, **k): pass
+    async def send_message(self, **k): self.sent.append(k)
+    async def copy_message(self, **k):
+        self.copied.append(k)
+        return types.SimpleNamespace(message_id=9100 + len(self.copied))
+
+def run_route(fn, upd, args=None):
+    b = CSBot()
+    asyncio.run(fn(upd, types.SimpleNamespace(bot=b, args=args or [])))
+    return b
+
+# the owner's own messages keep going to the old chat, untouched
+run_route(bot.route_text, Upd(424242, "帮我想个标题"))
+assert old_chat_calls == [424242] and cs_model.calls == 0 and owner_inbox == []
+print("PASS the owner's messages still go to the normal chat, not customer service")
+
+# anyone else, in private, gets customer service
+u = Upd(555, "你好，想做PPT")
+run_route(bot.route_text, u)
+assert u.effective_message.replies == ["你好呀～想做什么呢？"], u.effective_message.replies
+assert cs_model.calls == 1 and old_chat_calls == [424242]
+print("PASS a stranger's private message is answered by customer service")
+
+# groups are left alone
+run_route(bot.route_text, Upd(-100123, "hi all", chat_type="group"))
+assert cs_model.calls == 1 and old_chat_calls[-1] == -100123
+print("PASS group chats don't enter customer-service mode")
+
+# a handoff reaches the owner; replying to it reaches the customer
+u = Upd(555, "我要下单，怎么付款")
+run_route(bot.route_text, u)
+assert u.effective_message.replies == [cs_mod.HANDOFF_TEXT]
+assert "要下单/付款" in owner_inbox[-1] and "@xiaohong" in owner_inbox[-1]
+notice_id = 7000 + len(owner_inbox)
+reply = Upd(424242, "定金 50，发你收款码～", reply_to=types.SimpleNamespace(message_id=notice_id))
+run_route(bot.route_text, reply)
+assert delivered == [("555", "定金 50，发你收款码～")], delivered
+assert any("已转给客户 555" in r for r in reply.effective_message.replies)
+assert old_chat_calls == [424242, -100123], "a forwarded reply must not also go to the chat AI"
+print("PASS the owner replies to a notice and the text reaches that customer")
+
+# replying to something unrelated is just a normal chat message
+run_route(bot.route_text, Upd(424242, "随便说说", reply_to=types.SimpleNamespace(message_id=1)))
+assert old_chat_calls[-1] == 424242
+print("PASS a reply to an ordinary message is not mistaken for a customer reply")
+
+# a customer's photo is copied to the owner under the notice
+u = Upd(555, photo=[object()], caption="老师的要求")
+b = run_route(bot.route_media, u)
+assert u.effective_message.replies == [cs_mod.ATTACHMENT_TEXT]
+assert b.copied and b.copied[0]["chat_id"] == 424242 and b.copied[0]["from_chat_id"] == 555
+assert bot.service.lookup_owner_message(9101) == ("telegram", "555"), "the copied file is replyable too"
+print("PASS a customer's photo is forwarded to the owner and acknowledged")
+
+# owner commands
+u = Upd(555, "/customers"); run_route(bot.customers_command, u)
+assert u.effective_message.replies == [bot.XHS_DENIED_TEXT]
+u = Upd(424242, "/customers"); run_route(bot.customers_command, u)
+assert "小红" in u.effective_message.replies[0] and "Chat ID：555" in u.effective_message.replies[0]
+u = Upd(424242, "/ai"); run_route(bot.ai_command, u, ["555", "off"])
+assert "已暂停" in u.effective_message.replies[0], u.effective_message.replies
+calls = cs_model.calls
+u = Upd(555, "在吗"); run_route(bot.route_text, u)
+assert u.effective_message.replies == [] and cs_model.calls == calls, "AI paused"
+u = Upd(424242, "/ai"); run_route(bot.ai_command, u, ["555", "on"])
+assert "已恢复" in u.effective_message.replies[0]
+u = Upd(424242, "/ai"); run_route(bot.ai_command, u, ["555"])
+assert "用法" in u.effective_message.replies[0]
+u = Upd(555, "/ai"); run_route(bot.ai_command, u, ["555", "on"])
+assert u.effective_message.replies == [bot.XHS_DENIED_TEXT]
+print("PASS /customers and /ai are owner-only and work")
+
+# /start: customers get the customer greeting
+u = Upd(555, "/start"); run_route(bot.start, u)
+assert u.effective_message.replies == [bot.CS_WELCOME_TEXT]
+u = Upd(424242, "/start"); run_route(bot.start, u)
+assert u.effective_message.replies == [bot.WELCOME_TEXT]
+print("PASS /start greets customers as the assistant and the owner as before")
+
+# with the mode off (no owner), strangers get the old chat
+saved = bot.service
+bot.service = None
+run_route(bot.route_text, Upd(556, "hello"))
+assert old_chat_calls[-1] == 556
+bot.service = saved
+bot.chat = real_chat
+print("PASS with customer service off, everyone gets the old chat")
+
+# the scheduled jobs are still registered exactly as before
+app6 = Application.builder().token("123:fake").build()
+bot.X_DAILY_TIMES = "12:00,20:00"
+bot.schedule_daily_note(app6); bot.schedule_daily_tweets(app6)
+assert sorted(j.name for j in app6.job_queue.jobs()) == ["tweet-daily-1200", "tweet-daily-2000", "xhs-daily"]
+print("PASS the 小红书 and tweet schedules are unchanged")
+
 print("\nALL BOT WIRING TESTS PASSED")

@@ -446,6 +446,84 @@ python test_bot_wiring.py   # auto-posting, pause/resume, the admin gate
 
 ---
 
+# 客服模式（Customer Service）
+
+`OWNER_CHAT_ID` 之外的人私聊机器人，就进入客服模式：Claude 按 `products.yaml`
+回答 AI 代做服务的问题，问清需求（做什么、截止时间、预算），该你出面时通知你。
+你自己的消息、`/xhs`、`/tweet` 和所有定时任务都不受影响。群聊不进客服模式。
+
+逻辑都在 `customer_service.py`，不依赖 Telegram；`bot.py` 只是 Telegram 的入口。
+
+## 客户那边
+
+- 默认简体中文，语气像博主的助理。只根据 `products.yaml` 回答，写着「待填」的字段
+  当作不知道。
+- 模型带最近 10 条对话（`CS_HISTORY`），存在 SQLite（`CS_DB_PATH`）。
+- 每人每分钟最多 5 条（`CS_RATE_LIMIT`），超出只提示一次，之后安静到下一分钟。
+- 发图片/文件：回「收到文件啦」，文件转给你。
+
+## 什么时候转给你
+
+回客户「我请本人来跟你确认，稍等哦」，并把客户昵称、@用户名、chat ID、需求摘要、
+最近对话推给你：
+
+- 要下单 / 付款 / 定金 / 发票
+- 砍价、问优惠
+- 需求复杂
+- 问到资料里没有或「待填」的内容
+- 要找真人 / 本人
+
+模型自己判断之外，还有一层关键词兜底（付款、下单、便宜点、真人……），命中就一定转。
+模型出错、被拒答、没有 `ANTHROPIC_API_KEY`，也都转给你，不会让客户干等。
+
+## 你这边
+
+| 操作 | 效果 |
+| ---- | ---- |
+| 在 Telegram 里「回复」推送给你的那条消息 | 内容转发给那位客户（文字、图片、文件都行）|
+| `/ai <chat_id> off` | 这位客户不再由 AI 回复，他的消息直接转给你 |
+| `/ai <chat_id> on` | 恢复 AI 回复 |
+| `/customers` | 最近 15 位客户：昵称、需求摘要、最后消息时间、AI 开关 |
+
+你的回复会记进对话，之后 AI 会以「【本人回复】」看到它，可以据此继续接待。
+
+## products.yaml
+
+四项服务（写代码、做 PPT、写文案 / 小红书文案、做简单网站），每项有说明、价格区间、
+交付周期、需要客户提供什么；另有付款方式、修改次数、不接的内容、常见问题。
+把「待填」换成真实内容；以 `#` 开头的注释（包括「例如」）不会被模型看到。
+
+## 模型
+
+`claude-opus-5`（`CS_MODEL`），自适应思考、`effort: low`（`CS_EFFORT`），结构化输出
+（每次回复都是固定格式的 JSON，决定回复内容、要不要转人工、需求摘要），系统提示
+缓存，并开启了服务端 `fallbacks: "default"`：请求被 Claude 安全机制拒绝时，自动改由
+推荐的备用模型处理。
+
+## 接企业微信
+
+```python
+service.register_channel("wecom", send)   # send(chat_id, text)
+reply = await service.handle(cs.Inbound(channel="wecom", chat_id=..., text=..., display_name=...))
+if reply: await send(chat_id, reply)
+```
+
+转人工通知和你的回复仍然走 Telegram；`/ai wecom:<id> off` 这样指定渠道。
+
+## 配置
+
+| 变量 | 必填 | 默认 | 说明 |
+| ---- | ---- | ---- | ---- |
+| `OWNER_CHAT_ID` | 是* | `ADMIN_CHAT_ID` | 你本人的 chat ID；都没设则客服模式关闭 |
+| `ANTHROPIC_API_KEY` | 是* | — | Claude API 密钥；没有则客户消息全部转给你 |
+| `CS_MODEL` | 否 | `claude-opus-5` | 客服用的 Claude 模型 |
+| `CS_EFFORT` | 否 | `low` | 思考深度：low / medium / high |
+| `CS_PRODUCTS_PATH` | 否 | `products.yaml` | 业务资料文件 |
+| `CS_DB_PATH` | 否 | `cs.sqlite3` | 对话数据库。Railway 重新部署会清空，要保留就挂 Volume 并指向它 |
+| `CS_HISTORY` | 否 | `10` | 带给模型的最近消息条数 |
+| `CS_RATE_LIMIT` | 否 | `5` | 每位客户每分钟最多几条 |
+| `CS_TIMEZONE` | 否 | `Asia/Shanghai` | `/customers` 和对话记录的时间 |
+
 # X (Twitter) Bot powered by Claude
 
 `x_bot.py` puts Claude behind your X account: it polls your mentions, reads the
