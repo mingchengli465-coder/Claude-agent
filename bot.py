@@ -327,7 +327,7 @@ async def xhs_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 # --------------------------------------------------------------------------- #
 
 TWEET_WORKING_TEXT = "正在生成並發布推文…"
-TWEET_FAILED_TEXT = "😵 推文生成失敗了（已經重試過一次）。\n\n{error}"
+TWEET_FAILED_TEXT = "😵 推文生成失敗了（已經換模型重試過）。沒有發任何東西。\n\n{error}"
 # The text is included so a failed post isn't lost — it can be posted by hand.
 TWEET_PUBLISH_FAILED_TEXT = (
     "😵 推文發布失敗。\n\n{error}\n\n———\n這則的內容，要手動發的話：\n\n{text}"

@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import tweepy
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 
 import xhs
 
@@ -38,8 +38,16 @@ X_MODEL = os.environ.get("X_MODEL", "google/gemma-4-26b-a4b-it:free")
 # on it fails too; OpenRouter's free router picks whichever free model is up.
 # Set X_FALLBACK_MODEL to the same value as X_MODEL to retry on it instead.
 X_FALLBACK_MODEL = os.environ.get("X_FALLBACK_MODEL", "openrouter/free").strip() or X_MODEL
+# How many tries on the fallback. openrouter/free draws a different model each
+# call, so a second draw often lands on one that writes instead of only thinking.
+X_FALLBACK_TRIES = max(1, int(os.environ.get("X_FALLBACK_TRIES", "2")))
 X_REQUEST_TIMEOUT = float(os.environ.get("X_REQUEST_TIMEOUT", "120"))
-X_MAX_TOKENS = int(os.environ.get("X_MAX_TOKENS", "2000"))
+# Roomy, because the fallback can land on a reasoning model that spends most of
+# the budget thinking; 2000 ran out before it wrote anything.
+X_MAX_TOKENS = int(os.environ.get("X_MAX_TOKENS", "8000"))
+# Keep a reasoning model's thinking short and out of the reply. Switches itself
+# off for the process if a model rejects the parameter.
+_reasoning_supported = os.environ.get("X_REASONING", "true").lower() != "false"
 X_TWEET_STATE_FILE = Path(os.environ.get("X_TWEET_STATE_FILE", "x_tweet_state.json"))
 X_AVOID_DAYS = int(os.environ.get("X_AVOID_DAYS", "7"))
 # The prompt sets a different ceiling per language, so the trim needs both.
@@ -97,6 +105,9 @@ client = AsyncOpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url=OPENROUTER_BASE_URL,
     timeout=X_REQUEST_TIMEOUT,
+    # generate_tweet() retries on other models. The SDK's own instant retries
+    # only hit the same rate-limited pool again.
+    max_retries=0,
 ) if OPENROUTER_API_KEY else None
 
 # Only used when a model wraps the tweet in JSON despite the prompt.
@@ -398,14 +409,26 @@ async def _one_call(domain: str, recent: list[str], language: str,
     if client is None:
         raise GenerationError("OPENROUTER_API_KEY 沒有設定")
 
+    global _reasoning_supported
     # No response_format here: the prompt asks for bare text, and JSON mode
     # would fight it.
-    response = await client.chat.completions.create(
+    kwargs = dict(
         model=model,
         messages=[{"role": "user", "content": _build_prompt(language, recent, domain)}],
         temperature=1.0,
         max_tokens=X_MAX_TOKENS,
     )
+    if _reasoning_supported:
+        kwargs["extra_body"] = {"reasoning": {"effort": "low", "exclude": True}}
+    try:
+        response = await client.chat.completions.create(**kwargs)
+    except BadRequestError as exc:
+        if "extra_body" not in kwargs:
+            raise
+        _reasoning_supported = False
+        logger.warning("%s 拒絕了 reasoning 參數，之後不再發送：%s", model, exc)
+        kwargs.pop("extra_body")
+        response = await client.chat.completions.create(**kwargs)
 
     if not response.choices:
         raise GenerationError("模型回傳了空的 choices")
@@ -428,7 +451,7 @@ async def _one_call(domain: str, recent: list[str], language: str,
 
 
 async def generate_tweet(domain: str | None = None) -> Tweet:
-    """Generate one tweet, retrying once (on X_FALLBACK_MODEL) before giving up."""
+    """Generate one tweet: X_MODEL first, then X_FALLBACK_MODEL up to X_FALLBACK_TRIES times."""
     state = load_state()
     chosen = domain or take_domain(state)
     recent = recent_tweet_texts(state)
@@ -436,7 +459,8 @@ async def generate_tweet(domain: str | None = None) -> Tweet:
     logger.info("這則用 %s 生成", language)
 
     last_error: Exception | None = None
-    for attempt, model in enumerate((X_MODEL, X_FALLBACK_MODEL), start=1):
+    models = [X_MODEL] + [X_FALLBACK_MODEL] * X_FALLBACK_TRIES
+    for attempt, model in enumerate(models, start=1):
         try:
             tweet = await _one_call(chosen, recent, language, model)
         except Exception as exc:  # noqa: BLE001 - retry once, then report
@@ -461,7 +485,7 @@ async def generate_tweet(domain: str | None = None) -> Tweet:
         return tweet
 
     save_state(state)  # Keep the rotation moving past a dead topic.
-    raise GenerationError(f"連續兩次生成失敗：{last_error}") from last_error
+    raise GenerationError(f"連續 {len(models)} 次生成失敗：{last_error}") from last_error
 
 
 # --------------------------------------------------------------------------- #
