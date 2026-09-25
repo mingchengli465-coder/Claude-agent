@@ -5,3 +5,4 @@ tweepy==4.17.0
 anthropic==1.7.0
 python-dotenv==1.0.1
 PyYAML==6.0.2
+aiohttp==3.11.18

@@ -490,6 +490,36 @@ python test_bot_wiring.py   # auto-posting, pause/resume, the admin gate
 real person……），命中就一定转。
 模型出错、被拒答、没有 `ANTHROPIC_API_KEY`，也都转给你，不会让客户干等。
 
+## 平时也会通知你（AI 照常接待）
+
+- **👋 有客户来咨询了**：新客户的第一条消息，或者老客户隔了 6 小时以上
+  （`CS_NEW_SESSION_GAP_HOURS`）又来，推给你一条，附上他说的和 AI 回的。
+- **🔥 客户有购买意向**：模型判断客户在认真考虑（问具体价格、时间、说了具体需求）。
+- **💰 客户准备购买了**：客户明确想买、想开始。
+
+购买意向在一段对话里只升不降，每升一级通知一次；同一条消息已经转人工的话，只发
+转人工那一条（里面也写着购买意向）。这些通知也能直接「回复」来跟客户说话。
+`CS_NOTIFY_NEW=false` / `CS_NOTIFY_INTENT=false` 可以分别关掉。
+
+## 网站聊天窗口
+
+机器人同时开一个小网站（端口 `PORT`，默认 8080），客户在网页上也能跟 AI 客服聊，
+和 Telegram 客户走同一套逻辑、同一份资料、同样通知你：
+
+- `/`：演示页，发给商户看效果；右下角就是真的聊天窗口。
+- `/widget.js`：聊天窗口本身。任何网站在 `</body>` 前加一行就有了：
+
+  ```html
+  <script src="https://你的域名/widget.js" defer></script>
+  ```
+
+  可选 `data-title`（标题）、`data-color`（主色）、`data-welcome`（开场白）、
+  `data-open="true"`（打开页面就展开）。
+- 网页访客在通知里显示为「网页访客 xxxx」，chat ID 是 `web:...`；你回复通知，
+  消息几秒内出现在他的聊天窗口里（标着「本人」）。`/ai web:... off` 也一样能用。
+- 同一个 IP 每分钟最多 20 条、每小时最多 5 个新访客（防止有人刷屏刷通知），每条
+  最多 1000 字。`WEB_CHAT=false` 关掉网站。
+
 ## 你这边
 
 | 操作 | 效果 |
@@ -545,6 +575,11 @@ if reply: await send(chat_id, reply)
 | `CS_HISTORY` | 否 | `10` | 带给模型的最近消息条数 |
 | `CS_RATE_LIMIT` | 否 | `5` | 每位客户每分钟最多几条 |
 | `CS_TIMEZONE` | 否 | `Asia/Shanghai` | `/customers` 和对话记录的时间 |
+| `CS_NEW_SESSION_GAP_HOURS` | 否 | `6` | 客户隔多久再来算「新来咨询」 |
+| `CS_NOTIFY_NEW` | 否 | `true` | 新客户来咨询时通知你 |
+| `CS_NOTIFY_INTENT` | 否 | `true` | 客户有购买意向 / 准备购买时通知你 |
+| `WEB_CHAT` | 否 | `true` | 网站聊天窗口开关 |
+| `PORT` | 否 | `8080` | 网站端口（Railway 生成域名时填同一个） |
 
 # X (Twitter) Bot powered by Claude
 

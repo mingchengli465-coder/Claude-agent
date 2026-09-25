@@ -46,6 +46,13 @@ CS_REQUEST_TIMEOUT = float(os.environ.get("CS_REQUEST_TIMEOUT", "60"))
 CS_RATE_LIMIT = int(os.environ.get("CS_RATE_LIMIT", "5"))
 CS_RATE_WINDOW = float(os.environ.get("CS_RATE_WINDOW", "60"))
 CS_TIMEZONE = ZoneInfo(os.environ.get("CS_TIMEZONE", "Asia/Shanghai"))
+# A customer silent this long (hours) counts as new again: the owner hears about
+# them once more, and their purchase intent starts over.
+CS_NEW_SESSION_GAP = float(os.environ.get("CS_NEW_SESSION_GAP_HOURS", "6")) * 3600
+# Tell the owner when someone starts chatting / looks ready to buy, even while
+# the AI is handling it fine. "false" turns either off.
+CS_NOTIFY_NEW = os.environ.get("CS_NOTIFY_NEW", "true").lower() != "false"
+CS_NOTIFY_INTENT = os.environ.get("CS_NOTIFY_INTENT", "true").lower() != "false"
 
 HANDOFF_TEXT = "我请本人来跟你确认，稍等哦"
 RATE_LIMITED_TEXT = "消息有点多啦 🙏 我一分钟最多回 {limit} 条，稍等一下再发哦～"
@@ -92,6 +99,13 @@ HANDOFF_REASONS = {
     "ai_paused": "AI 已对这位客户暂停",
 }
 
+# How keen the customer is to buy, as judged by the model. Only ever rises
+# within a conversation; each rise tells the owner.
+INTENT_LEVELS = {"": 0, "interested": 1, "ready": 2}
+INTENT_LABELS = {1: "有购买意向", 2: "准备购买"}
+
+CHANNEL_LABELS = {"telegram": "Telegram", "web": "网站聊天窗口"}
+
 # A safety net under the model's own judgement: these always go to the owner.
 _HANDOFF_KEYWORDS = [
     ("wants_human", re.compile(
@@ -129,6 +143,7 @@ class Decision:
     handoff: bool = False
     reason: str = ""
     summary: str = ""
+    intent: str = ""
 
 
 class Responder(Protocol):
@@ -186,6 +201,12 @@ SYSTEM_TEMPLATE = """你是一位小红书博主的客服助理，帮博主本�
 【summary】
 每次都更新一句话的需求摘要，格式：做什么｜截止时间｜预算。不知道的写"未说明"。
 
+【intent：客户有多想买】
+看整段对话判断，每次都填：
+- ""：只是随便问问、打听一下
+- "interested"：认真在考虑，比如问了具体价格、交付时间、要提供什么，或者说了自己的具体需求
+- "ready"：明确想买/想开始，比如"那就做这个吧""怎么开始""我要了""什么时候能开工"
+
 【业务资料 products.yaml】
 {catalog}"""
 
@@ -199,8 +220,9 @@ DECISION_SCHEMA = {
             "enum": ["", "order_or_payment", "bargain", "complex", "out_of_scope", "wants_human"],
         },
         "summary": {"type": "string", "description": "做什么｜截止时间｜预算"},
+        "intent": {"type": "string", "enum": ["", "interested", "ready"]},
     },
-    "required": ["reply", "handoff", "reason", "summary"],
+    "required": ["reply", "handoff", "reason", "summary", "intent"],
     "additionalProperties": False,
 }
 
@@ -254,7 +276,13 @@ class ClaudeResponder:
             handoff=bool(data.get("handoff")),
             reason=str(data.get("reason") or ""),
             summary=str(data.get("summary") or "").strip(),
+            intent=_intent(data.get("intent")),
         )
+
+
+def _intent(value) -> str:
+    value = str(value or "").strip().lower()
+    return value if value in INTENT_LEVELS else ""
 
 
 # Models without schema-enforced output are told the shape in words, with an
@@ -267,9 +295,10 @@ JSON_FORMAT_SUFFIX = """
 - handoff：要不要转给本人（true / false）
 - reason：转给本人的原因，只能是 "order_or_payment"、"bargain"、"complex"、"out_of_scope"、"wants_human" 之一；不转就写 ""
 - summary：需求摘要，格式「做什么｜截止时间｜预算」，不知道的写"未说明"
+- intent：客户有多想买，只能是 ""、"interested"、"ready" 之一
 
 示例（内容不要照抄）：
-{"reply": "可以的～想做几页、什么时候要呀？", "handoff": false, "reason": "", "summary": "课程汇报PPT｜未说明｜未说明"}"""
+{"reply": "可以的～想做几页、什么时候要呀？", "handoff": false, "reason": "", "summary": "课程汇报PPT｜未说明｜未说明", "intent": "interested"}"""
 
 
 def parse_decision(text: str) -> Decision:
@@ -298,6 +327,7 @@ def parse_decision(text: str) -> Decision:
         handoff=bool(handoff),
         reason=reason,
         summary=str(data.get("summary") or "").strip(),
+        intent=_intent(data.get("intent")),
     )
 
 
@@ -350,6 +380,7 @@ class Store:
                 last_message_at REAL,
                 last_ai_off_reply REAL DEFAULT 0,
                 lang TEXT DEFAULT '',
+                intent INTEGER DEFAULT 0,
                 PRIMARY KEY (channel, chat_id)
             );
             CREATE TABLE IF NOT EXISTS messages (
@@ -370,10 +401,12 @@ class Store:
             );
             """
         )
-        # Databases created before `lang` existed.
+        # Databases created before these columns existed.
         columns = {row["name"] for row in self.db.execute("PRAGMA table_info(customers)")}
         if "lang" not in columns:
             self.db.execute("ALTER TABLE customers ADD COLUMN lang TEXT DEFAULT ''")
+        if "intent" not in columns:
+            self.db.execute("ALTER TABLE customers ADD COLUMN intent INTEGER DEFAULT 0")
         self.db.commit()
 
     def touch_customer(self, channel: str, chat_id: str, username: str, display_name: str, now: float) -> None:
@@ -393,12 +426,22 @@ class Store:
             "SELECT * FROM customers WHERE channel = ? AND chat_id = ?", (channel, chat_id)
         ).fetchone()
 
-    def add_message(self, channel: str, chat_id: str, role: str, text: str, now: float) -> None:
-        self.db.execute(
+    def add_message(self, channel: str, chat_id: str, role: str, text: str, now: float) -> int:
+        cur = self.db.execute(
             "INSERT INTO messages (channel, chat_id, role, text, ts) VALUES (?, ?, ?, ?, ?)",
             (channel, chat_id, role, text, now),
         )
         self.db.commit()
+        return cur.lastrowid
+
+    def messages_after(self, channel: str, chat_id: str, after_id: int, limit: int = 50) -> list[sqlite3.Row]:
+        """Messages newer than `after_id`, oldest first (at most the newest `limit`)."""
+        rows = self.db.execute(
+            "SELECT id, role, text, ts FROM messages WHERE channel = ? AND chat_id = ? AND id > ?"
+            " ORDER BY id DESC LIMIT ?",
+            (channel, chat_id, after_id, limit),
+        ).fetchall()
+        return list(reversed(rows))
 
     def recent_messages(self, channel: str, chat_id: str, limit: int) -> list[sqlite3.Row]:
         rows = self.db.execute(
@@ -420,6 +463,10 @@ class Store:
         )
         self.db.commit()
         return cur.rowcount > 0
+
+    def set_intent(self, channel: str, chat_id: str, level: int) -> None:
+        self.db.execute("UPDATE customers SET intent = ? WHERE channel = ? AND chat_id = ?", (level, channel, chat_id))
+        self.db.commit()
 
     def set_lang(self, channel: str, chat_id: str, lang: str) -> None:
         self.db.execute("UPDATE customers SET lang = ? WHERE channel = ? AND chat_id = ?", (lang, channel, chat_id))
@@ -527,7 +574,11 @@ class CustomerService:
         key = (msg.channel, msg.chat_id)
         async with self.locks[key]:
             now = self.clock()
+            before = self.store.customer(*key)
+            is_new = before is None or now - (before["last_message_at"] or 0) >= CS_NEW_SESSION_GAP
             self.store.touch_customer(msg.channel, msg.chat_id, msg.username, msg.display_name, now)
+            if is_new:
+                self.store.set_intent(*key, 0)
             self.store.add_message(msg.channel, msg.chat_id, "customer", text, now)
             lang = self._lang(key, text, msg.lang)
 
@@ -557,14 +608,25 @@ class CustomerService:
 
             if decision.summary:
                 self.store.set_summary(*key, decision.summary)
+            intent = INTENT_LEVELS.get(decision.intent, 0)
+            intent_rose = intent > (customer["intent"] or 0)  # already reset to 0 for a new conversation
+            if intent_rose:
+                self.store.set_intent(*key, intent)
 
             keyword_reason = detect_handoff(text)
             if decision.handoff or keyword_reason or not decision.reply:
                 reason = decision.reason if decision.handoff and decision.reason else (keyword_reason or "complex")
+                # The handoff notice already carries everything, so it's the only one.
+                reply = self._say(key, CANNED[lang]["handoff"])
                 await self._notify(key, reason)
-                return self._say(key, CANNED[lang]["handoff"])
+                return reply
 
-            return self._say(key, decision.reply)
+            reply = self._say(key, decision.reply)
+            if intent_rose and CS_NOTIFY_INTENT:
+                await self._notify_intent(key, intent, is_new)
+            elif is_new and CS_NOTIFY_NEW:
+                await self._notify_new(key)
+            return reply
 
     async def handle_attachment(self, msg: Inbound, kind: str) -> tuple[str, int | None]:
         """A photo/file from a customer: record it and tell the owner. Returns
@@ -624,10 +686,41 @@ class CustomerService:
         ref = key[1] if key[0] == "telegram" else f"{key[0]}:{key[1]}"
         return f"客户：{name}{user}\nChat ID：{ref}"
 
+    def _where(self, key: tuple[str, str]) -> str:
+        return CHANNEL_LABELS.get(key[0], key[0])
+
+    def _intent_line(self, key: tuple[str, str]) -> str:
+        c = self.store.customer(*key)
+        label = INTENT_LABELS.get(c["intent"] if c else 0)
+        return f"购买意向：{label}\n" if label else ""
+
+    async def _notify_new(self, key: tuple[str, str]) -> int | None:
+        """Someone started chatting; the AI is on it, this is just so the owner knows."""
+        ref = key[1] if key[0] == "telegram" else f"{key[0]}:{key[1]}"
+        text = (
+            f"👋 有客户来咨询了（{self._where(key)}）\n"
+            f"{self.describe(key)}\n\n"
+            f"{self.transcript(key, 4)}\n\n"
+            f"AI 正在接待，你不用管。想亲自说话就回复这条消息；/ai {ref} off 可暂停 AI"
+        )
+        return await self._send_owner(key, text)
+
+    async def _notify_intent(self, key: tuple[str, str], level: int, is_new: bool) -> int | None:
+        """The customer looks keen to buy; the AI keeps chatting, the owner may want to step in."""
+        ref = key[1] if key[0] == "telegram" else f"{key[0]}:{key[1]}"
+        c = self.store.customer(*key)
+        summary = (c["summary"] if c else "") or "（还没问清楚）"
+        head = "💰 客户准备购买了" if level >= 2 else "🔥 客户有购买意向"
+        text = (
+            f"{head}（{self._where(key)}{'，新客户' if is_new else ''}）\n"
+            f"{self.describe(key)}\n"
+            f"需求摘要：{summary}\n\n"
+            f"—— 最近对话 ——\n{self.transcript(key)}\n\n"
+            f"AI 还在继续聊。想亲自跟进就回复这条消息，内容会转给客户；/ai {ref} off 可暂停 AI"
+        )
+        return await self._send_owner(key, text)
+
     async def _notify(self, key: tuple[str, str], reason: str, forward_only: str | None = None) -> int | None:
-        if self.owner_notify is None:
-            logger.warning("没有设置 OWNER_CHAT_ID，客户 %s:%s 的转人工通知发不出去", *key)
-            return None
         ref = key[1] if key[0] == "telegram" else f"{key[0]}:{key[1]}"
         if forward_only is not None:
             text = f"💬 {self.describe(key)}\n（AI 已暂停，/ai {ref} on 恢复）\n\n{forward_only}\n\n↩️ 回复这条消息，内容会转给客户"
@@ -635,16 +728,24 @@ class CustomerService:
             c = self.store.customer(*key)
             summary = (c["summary"] if c else "") or "（还没问清楚）"
             text = (
-                f"🔔 需要你接手：{HANDOFF_REASONS.get(reason, reason)}\n"
+                f"🔔 需要你接手：{HANDOFF_REASONS.get(reason, reason)}（{self._where(key)}）\n"
                 f"{self.describe(key)}\n"
-                f"需求摘要：{summary}\n\n"
+                f"需求摘要：{summary}\n"
+                f"{self._intent_line(key)}\n"
                 f"—— 最近对话 ——\n{self.transcript(key)}\n\n"
                 f"↩️ 回复这条消息，内容会转给客户。/ai {ref} off 可暂停 AI"
             )
+        return await self._send_owner(key, text)
+
+    async def _send_owner(self, key: tuple[str, str], text: str) -> int | None:
+        """Send a notice about this customer to the owner, linked so replying to it reaches them."""
+        if self.owner_notify is None:
+            logger.warning("没有设置 OWNER_CHAT_ID，客户 %s:%s 的通知发不出去", *key)
+            return None
         try:
             owner_message_id = await self.owner_notify(text)
         except Exception:  # noqa: BLE001 - a failed notice must not break the customer's reply
-            logger.exception("转人工通知发送失败（%s:%s）", *key)
+            logger.exception("给本人的通知发送失败（%s:%s）", *key)
             return None
         if owner_message_id is not None:
             self.store.link_owner_message(owner_message_id, *key, self.clock())
@@ -690,7 +791,8 @@ class CustomerService:
                 last_text = last_text[:40] + "…"
             ai = "AI 开" if c["ai_enabled"] else "AI 关"
             blocks.append(
-                f"{self.describe(key)}（{ai}）\n"
+                f"{self.describe(key)}（{self._where(key)}，{ai}）\n"
+                f"{self._intent_line(key)}"
                 f"需求：{c['summary'] or '（还没问清楚）'}\n"
                 f"最后消息 {at}：{last_text}"
             )

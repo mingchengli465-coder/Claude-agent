@@ -73,8 +73,14 @@ system_sent, messages = model.calls[-1]
 assert catalog in system_sent
 assert messages == [{"role": "user", "content": "你好，想做个PPT"}], messages
 assert svc.store.customer("telegram", "555")["summary"] == "PPT｜未说明｜未说明"
-assert owner.notices == [], "a plain answer must not bother the owner"
-print("PASS an ordinary question is answered by the model and the summary is kept")
+assert len(owner.notices) == 1 and "有客户来咨询了" in owner.notices[0][1], owner.notices
+for must in ("Telegram", "小红", "Chat ID：555", "你好，想做个PPT", reply, "AI 正在接待"):
+    assert must in owner.notices[0][1], (must, owner.notices[0][1])
+assert svc.lookup_owner_message(owner.notices[0][0]) == ("telegram", "555"), "replying to the notice reaches them"
+clock.t += 30
+run(svc.handle(msg("大概10页")))
+assert len(owner.notices) == 1, "the rest of the conversation doesn't bother the owner"
+print("PASS an ordinary question is answered by the model; the owner hears once that someone is asking")
 
 # --- context: the last 10 messages, customer turn first and last ----------------------
 for i in range(8):
@@ -353,5 +359,74 @@ assert run(svc.handle(msg("在吗"))) == cs.HANDOFF_TEXT
 assert "AI 出错" in owner.notices[-1][1]
 cs.CS_REQUEST_TIMEOUT = saved
 print("PASS a hung model hands the customer to the owner at the deadline")
+
+# --- new-customer notice: once per conversation, again after a long silence ----------------
+svc, model, owner, clock, sent = fresh()
+run(svc.handle(msg("在吗")))
+clock.t += 3600
+run(svc.handle(msg("还在吗")))
+assert len(owner.notices) == 1, owner.notices
+clock.t += cs.CS_NEW_SESSION_GAP
+run(svc.handle(msg("我又来了")))
+assert len(owner.notices) == 2 and "有客户来咨询了" in owner.notices[-1][1] and "我又来了" in owner.notices[-1][1]
+svc, model, owner, clock, sent = fresh()
+assert run(svc.handle(msg("我要下单，怎么付款"))) == cs.HANDOFF_TEXT
+assert len(owner.notices) == 1 and "需要你接手" in owner.notices[0][1], "a handoff is the only notice"
+assert cs.HANDOFF_TEXT in owner.notices[0][1], "the notice shows what the customer was told"
+print("PASS the owner hears about a new customer once, again after a long silence, and never twice for one message")
+
+# --- purchase intent: the owner hears each time it rises, the AI keeps chatting -------------------
+svc, model, owner, clock, sent = fresh()
+run(svc.handle(msg("你们做网站吗")))
+model.next = cs.Decision(reply="做的～个人主页69-99元，要几页呀？", summary="网站｜未说明｜未说明", intent="interested")
+clock.t += 30
+assert run(svc.handle(msg("多少钱？大概什么时候能好"))) == "做的～个人主页69-99元，要几页呀？"
+notice = owner.notices[-1][1]
+assert len(owner.notices) == 2 and "🔥 客户有购买意向" in notice, owner.notices
+for must in ("小红", "网站｜未说明｜未说明", "多少钱", "AI 还在继续聊", "回复这条消息"):
+    assert must in notice, (must, notice)
+assert svc.lookup_owner_message(owner.notices[-1][0]) == ("telegram", "555")
+clock.t += 30
+run(svc.handle(msg("三页就行")))
+assert len(owner.notices) == 2, "the same level doesn't notify again"
+model.next = cs.Decision(reply="好的～我请本人跟你确认开工时间", summary="网站3页｜未说明｜99元", intent="ready")
+clock.t += 30
+run(svc.handle(msg("那就做这个吧")))
+assert len(owner.notices) == 3 and "💰 客户准备购买了" in owner.notices[-1][1], owner.notices[-1]
+model.next = cs.Decision(reply="", handoff=True, reason="complex", summary="网站3页｜未说明｜99元", intent="ready")
+clock.t += 30
+run(svc.handle(msg("可以加个后台吗")))
+assert "购买意向：准备购买" in owner.notices[-1][1], "a handoff notice says how keen they are"
+assert "准备购买" in svc.customers_report()
+# A brand-new customer who is keen straight away gets one notice, not two.
+svc, model, owner, clock, sent = fresh()
+model.next = cs.Decision(reply="可以的～要几页？", summary="PPT｜明天｜未说明", intent="ready")
+run(svc.handle(msg("明天要一个PPT，直接开始吧")))
+assert len(owner.notices) == 1 and "💰 客户准备购买了（Telegram，新客户）" in owner.notices[0][1], owner.notices
+# Keen-ness starts over in a new conversation.
+clock.t += cs.CS_NEW_SESSION_GAP
+model.next = cs.Decision(reply="你好呀", intent="interested")
+run(svc.handle(msg("你好")))
+assert "🔥 客户有购买意向" in owner.notices[-1][1]
+print("PASS the owner is told when a customer gets interested and again when they're ready to buy")
+
+# --- the model's intent is read from both providers' JSON ---------------------------------------------
+assert cs.parse_decision('{"reply": "hi", "handoff": false, "reason": "", "summary": "", "intent": "ready"}').intent == "ready"
+assert cs.parse_decision('{"reply": "hi", "intent": "very keen"}').intent == "", "unknown values are ignored"
+assert cs.parse_decision('{"reply": "hi"}').intent == ""
+assert "intent" in cs.DECISION_SCHEMA["required"] and "intent" in cs.JSON_FORMAT_SUFFIX
+print("PASS intent comes through JSON mode and the schema")
+
+# --- messages_after: what the web chat window polls -----------------------------------------------------
+store = cs.Store(":memory:")
+store.touch_customer("web", "v1", "", "", 1.0)
+a = store.add_message("web", "v1", "customer", "hi", 1.0)
+b = store.add_message("web", "v1", "assistant", "hello", 2.0)
+c = store.add_message("web", "v1", "owner", "I'm here", 3.0)
+store.add_message("web", "v2", "owner", "someone else", 3.0)
+assert [r["text"] for r in store.messages_after("web", "v1", a)] == ["hello", "I'm here"]
+assert [r["id"] for r in store.messages_after("web", "v1", 0)] == [a, b, c]
+assert store.messages_after("web", "v1", c) == []
+print("PASS messages can be read back after a given id, per customer")
 
 print("\nALL CUSTOMER SERVICE TESTS PASSED")

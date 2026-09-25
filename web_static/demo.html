@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}} · AI 客服演示</title>
+<meta name="description" content="给你的店铺配一个 24 小时在线的 AI 客服：按你的价目表回答客户，要下单、砍价自动转给你本人。">
+<style>
+  :root { --c: #e8543a; --ink: #1d1d1f; --muted: #6e6e73; --bg: #fbfaf8; --card: #fff; --line: #ecebe8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.65;
+         font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 56px 0 32px; }
+  .shop { font-size: 14px; color: var(--muted); letter-spacing: .02em; }
+  h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.2; margin: 10px 0 14px; }
+  h1 em { font-style: normal; color: var(--c); }
+  .lead { font-size: 18px; color: #3a3a3c; max-width: 640px; margin: 0; }
+  .try { margin-top: 26px; display: inline-flex; align-items: center; gap: 10px; background: var(--c); color: #fff;
+         border: 0; border-radius: 999px; padding: 13px 22px; font-size: 16px; cursor: pointer; }
+  .hint { font-size: 14px; color: var(--muted); margin-top: 10px; }
+  section { padding: 28px 0; }
+  h2 { font-size: 22px; margin: 0 0 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .card b { display: block; margin-bottom: 4px; font-size: 16px; }
+  .card p { margin: 0; color: #48484a; font-size: 15px; }
+  ol.steps { margin: 0; padding-left: 22px; color: #3a3a3c; }
+  ol.steps li { margin-bottom: 8px; }
+  .ask { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ask span { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 14px; color: #3a3a3c; }
+  pre { background: #1d1d1f; color: #f5f5f7; padding: 14px 16px; border-radius: 12px; overflow-x: auto; font-size: 13px; margin: 0; }
+  .contact a { color: var(--c); font-weight: 600; }
+  footer { padding: 40px 0 120px; color: var(--muted); font-size: 13px; }
+  html:not([data-en]) [lang-en], html[data-en] [lang-zh] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="shop">{{TITLE}}</div>
+    <h1 lang-zh>给你的店铺配一个 <em>24 小时在线</em> 的 AI 客服</h1>
+    <h1 lang-en>An AI assistant that answers <em>your customers 24/7</em></h1>
+    <p class="lead" lang-zh>它按你自己的价目表和常见问题回答客户，中文、英文都能聊，会主动问清需求。客户要下单、砍价、问到它答不了的，自动转给你本人，你在手机上直接回。</p>
+    <p class="lead" lang-en>It answers from your own price list and FAQ, in the customer's language, and asks the right questions. When someone wants to order, haggle, or asks something it can't answer, it hands them to you on your phone.</p>
+    <button class="try" type="button" id="try"><span lang-zh>💬 现在就试试：点右下角跟它聊</span><span lang-en>💬 Try it now: chat in the corner</span></button>
+    <div class="hint" lang-zh>右下角这个聊天窗口就是真实的 AI 客服，你现在看到的效果，就是装到你网站上的效果。</div>
+    <div class="hint" lang-en>The chat window in the corner is the real thing — exactly what your visitors would see.</div>
+  </header>
+
+  <section>
+    <h2 lang-zh>能帮你做什么</h2>
+    <h2 lang-en>What it does</h2>
+    <div class="grid">
+      <div class="card"><b lang-zh>🌙 随时回复</b><b lang-en>🌙 Always on</b>
+        <p lang-zh>半夜、上课、忙的时候客户来问，也能马上得到回复，不会因为回得慢跑掉。</p>
+        <p lang-en>Customers get an answer at 3am or while you're busy, so they don't wander off.</p></div>
+      <div class="card"><b lang-zh>📋 只说你给的信息</b><b lang-en>📋 Sticks to your facts</b>
+        <p lang-zh>价格、交付时间、付款方式都只按你的资料回答，不乱编、不乱承诺。</p>
+        <p lang-en>Prices, timelines and payment terms come only from your info. No made-up promises.</p></div>
+      <div class="card"><b lang-zh>🔔 重要的事叫你</b><b lang-en>🔔 Calls you in</b>
+        <p lang-zh>有新客户来问、客户想买、要下单付款时，都会第一时间通知你，附上聊天记录。</p>
+        <p lang-en>You're notified when someone new starts chatting, looks ready to buy, or wants to pay, with the chat so far.</p></div>
+      <div class="card"><b lang-zh>🌏 多种语言</b><b lang-en>🌏 Any language</b>
+        <p lang-zh>客户用什么语言问，它就用什么语言答，适合做海外客户的商家。</p>
+        <p lang-en>Replies in whatever language the customer writes in.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 lang-zh>可以这样问它试试</h2>
+    <h2 lang-en>Things to ask it</h2>
+    <div class="ask" lang-zh>
+      <span>AI 客服多少钱？</span><span>可以接到我的网站吗？</span><span>多久能上线？</span><span>每个月的费用包含什么？</span><span>能便宜点吗？</span>
+    </div>
+    <div class="ask" lang-en>
+      <span>How much is the AI assistant?</span><span>Can it go on my website?</span><span>How long does setup take?</span><span>Can I get a discount?</span>
+    </div>
+  </section>
+
+  <section>
+    <h2 lang-zh>怎么装到你的网站</h2>
+    <h2 lang-en>How it goes on your site</h2>
+    <ol class="steps" lang-zh>
+      <li>把你的价目表、常见问题发给我。</li>
+      <li>我帮你搭好 AI 客服，按你的店铺改好名字和颜色。</li>
+      <li>在你网站里加一行代码（不会弄的话我帮你加），右下角就会出现聊天窗口：</li>
+    </ol>
+    <ol class="steps" lang-en>
+      <li>Send me your price list and FAQ.</li>
+      <li>I set up your assistant with your shop's name and colours.</li>
+      <li>One line goes into your site (I can add it for you) and the chat window appears:</li>
+    </ol>
+    <pre id="snippet"></pre>
+  </section>
+
+  <section class="contact" style="display: {{CONTACT_DISPLAY}}">
+    <h2 lang-zh>想给自己的店也装一个？</h2>
+    <h2 lang-en>Want one for your shop?</h2>
+    <p lang-zh>直接在右下角问助理，或者 <a href="{{CONTACT}}" target="_blank" rel="noopener">在 Telegram 上找我</a>。</p>
+    <p lang-en>Ask the assistant in the corner, or <a href="{{CONTACT}}" target="_blank" rel="noopener">message me on Telegram</a>.</p>
+  </section>
+
+  <footer>© {{TITLE}}</footer>
+</div>
+
+<script>
+  if (!/^zh/i.test(navigator.language || "")) {
+    document.documentElement.setAttribute("data-en", "");
+    document.documentElement.lang = "en";
+  }
+  document.getElementById("snippet").textContent =
+    '<script src="' + location.origin + '/widget.js" defer><\/script>';
+  document.getElementById("try").addEventListener("click", function () {
+    if (window.aiChatOpen) window.aiChatOpen();
+  });
+</script>
+<script src="/widget.js" data-title="{{TITLE_ATTR}}" defer></script>
+</body>
+</html>

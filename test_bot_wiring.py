@@ -490,10 +490,21 @@ print("PASS customer service picks Claude, else DeepSeek, else hands everything 
 class MeBot:
     async def get_me(self): return types.SimpleNamespace(username="vinc_design_bot")
 tweet_mod.X_TELEGRAM_LINK = "bot"
+import web as web_mod
+started = []
+async def fake_start(self, port=0): started.append(self)
+saved_start, web_mod.WebChat.start = web_mod.WebChat.start, fake_start
 asyncio.run(bot.post_init(types.SimpleNamespace(bot=MeBot())))
+web_mod.WebChat.start = saved_start
 assert tweet_mod.telegram_link() == "https://t.me/vinc_design_bot"
 tweet_mod.X_TELEGRAM_LINK = ""
 print("PASS post_init hands the bot's username to the tweet link")
+assert started and bot.web_chat is started[0], "customer service on -> the website chat window opens"
+assert bot.web_chat.contact_link == "https://t.me/vinc_design_bot"
+assert "web" in bot.service.senders, "owner replies to website visitors have somewhere to go"
+assert ".post_shutdown(post_shutdown)" in __import__("inspect").getsource(bot.main)
+bot.web_chat = None
+print("PASS startup opens the website chat window on the same customer service")
 
 # --- nothing waits behind a slow handler, and the chat model has a hard deadline ----------------------
 import inspect as _inspect

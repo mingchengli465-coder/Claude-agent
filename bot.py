@@ -34,6 +34,7 @@ from telegram.ext import (
 import customer_service as cs
 import llm
 import tweet as tweet_mod
+import web
 import xhs
 
 logging.basicConfig(
@@ -877,18 +878,45 @@ def check_env(name: str, value: str) -> str:
     return ""
 
 
+# Set in post_init when customer service is on. None means no website chat.
+web_chat: web.WebChat | None = None
+
+
 async def post_init(application: Application) -> None:
-    """Learn the bot's own @username, so X_TELEGRAM_LINK=bot can point tweets at it."""
+    """Learn the bot's own @username, so X_TELEGRAM_LINK=bot can point tweets at it,
+    then open the website chat window."""
+    username = ""
     try:
         me = await application.bot.get_me()
+        username = me.username or ""
     except TelegramError:
         logger.exception("拿不到机器人自己的用户名，X_TELEGRAM_LINK=bot 暂时不会生效")
-        schedule_post_on_start(application)
-        return
-    tweet_mod.set_bot_username(me.username)
-    link = tweet_mod.telegram_link()
-    logger.info("机器人是 @%s；推文底下的 Telegram 链接：%s", me.username, link or "（没设置）")
+    else:
+        tweet_mod.set_bot_username(username)
+        link = tweet_mod.telegram_link()
+        logger.info("机器人是 @%s；推文底下的 Telegram 链接：%s", username, link or "（没设置）")
     schedule_post_on_start(application)
+    await start_web_chat(username)
+
+
+async def start_web_chat(bot_username: str = "") -> None:
+    """The website chat window shares the customer service (and its owner notices)."""
+    global web_chat
+    if service is None or not web.WEB_CHAT:
+        return
+    contact = f"https://t.me/{bot_username}" if bot_username else ""
+    chat = web.WebChat(service, title=web.shop_name(), contact_link=contact)
+    try:
+        await chat.start()
+    except OSError:
+        logger.exception("网站聊天窗口启动失败（端口 %s 被占用？），Telegram 机器人照常运行", web.WEB_PORT)
+        return
+    web_chat = chat
+
+
+async def post_shutdown(application: Application) -> None:
+    if web_chat is not None:
+        await web_chat.stop()
 
 
 def schedule_post_on_start(application: Application) -> None:
@@ -926,6 +954,7 @@ def main() -> None:
         .token(TELEGRAM_BOT_TOKEN)
         .concurrent_updates(True)
         .post_init(post_init)
+        .post_shutdown(post_shutdown)
         .build()
     )
     application.add_handler(CommandHandler("start", start))
