@@ -351,4 +351,27 @@ tw.X_REQUEST_TIMEOUT = saved_timeout
 assert tw.X_REQUEST_TIMEOUT == 90
 print("PASS a hung model is dropped at the deadline and the fallback answers")
 
+# --- DeepSeek first when its key is set, OpenRouter's free models behind it ---------------------------
+class Recorder:
+    def __init__(self, label, fail=False): self.label, self.fail, self.calls = label, fail, []
+    async def create(self, **kw):
+        self.calls.append(kw)
+        if self.fail:
+            raise RuntimeError(f"{self.label} down")
+        m = types.SimpleNamespace(content=payload, model_extra={})
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=m, finish_reason="stop")])
+ds, orr = Recorder("deepseek"), Recorder("openrouter")
+tw.ds_client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=ds))
+tw.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=orr))
+tw._reasoning_supported = True
+assert asyncio.run(tw.generate_tweet("d")).text == payload
+assert [c["model"] for c in ds.calls] == ["deepseek-flash"] and orr.calls == []
+assert "extra_body" not in ds.calls[0], "OpenRouter's reasoning parameter must not go to DeepSeek"
+ds.fail = True
+assert asyncio.run(tw.generate_tweet("d")).text == payload
+assert [c["model"] for c in orr.calls] == ["openrouter/free"], "DeepSeek down: the free router takes over"
+assert orr.calls[0]["extra_body"]["reasoning"]["effort"] == "low"
+tw.ds_client = None
+print("PASS tweets use DeepSeek first and fall back to OpenRouter's free models")
+
 print("\nALL TWEET TESTS PASSED")

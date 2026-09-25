@@ -32,6 +32,7 @@ from telegram.ext import (
 )
 
 import customer_service as cs
+import llm
 import tweet as tweet_mod
 import xhs
 
@@ -76,13 +77,13 @@ MAX_HISTORY_MESSAGES = MAX_HISTORY_ROUNDS * 2
 TELEGRAM_MESSAGE_LIMIT = 4096
 
 WELCOME_TEXT = (
-    "👋 Hi! I'm an AI chatbot running on OpenRouter.\n\n"
+    "👋 Hi! I'm an AI chatbot.\n\n"
     "Just send me a message and I'll reply. I remember the last "
     f"{MAX_HISTORY_ROUNDS} rounds of our conversation.\n\n"
     "Commands:\n"
     "/start - show this message\n"
     "/reset - clear the conversation history\n"
-    f"\nCurrent model: {MODEL}"
+    f"\nCurrent model: {llm.DEEPSEEK_MODEL if llm.USE_DEEPSEEK else MODEL}"
 )
 
 GENERIC_ERROR_TEXT = "😵 Something went wrong while contacting the AI. Please try again in a moment."
@@ -100,6 +101,14 @@ client = AsyncOpenAI(
     base_url=OPENROUTER_BASE_URL,
     timeout=REQUEST_TIMEOUT,
 )
+# DeepSeek, when DEEPSEEK_API_KEY is set: answers first, OpenRouter's MODEL behind it.
+ds_client = llm.deepseek_client(REQUEST_TIMEOUT)
+
+
+def chat_attempts() -> list[tuple]:
+    """(client, model) in the order the owner's chat tries them."""
+    tries = [(ds_client, llm.DEEPSEEK_MODEL)] if ds_client is not None else []
+    return tries + [(client, MODEL)]
 
 
 def split_message(text: str, limit: int = TELEGRAM_MESSAGE_LIMIT) -> list[str]:
@@ -136,11 +145,19 @@ async def ask_model(chat_id: int, user_text: str) -> str:
     messages.extend(history)
     messages.append({"role": "user", "content": user_text})
 
-    # A hard deadline on top of the SDK timeout: OpenRouter keeps a slow request
-    # alive by trickling whitespace, so the socket-level timeout never fires.
-    response = await asyncio.wait_for(
-        client.chat.completions.create(model=MODEL, messages=messages), REQUEST_TIMEOUT
-    )
+    attempts = chat_attempts()
+    for index, (api, model) in enumerate(attempts):
+        try:
+            # A hard deadline on top of the SDK timeout: OpenRouter keeps a slow
+            # request alive by trickling whitespace, so the socket timeout never fires.
+            response = await asyncio.wait_for(
+                api.chat.completions.create(model=model, messages=messages), REQUEST_TIMEOUT
+            )
+            break
+        except Exception as exc:  # noqa: BLE001 - the last attempt's error is raised to chat()
+            if index == len(attempts) - 1:
+                raise
+            logger.warning("%s 回答失败，改用 %s：%s", model, attempts[index + 1][1], exc)
 
     if not response.choices:
         raise RuntimeError("OpenRouter returned a response with no choices")
@@ -818,7 +835,10 @@ def main() -> None:
             + "\n請到部署平台（Railway → 專案 → Variables）把上面列出的變數設成真正的值。"
         )
 
-    logger.info("Starting bot with model %s via %s", MODEL, OPENROUTER_BASE_URL)
+    if llm.USE_DEEPSEEK:
+        logger.info("聊天、小红书、推文都先用 DeepSeek（%s），失败再用 OpenRouter 免费模型", llm.DEEPSEEK_MODEL)
+    else:
+        logger.info("Starting bot with model %s via %s", MODEL, OPENROUTER_BASE_URL)
 
     # Updates are handled concurrently: a /tweet or /xhs waiting minutes on a free
     # model must not hold up customers or the owner's chat. Every handler that

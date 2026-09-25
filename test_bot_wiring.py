@@ -512,4 +512,23 @@ assert u.effective_message.replies == [bot.TIMEOUT_TEXT], u.effective_message.re
 bot.client, bot.REQUEST_TIMEOUT = saved_client, saved_timeout
 print("PASS the owner's chat gives up on a hung model instead of going silent")
 
+# --- the owner's chat: DeepSeek first, OpenRouter behind it -------------------------------------------
+class ChatRec:
+    def __init__(self, text, fail=False): self.text, self.fail, self.models = text, fail, []
+    async def create(self, **kw):
+        self.models.append(kw["model"])
+        if self.fail:
+            raise RuntimeError("down")
+        m = types.SimpleNamespace(content=self.text)
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=m)])
+cds, cor = ChatRec("我是 DeepSeek"), ChatRec("free model here")
+saved = bot.ds_client, bot.client
+bot.ds_client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=cds))
+bot.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=cor))
+assert asyncio.run(bot.ask_model(31337, "你是什么模型")) == "我是 DeepSeek" and cor.models == []
+cds.fail = True
+assert asyncio.run(bot.ask_model(31337, "再问一次")) == "free model here" and cor.models == [bot.MODEL]
+bot.ds_client, bot.client = saved
+print("PASS the owner's chat uses DeepSeek first and falls back to OpenRouter")
+
 print("\nALL BOT WIRING TESTS PASSED")

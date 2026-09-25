@@ -24,6 +24,7 @@ from pathlib import Path
 import tweepy
 from openai import AsyncOpenAI, BadRequestError
 
+import llm
 import xhs
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,14 @@ client = AsyncOpenAI(
     # only hit the same rate-limited pool again.
     max_retries=0,
 ) if OPENROUTER_API_KEY else None
+# DeepSeek, when DEEPSEEK_API_KEY is set: tried first, OpenRouter behind it.
+ds_client = llm.deepseek_client(X_REQUEST_TIMEOUT)
+
+
+def _attempts() -> list[tuple]:
+    """(client, model, is_openrouter) in the order to try them."""
+    first = (ds_client, llm.DEEPSEEK_MODEL, False) if ds_client is not None else (client, X_MODEL, True)
+    return [first] + [(client, X_FALLBACK_MODEL, True)] * X_FALLBACK_TRIES
 
 # Only used when a model wraps the tweet in JSON despite the prompt.
 TEXT_KEYS = ("text", "tweet", "正文", "內容", "内容", "content")
@@ -416,8 +425,9 @@ def _parse_tweet(raw: str, domain: str, language: str = ENGLISH) -> Tweet:
 
 
 async def _one_call(domain: str, recent: list[str], language: str,
-                    model: str = X_MODEL) -> Tweet:
-    if client is None:
+                    model: str = X_MODEL, api=None, openrouter: bool = True) -> Tweet:
+    api = api if api is not None else client
+    if api is None:
         raise GenerationError("OPENROUTER_API_KEY 沒有設定")
 
     global _reasoning_supported
@@ -429,17 +439,17 @@ async def _one_call(domain: str, recent: list[str], language: str,
         temperature=1.0,
         max_tokens=X_MAX_TOKENS,
     )
-    if _reasoning_supported:
+    if openrouter and _reasoning_supported:  # OpenRouter's parameter, not DeepSeek's
         kwargs["extra_body"] = {"reasoning": {"effort": "low", "exclude": True}}
     try:
-        response = await asyncio.wait_for(client.chat.completions.create(**kwargs), X_REQUEST_TIMEOUT)
+        response = await asyncio.wait_for(api.chat.completions.create(**kwargs), X_REQUEST_TIMEOUT)
     except BadRequestError as exc:
         if "extra_body" not in kwargs:
             raise
         _reasoning_supported = False
         logger.warning("%s 拒絕了 reasoning 參數，之後不再發送：%s", model, exc)
         kwargs.pop("extra_body")
-        response = await asyncio.wait_for(client.chat.completions.create(**kwargs), X_REQUEST_TIMEOUT)
+        response = await asyncio.wait_for(api.chat.completions.create(**kwargs), X_REQUEST_TIMEOUT)
 
     if not response.choices:
         raise GenerationError("模型回傳了空的 choices")
@@ -462,7 +472,7 @@ async def _one_call(domain: str, recent: list[str], language: str,
 
 
 async def generate_tweet(domain: str | None = None) -> Tweet:
-    """Generate one tweet: X_MODEL first, then X_FALLBACK_MODEL up to X_FALLBACK_TRIES times."""
+    """Generate one tweet: DeepSeek (or X_MODEL) first, then X_FALLBACK_MODEL up to X_FALLBACK_TRIES times."""
     state = load_state()
     chosen = domain or take_domain(state)
     recent = recent_tweet_texts(state)
@@ -470,10 +480,10 @@ async def generate_tweet(domain: str | None = None) -> Tweet:
     logger.info("這則用 %s 生成", language)
 
     last_error: Exception | None = None
-    models = [X_MODEL] + [X_FALLBACK_MODEL] * X_FALLBACK_TRIES
-    for attempt, model in enumerate(models, start=1):
+    models = _attempts()
+    for attempt, (api, model, is_openrouter) in enumerate(models, start=1):
         try:
-            tweet = await _one_call(chosen, recent, language, model)
+            tweet = await _one_call(chosen, recent, language, model, api, is_openrouter)
         except Exception as exc:  # noqa: BLE001 - retry once, then report
             last_error = exc
             logger.warning("推文生成第 %d 次失敗（%s）：%s", attempt, model, exc, exc_info=True)
