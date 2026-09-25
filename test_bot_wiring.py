@@ -178,6 +178,26 @@ assert len(published) == 1, published
 assert all(mk is None for _, mk in b.msgs)
 print("PASS the scheduled job publishes without asking")
 
+# --- the Telegram link reply is reported, and its failure doesn't hide the post --
+async def reply_ok(url): return "555"
+tweet_mod.post_link_reply = reply_ok
+upd, b = run_cmd(bot.tweet_command)
+sent = [m for m, _ in b.msgs if m and "已發推" in m]
+assert sent and "已在底下回覆 Telegram 連結" in sent[0], sent
+
+async def reply_boom(url): raise RuntimeError("回覆被拒")
+tweet_mod.post_link_reply = reply_boom
+upd, b = run_cmd(bot.tweet_command)
+sent = [m for m, _ in b.msgs if m and "已發推" in m]
+assert sent and "回覆被拒" in sent[0] and "推文已發出" in sent[0], sent
+
+async def reply_off(url): return None
+tweet_mod.post_link_reply = reply_off
+upd, b = run_cmd(bot.tweet_command)
+sent = [m for m, _ in b.msgs if m and "已發推" in m]
+assert sent and "Telegram" not in sent[0], "no link configured, nothing to say"
+print("PASS the link reply is reported, and a failed reply still reports the tweet as posted")
+
 # --- a publish failure is reported, with the text so it isn't lost ----------
 async def boom_publish(item): raise RuntimeError("X 拒絕了這則")
 tweet_mod.publish = boom_publish

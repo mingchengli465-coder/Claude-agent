@@ -222,4 +222,34 @@ except tw.GenerationError:
 assert down.models == [tw.X_MODEL, "openrouter/free"], "still exactly two calls"
 print("PASS when both fail it still stops after two calls")
 
+# --- the Telegram link reply --------------------------------------------------
+for raw in ("https://t.me/vinc_design", "t.me/vinc_design", "@vinc_design", "vinc_design",
+            "https://telegram.me/vinc_design/", "  http://www.t.me/vinc_design "):
+    assert tw.telegram_link(raw) == "https://t.me/vinc_design", (raw, tw.telegram_link(raw))
+assert tw.telegram_link("") == "" and tw.telegram_link("@") == ""
+
+tw.X_TELEGRAM_LINK = ""
+assert tw.link_reply_text() == ""
+assert asyncio.run(tw.post_link_reply("https://x.com/u/status/1")) is None, "off when unset"
+
+tw.X_TELEGRAM_LINK = "@vinc_design"
+reply = tw.link_reply_text()
+assert "https://t.me/vinc_design" in reply and "{link}" not in reply, reply
+assert tw.weighted_length(reply) <= 280, tw.weighted_length(reply)
+
+class FakeX:
+    def __init__(self): self.calls = []
+    def create_tweet(self, **kw):
+        self.calls.append(kw)
+        return types.SimpleNamespace(data={"id": "999"})
+fx = FakeX()
+saved_build = tw.build_x_client
+tw.build_x_client = lambda: fx
+got = asyncio.run(tw.post_link_reply("https://x.com/Vincent40769988/status/2103354135085252739"))
+tw.build_x_client = saved_build
+tw.X_TELEGRAM_LINK = ""
+assert got == "999"
+assert fx.calls == [{"text": reply, "in_reply_to_tweet_id": "2103354135085252739"}], fx.calls
+print("PASS the Telegram link is normalised and posted as a reply under the tweet")
+
 print("\nALL TWEET TESTS PASSED")
