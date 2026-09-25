@@ -495,4 +495,21 @@ assert tweet_mod.telegram_link() == "https://t.me/vinc_design_bot"
 tweet_mod.X_TELEGRAM_LINK = ""
 print("PASS post_init hands the bot's username to the tweet link")
 
+# --- nothing waits behind a slow handler, and the chat model has a hard deadline ----------------------
+import inspect as _inspect
+assert ".concurrent_updates(True)" in _inspect.getsource(bot.main), "a slow /tweet must not block customers"
+
+class HangingChat:
+    async def create(self, **kw):
+        await asyncio.sleep(3600)
+saved_client, saved_timeout = bot.client, bot.REQUEST_TIMEOUT
+bot.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=HangingChat()))
+bot.REQUEST_TIMEOUT = 0.05
+bot.chat = real_chat
+u = Upd(424242, "在吗")
+run_route(bot.route_text, u)
+assert u.effective_message.replies == [bot.TIMEOUT_TEXT], u.effective_message.replies
+bot.client, bot.REQUEST_TIMEOUT = saved_client, saved_timeout
+print("PASS the owner's chat gives up on a hung model instead of going silent")
+
 print("\nALL BOT WIRING TESTS PASSED")

@@ -41,7 +41,9 @@ X_FALLBACK_MODEL = os.environ.get("X_FALLBACK_MODEL", "openrouter/free").strip()
 # How many tries on the fallback. openrouter/free draws a different model each
 # call, so a second draw often lands on one that writes instead of only thinking.
 X_FALLBACK_TRIES = max(1, int(os.environ.get("X_FALLBACK_TRIES", "2")))
-X_REQUEST_TIMEOUT = float(os.environ.get("X_REQUEST_TIMEOUT", "120"))
+# Enforced with asyncio.wait_for per attempt: OpenRouter keeps slow requests
+# alive with whitespace, so the SDK's socket timeout alone never fires.
+X_REQUEST_TIMEOUT = float(os.environ.get("X_REQUEST_TIMEOUT", "90"))
 # Roomy, because the fallback can land on a reasoning model that spends most of
 # the budget thinking; 2000 ran out before it wrote anything.
 X_MAX_TOKENS = int(os.environ.get("X_MAX_TOKENS", "8000"))
@@ -430,14 +432,14 @@ async def _one_call(domain: str, recent: list[str], language: str,
     if _reasoning_supported:
         kwargs["extra_body"] = {"reasoning": {"effort": "low", "exclude": True}}
     try:
-        response = await client.chat.completions.create(**kwargs)
+        response = await asyncio.wait_for(client.chat.completions.create(**kwargs), X_REQUEST_TIMEOUT)
     except BadRequestError as exc:
         if "extra_body" not in kwargs:
             raise
         _reasoning_supported = False
         logger.warning("%s 拒絕了 reasoning 參數，之後不再發送：%s", model, exc)
         kwargs.pop("extra_body")
-        response = await client.chat.completions.create(**kwargs)
+        response = await asyncio.wait_for(client.chat.completions.create(**kwargs), X_REQUEST_TIMEOUT)
 
     if not response.choices:
         raise GenerationError("模型回傳了空的 choices")

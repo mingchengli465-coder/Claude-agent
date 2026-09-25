@@ -136,7 +136,11 @@ async def ask_model(chat_id: int, user_text: str) -> str:
     messages.extend(history)
     messages.append({"role": "user", "content": user_text})
 
-    response = await client.chat.completions.create(model=MODEL, messages=messages)
+    # A hard deadline on top of the SDK timeout: OpenRouter keeps a slow request
+    # alive by trickling whitespace, so the socket-level timeout never fires.
+    response = await asyncio.wait_for(
+        client.chat.completions.create(model=MODEL, messages=messages), REQUEST_TIMEOUT
+    )
 
     if not response.choices:
         raise RuntimeError("OpenRouter returned a response with no choices")
@@ -204,7 +208,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.warning("Rate limited by OpenRouter for chat %s", chat_id, exc_info=True)
             await message.reply_text(RATE_LIMIT_TEXT)
             return
-        except APITimeoutError:
+        except (APITimeoutError, asyncio.TimeoutError):
             logger.warning("OpenRouter request timed out for chat %s", chat_id, exc_info=True)
             await message.reply_text(TIMEOUT_TEXT)
             return
@@ -816,7 +820,16 @@ def main() -> None:
 
     logger.info("Starting bot with model %s via %s", MODEL, OPENROUTER_BASE_URL)
 
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
+    # Updates are handled concurrently: a /tweet or /xhs waiting minutes on a free
+    # model must not hold up customers or the owner's chat. Every handler that
+    # shares state per chat already takes a per-chat lock.
+    application = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .concurrent_updates(True)
+        .post_init(post_init)
+        .build()
+    )
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(CommandHandler("xhs", xhs_command))

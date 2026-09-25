@@ -463,4 +463,22 @@ assert xhs.BADGE_TEXT == "接单中"
 assert all("PPT" in d or "简历" in d or "Excel" in d or "文案" in d for d in xhs.DOMAINS), xhs.DOMAINS
 print(f"PASS the prompt carries the service brief and rotates {len(xhs.DOMAINS)} service lines")
 
+# --- /xhs gives up on a hung model at the deadline --------------------------------------------------
+class HangingXhs:
+    def __init__(self): self.models = []
+    async def create(self, **kw):
+        self.models.append(kw["model"])
+        if kw["model"] == xhs.XHS_MODEL:
+            await asyncio.sleep(3600)
+        m = types.SimpleNamespace(content=json.dumps(GOOD, ensure_ascii=False), model_extra={})
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=m, finish_reason="stop")])
+hx = HangingXhs()
+xhs.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=hx))
+saved_t = xhs.XHS_REQUEST_TIMEOUT
+xhs.XHS_REQUEST_TIMEOUT = 0.05
+assert asyncio.run(xhs.generate_note("课程汇报 PPT", state={})).title == GOOD["title"]
+assert hx.models == [xhs.XHS_MODEL, "openrouter/free"], hx.models
+xhs.XHS_REQUEST_TIMEOUT = saved_t
+print("PASS a hung 小红书 model is dropped at the deadline and the fallback writes the note")
+
 print("\nALL XHS TESTS PASSED")
