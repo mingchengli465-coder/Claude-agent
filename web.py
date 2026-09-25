@@ -124,7 +124,7 @@ def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
         value = str(data.get(key) or "").strip()
         if pattern.match(value):
             handle = value.rstrip("/").rsplit("/", 1)[-1]
-            text = value if key == "邮箱" else "" if "?" in handle else "@" + handle
+            text = value if key == "邮箱" else "↗" if "?" in handle else "@" + handle
             links.append((label, href(value), text))
     return links
 

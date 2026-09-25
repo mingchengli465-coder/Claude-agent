@@ -54,6 +54,7 @@ async def main():
         # The owner's own contacts come from products.yaml.
         assert 'href="https://t.me/Vinceeeeentttt"' in site and "@Vinceeeeentttt" in site
         assert 'data-copy="Vinc100327"' in site and 'data-copy="Abide2837"' in site
+        assert 'href="https://www.facebook.com/profile.php?id=61574166461675"' in site
         assert 'href="https://x.com/Vincent40769988"' in site and 'href="mailto:mingchengli465@gmail.com"' in site
         r = await client.get("/demo")
         page = await r.text()
@@ -161,7 +162,7 @@ async def main():
     links.write_text("联系本人:\n  X: https://x.com/someone\n  Facebook: https://www.facebook.com/profile.php?id=123\n"
                      "  邮箱: 'a@b.co\"><script>'\n", encoding="utf-8")
     assert web.owner_links(links) == [("X", "https://x.com/someone", "@someone"),
-                                      ("Facebook", "https://www.facebook.com/profile.php?id=123", "")]
+                                      ("Facebook", "https://www.facebook.com/profile.php?id=123", "↗")]
     links.write_text("联系本人:\n  X: javascript:alert(1)\n  Facebook:\n  邮箱: me@example.com\n", encoding="utf-8")
     assert web.owner_links(links) == [("Email", "mailto:me@example.com", "me@example.com")], "bad links and blanks are dropped"
     print("PASS the shop name comes from products.yaml")
