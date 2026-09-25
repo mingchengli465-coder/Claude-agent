@@ -325,6 +325,7 @@ Telegram only gets told afterwards.
 | `/tweet` | Generates and posts one now, even while paused             |
 | `/pause` | Stops the scheduled posting                                |
 | `/resume`| Starts it again                                            |
+| `/post <text>` | Posts your own text to X exactly as written. A line of just `---` splits off a reply to post underneath (e.g. links); without it the Telegram link reply is added |
 
 All three are gated on `ADMIN_CHAT_ID`.
 

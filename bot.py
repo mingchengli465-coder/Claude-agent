@@ -385,6 +385,11 @@ TWEET_LINK_REPLY_OK = "\n\n💬 已在底下回覆 Telegram 連結"
 # The tweet itself is up, so this is a warning, not a failure.
 TWEET_LINK_REPLY_FAILED = "\n\n⚠️ 推文已發出，但底下的 Telegram 連結回覆失敗：{error}"
 TWEET_PAUSED_TEXT = "⏸ 自動發推已暫停。/resume 恢復。"
+POST_USAGE_TEXT = (
+    "用法：/post 后面接推文内容，原样发到 X。\n\n"
+    "想在推文底下再回复一条（比如放链接），另起一行只写 ---，下面写回复内容。\n"
+    "没有 --- 的话，底下会自动回复机器人链接。"
+)
 TWEET_RESUMED_TEXT = "▶️ 自動發推已恢復。"
 TWEET_ALREADY_PAUSED = "⏸ 本來就是暫停狀態。/resume 恢復。"
 TWEET_ALREADY_RUNNING = "▶️ 本來就在跑了。/pause 可以暫停。"
@@ -443,6 +448,57 @@ async def tweet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         note += "\n（目前排程是暫停狀態，這則是你手動發的）"
     await update.effective_message.reply_text(note)
     await produce_and_post_tweet(context, chat_id)
+
+
+def split_post(body: str) -> tuple[str, str]:
+    """'/post' body -> (tweet, reply). A line of just --- separates them."""
+    lines = body.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() == "---":
+            return "\n".join(lines[:i]).strip(), "\n".join(lines[i + 1:]).strip()
+    return body.strip(), ""
+
+
+async def post_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/post <text> — publish the owner's own text to X, exactly as written."""
+    chat_id = update.effective_chat.id
+    message = update.effective_message
+    if not is_admin(chat_id):
+        await message.reply_text(XHS_DENIED_TEXT)
+        return
+
+    body = re.sub(r"^/post(@\w+)?", "", message.text or "", count=1).strip()
+    main, reply = split_post(body)
+    if not main:
+        await message.reply_text(POST_USAGE_TEXT)
+        return
+    for label, text in (("推文", main), ("底下的回复", reply)):
+        if text and tweet_mod.x_length(text) > tweet_mod.X_WEIGHTED_LIMIT:
+            await message.reply_text(
+                f"⚠️ {label}太长了：{tweet_mod.x_length(text)}/{tweet_mod.X_WEIGHTED_LIMIT}"
+                "（中文一个字算 2，链接一条算 23）。删短一点再发。"
+            )
+            return
+
+    try:
+        url = await tweet_mod.publish(tweet_mod.Tweet(domain="手動", topic=main[:60], text=main))
+    except Exception as exc:  # noqa: BLE001 - tell the owner exactly why
+        logger.exception("手動推文發布失敗")
+        await message.reply_text(TWEET_PUBLISH_FAILED_TEXT.format(error=exc, text=main))
+        return
+    logger.info("手動推文已發布：%s", url)
+
+    note = ""
+    try:
+        if reply:
+            await tweet_mod.post_reply(url, reply)
+            note = "\n\n💬 底下的回复也发了"
+        elif await tweet_mod.post_link_reply(url):
+            note = TWEET_LINK_REPLY_OK
+    except Exception as exc:  # noqa: BLE001 - the tweet itself is already out
+        logger.exception("手動推文的回覆失敗")
+        note = TWEET_LINK_REPLY_FAILED.format(error=exc)
+    await message.reply_text(f"🚀 已发推\n\n{main}\n\n———\n{url}{note}")
 
 
 async def tweet_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -859,6 +915,7 @@ def main() -> None:
     application.add_handler(CommandHandler("resume", resume_command))
     application.add_handler(CommandHandler("ai", ai_command))
     application.add_handler(CommandHandler("customers", customers_command))
+    application.add_handler(CommandHandler("post", post_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, route_text))
     application.add_handler(MessageHandler(filters.ATTACHMENT & ~filters.COMMAND, route_media))
     application.add_error_handler(on_error)

@@ -595,6 +595,17 @@ def _reply_sync(tweet_id: str, text: str) -> str:
     return reply_id
 
 
+def x_length(text: str) -> int:
+    """Length as X counts it: CJK weighs 2, and every link counts as 23."""
+    return weighted_length(_URL_RE.sub("x" * 23, text))
+
+
+async def post_reply(tweet_url_: str, text: str) -> str:
+    """Reply under the tweet at tweet_url_ with exactly this text."""
+    tweet_id = tweet_url_.rstrip("/").rsplit("/", 1)[-1]
+    return await asyncio.to_thread(_reply_sync, tweet_id, text)
+
+
 async def post_link_reply(tweet_url_: str) -> str | None:
     """Reply under the posted tweet with the Telegram link. None when not configured."""
     text = link_reply_text()
