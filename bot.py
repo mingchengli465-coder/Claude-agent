@@ -786,6 +786,18 @@ def check_env(name: str, value: str) -> str:
     return ""
 
 
+async def post_init(application: Application) -> None:
+    """Learn the bot's own @username, so X_TELEGRAM_LINK=bot can point tweets at it."""
+    try:
+        me = await application.bot.get_me()
+    except TelegramError:
+        logger.exception("拿不到机器人自己的用户名，X_TELEGRAM_LINK=bot 暂时不会生效")
+        return
+    tweet_mod.set_bot_username(me.username)
+    link = tweet_mod.telegram_link()
+    logger.info("机器人是 @%s；推文底下的 Telegram 链接：%s", me.username, link or "（没设置）")
+
+
 def main() -> None:
     problems = [
         problem
@@ -804,7 +816,7 @@ def main() -> None:
 
     logger.info("Starting bot with model %s via %s", MODEL, OPENROUTER_BASE_URL)
 
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(CommandHandler("xhs", xhs_command))

@@ -316,4 +316,16 @@ assert got == "999"
 assert fx.calls == [{"text": reply, "in_reply_to_tweet_id": "2103354135085252739"}], fx.calls
 print("PASS the Telegram link is normalised and posted as a reply under the tweet")
 
+# X_TELEGRAM_LINK=bot points at the bot itself, once it knows its username
+tw.X_TELEGRAM_LINK = "bot"
+tw.set_bot_username("")
+assert tw.link_reply_text() == "", "before startup looks the bot up: no reply, never a wrong link"
+tw.set_bot_username("@vinc_design_bot")
+assert tw.telegram_link() == "https://t.me/vinc_design_bot"
+assert "https://t.me/vinc_design_bot" in tw.link_reply_text()
+tw.X_TELEGRAM_LINK = "@someone_else"
+assert tw.telegram_link() == "https://t.me/someone_else", "an explicit link still wins"
+tw.X_TELEGRAM_LINK = ""
+print("PASS X_TELEGRAM_LINK=bot links tweets to the bot's own username")
+
 print("\nALL TWEET TESTS PASSED")

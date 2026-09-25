@@ -486,4 +486,13 @@ assert type(bot.build_customer_service(fake_bot).responder).__name__ == "ClaudeR
 bot.ANTHROPIC_API_KEY, bot.DEEPSEEK_API_KEY = saved_keys
 print("PASS customer service picks Claude, else DeepSeek, else hands everything to the owner")
 
+# --- startup learns the bot's username for the tweet link ------------------------------------------
+class MeBot:
+    async def get_me(self): return types.SimpleNamespace(username="vinc_design_bot")
+tweet_mod.X_TELEGRAM_LINK = "bot"
+asyncio.run(bot.post_init(types.SimpleNamespace(bot=MeBot())))
+assert tweet_mod.telegram_link() == "https://t.me/vinc_design_bot"
+tweet_mod.X_TELEGRAM_LINK = ""
+print("PASS post_init hands the bot's username to the tweet link")
+
 print("\nALL BOT WIRING TESTS PASSED")
