@@ -1,7 +1,9 @@
 Fonts in this folder are licensed under the SIL Open Font License 1.1 (text below).
 
 - Geist Sans and Geist Mono, (C) 2023 Vercel, made in collaboration with basement.studio
-- Instrument Serif (italic, used for the logo), Copyright 2022 The Instrument Serif Project Authors
+- Instrument Serif, Copyright 2022 The Instrument Serif Project Authors
+- serif-sc / serif-tc: subsets of Noto Serif SC / TC, Copyright 2017 Adobe (http://www.adobe.com/),
+  with Reserved Font Name 'Source'. Built by tools/build_fonts.py.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is available with a FAQ at: http://scripts.sil.org/OFL and copied below

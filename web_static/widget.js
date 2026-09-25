@@ -252,6 +252,13 @@
   }
 
   window.aiChatOpen = function () { setOpen(true); };
+  // A page can offer ready-made questions: open the window and send one.
+  window.aiChatAsk = function (text) {
+    setOpen(true);
+    if (busy || !text) return;
+    input.value = String(text).slice(0, 1000);
+    send();
+  };
   // A page with its own language switch keeps the chat window in step.
   window.aiChatSetLang = function (tag) {
     langTag = tag;

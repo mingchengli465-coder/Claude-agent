@@ -72,6 +72,8 @@ async def main():
         r = await client.get("/favicon.ico")
         assert r.status == 200 and "svg" in r.headers["Content-Type"]
         assert 'rel="icon"' in page, "the demo page has its own icon"
+        for font in ("serif-sc.woff2", "serif-tc.woff2", "instrument-serif-latin-400-normal.woff2"):
+            assert f"/fonts/{font}" in page and (await client.get(f"/fonts/{font}")).status == 200, font
         for font in ("instrument-serif-latin-400-italic.woff2", "geist-sans-latin-500-normal.woff2", "geist-mono-latin-400-normal.woff2"):
             assert f"/fonts/{font}" in site, font
             r = await client.get(f"/fonts/{font}")
