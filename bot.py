@@ -154,7 +154,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     logger.info("/start from chat %s", chat_id)
     if customer_mode_for(update):
-        await update.effective_message.reply_text(CS_WELCOME_TEXT)
+        await update.effective_message.reply_text(for_customer(update, CS_WELCOME_TEXT, CS_WELCOME_TEXT_EN))
         return
     await update.effective_message.reply_text(WELCOME_TEXT)
 
@@ -469,7 +469,30 @@ CS_WELCOME_TEXT = (
     "想做 PPT、写代码、写文案还是做个简单网站？跟我说说要做什么、什么时候要、预算大概多少，"
     "我帮你问清楚，再请本人给你报价～"
 )
+CS_WELCOME_TEXT_EN = (
+    "Hi there! I'm the assistant here 👋\n\n"
+    "Need slides, some code, copywriting or a simple website? Tell me what you need, "
+    "your deadline and your budget, and I'll get the owner to quote you. "
+    "Feel free to write in any language."
+)
 CS_ERROR_TEXT = "不好意思，我这边出了点小问题，我请本人来跟你确认，稍等哦"
+CS_ERROR_TEXT_EN = "Sorry, something went wrong on my side. Let me get the owner to help you, one moment please."
+
+
+def customer_lang(update: Update) -> str:
+    """'zh' if the customer's Telegram is set to Chinese, otherwise '' (unknown).
+
+    Never 'en': Telegram has no official Chinese interface, so plenty of Chinese
+    speakers run it in English. What they actually write decides the rest.
+    """
+    user = update.effective_user
+    code = (getattr(user, "language_code", "") or "").lower()
+    return "zh" if code.startswith("zh") else ""
+
+
+def for_customer(update: Update, zh: str, en: str) -> str:
+    """Chinese for a Chinese Telegram, otherwise both, Chinese first."""
+    return zh if customer_lang(update) == "zh" else f"{zh}\n\n———\n\n{en}"
 OWNER_NOTICE_LIMIT = 4000
 
 # Set in main() (or by tests). None means customer-service mode is off.
@@ -495,6 +518,7 @@ def _inbound(update: Update, text: str) -> cs.Inbound:
         text=text,
         username=(user.username or "") if user else "",
         display_name=(user.full_name or "") if user else "",
+        lang=customer_lang(update),
     )
 
 
@@ -653,7 +677,10 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.exception("Unhandled exception while processing update", exc_info=context.error)
 
     if isinstance(update, Update) and update.effective_message is not None:
-        text = CS_ERROR_TEXT if customer_mode_for(update) else GENERIC_ERROR_TEXT
+        if customer_mode_for(update):
+            text = for_customer(update, CS_ERROR_TEXT, CS_ERROR_TEXT_EN)
+        else:
+            text = GENERIC_ERROR_TEXT
         try:
             await update.effective_message.reply_text(text)
         except TelegramError:

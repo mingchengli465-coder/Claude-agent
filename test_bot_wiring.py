@@ -445,9 +445,15 @@ print("PASS /customers and /ai are owner-only and work")
 
 # /start: customers get the customer greeting
 u = Upd(555, "/start"); run_route(bot.start, u)
-assert u.effective_message.replies == [bot.CS_WELCOME_TEXT]
+assert u.effective_message.replies[0].startswith(bot.CS_WELCOME_TEXT)
 u = Upd(424242, "/start"); run_route(bot.start, u)
 assert u.effective_message.replies == [bot.WELCOME_TEXT]
+u = Upd(557, "/start"); u.effective_user.language_code = "en"; run_route(bot.start, u)
+greeting = u.effective_message.replies[0]
+assert bot.CS_WELCOME_TEXT in greeting and bot.CS_WELCOME_TEXT_EN in greeting, "English Telegram: both languages"
+u = Upd(558, "/start"); u.effective_user.language_code = "zh-hans"; run_route(bot.start, u)
+assert u.effective_message.replies == [bot.CS_WELCOME_TEXT], "Chinese Telegram: Chinese only"
+assert bot._inbound(u, "x").lang == "zh" and bot._inbound(Upd(557, "x"), "x").lang == ""
 print("PASS /start greets customers as the assistant and the owner as before")
 
 # with the mode off (no owner), strangers get the old chat

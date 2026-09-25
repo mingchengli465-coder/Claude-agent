@@ -45,6 +45,29 @@ HANDOFF_TEXT = "我请本人来跟你确认，稍等哦"
 RATE_LIMITED_TEXT = "消息有点多啦 🙏 我一分钟最多回 {limit} 条，稍等一下再发哦～"
 ATTACHMENT_TEXT = "收到文件啦～我转给本人看一下，稍等哦"
 AI_ERROR_TEXT = HANDOFF_TEXT
+
+# The model answers in the customer's own language; these fixed lines only come
+# in Chinese and English, so anyone not writing Chinese gets English.
+CANNED = {
+    "zh": {"handoff": HANDOFF_TEXT, "rate_limited": RATE_LIMITED_TEXT, "attachment": ATTACHMENT_TEXT},
+    "en": {
+        "handoff": "Let me get the owner to confirm this with you, one moment please.",
+        "rate_limited": "That's a lot of messages 🙏 I can reply to {limit} a minute, please give me a moment.",
+        "attachment": "Got your file! I'll pass it to the owner, one moment please.",
+    },
+}
+_CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
+_LETTERS = re.compile(r"[^\W\d_]")
+
+
+def detect_lang(text: str) -> str:
+    """'zh' for Chinese, 'en' for any other written language, '' when there's
+    nothing to go on (only emoji, numbers, punctuation)."""
+    if _CJK.search(text or ""):
+        return "zh"
+    if _LETTERS.search(text or ""):
+        return "en"
+    return ""
 # How often a customer may see the "no AI right now" reply, so a burst of
 # messages doesn't get the same line back each time.
 NO_AI_REPLY_EVERY = 600
@@ -65,9 +88,15 @@ HANDOFF_REASONS = {
 
 # A safety net under the model's own judgement: these always go to the owner.
 _HANDOFF_KEYWORDS = [
-    ("wants_human", re.compile(r"真人|人工|转人工|找本人|本人在吗|老板在吗|机器人吗|是AI吗|是 AI 吗", re.I)),
-    ("order_or_payment", re.compile(r"付款|付钱|转账|怎么付|下单|拍下|定金|订金|收款码|发票")),
-    ("bargain", re.compile(r"便宜点|便宜些|便宜一点|优惠|打折|砍价|少点|少一点|能不能少")),
+    ("wants_human", re.compile(
+        r"真人|人工|转人工|找本人|本人在吗|老板在吗|机器人吗|是AI吗|是 AI 吗"
+        r"|\b(real person|human|talk to (the )?(owner|someone|a person)|are you (a )?(bot|robot|ai))\b", re.I)),
+    ("order_or_payment", re.compile(
+        r"付款|付钱|转账|怎么付|下单|拍下|定金|订金|收款码|发票"
+        r"|\b(pay|payment|paying|deposit|invoice|checkout|place an order|i want to order|how do i order)\b", re.I)),
+    ("bargain", re.compile(
+        r"便宜点|便宜些|便宜一点|优惠|打折|砍价|少点|少一点|能不能少"
+        r"|\b(discount|cheaper|lower (the )?price|better price|best price|negotiat\w*)\b", re.I)),
 ]
 
 
@@ -82,6 +111,9 @@ class Inbound:
     text: str
     username: str = ""
     display_name: str = ""
+    # The channel's guess at the customer's language ("zh"/"en"), e.g. from their
+    # app settings. Only used when the message itself doesn't show it.
+    lang: str = ""
 
 
 @dataclass
@@ -119,7 +151,8 @@ def load_catalog(path: Path = CS_PRODUCTS_PATH) -> str:
 SYSTEM_TEMPLATE = """你是一位小红书博主的客服助理，帮博主本人接待来咨询 AI 代做服务的客户。客户大多是从小红书找过来的。
 
 【说话方式】
-- 默认用简体中文；客户用别的语言就跟着换。
+- 用客户最近一条消息的语言回复：客户写中文就用简体中文，写英文就用英文，写其他语言就用那种语言。
+- 业务资料是中文的，用客户的语言转述，意思不能变。价格照原数字说，并注明是人民币（CNY / RMB）。
 - 亲切、自然、像博主本人的助理在私信里聊天，不要像官方客服。句子短，可以偶尔用一个 emoji，不要每句都用。
 - 你是助理，不是博主本人。被问到是不是真人/机器人时如实说你是助理，并转给本人。
 
@@ -234,6 +267,7 @@ class Store:
                 first_seen REAL,
                 last_message_at REAL,
                 last_ai_off_reply REAL DEFAULT 0,
+                lang TEXT DEFAULT '',
                 PRIMARY KEY (channel, chat_id)
             );
             CREATE TABLE IF NOT EXISTS messages (
@@ -254,6 +288,10 @@ class Store:
             );
             """
         )
+        # Databases created before `lang` existed.
+        columns = {row["name"] for row in self.db.execute("PRAGMA table_info(customers)")}
+        if "lang" not in columns:
+            self.db.execute("ALTER TABLE customers ADD COLUMN lang TEXT DEFAULT ''")
         self.db.commit()
 
     def touch_customer(self, channel: str, chat_id: str, username: str, display_name: str, now: float) -> None:
@@ -300,6 +338,10 @@ class Store:
         )
         self.db.commit()
         return cur.rowcount > 0
+
+    def set_lang(self, channel: str, chat_id: str, lang: str) -> None:
+        self.db.execute("UPDATE customers SET lang = ? WHERE channel = ? AND chat_id = ?", (lang, channel, chat_id))
+        self.db.commit()
 
     def set_ai_off_reply(self, channel: str, chat_id: str, now: float) -> None:
         self.db.execute(
@@ -405,11 +447,12 @@ class CustomerService:
             now = self.clock()
             self.store.touch_customer(msg.channel, msg.chat_id, msg.username, msg.display_name, now)
             self.store.add_message(msg.channel, msg.chat_id, "customer", text, now)
+            lang = self._lang(key, text, msg.lang)
 
             allowed, warn = self.rate.check(f"{msg.channel}:{msg.chat_id}", now)
             if not allowed:
                 logger.info("客户 %s:%s 超过频率限制", *key)
-                return RATE_LIMITED_TEXT.format(limit=self.rate.limit) if warn else None
+                return CANNED[lang]["rate_limited"].format(limit=self.rate.limit) if warn else None
 
             customer = self.store.customer(*key)
             if not customer["ai_enabled"]:
@@ -420,7 +463,7 @@ class CustomerService:
                 await self._notify(key, "ai_unavailable")
                 if now - (customer["last_ai_off_reply"] or 0) >= NO_AI_REPLY_EVERY:
                     self.store.set_ai_off_reply(*key, now)
-                    return self._say(key, HANDOFF_TEXT)
+                    return self._say(key, CANNED[lang]["handoff"])
                 return None
 
             try:
@@ -428,7 +471,7 @@ class CustomerService:
             except Exception:  # noqa: BLE001 - any failure goes to the owner, never silence
                 logger.exception("客服 AI 出错（%s:%s）", *key)
                 await self._notify(key, "ai_error")
-                return self._say(key, AI_ERROR_TEXT)
+                return self._say(key, CANNED[lang]["handoff"])
 
             if decision.summary:
                 self.store.set_summary(*key, decision.summary)
@@ -437,7 +480,7 @@ class CustomerService:
             if decision.handoff or keyword_reason or not decision.reply:
                 reason = decision.reason if decision.handoff and decision.reason else (keyword_reason or "complex")
                 await self._notify(key, reason)
-                return self._say(key, HANDOFF_TEXT)
+                return self._say(key, CANNED[lang]["handoff"])
 
             return self._say(key, decision.reply)
 
@@ -449,8 +492,19 @@ class CustomerService:
         self.store.touch_customer(msg.channel, msg.chat_id, msg.username, msg.display_name, now)
         label = f"[{kind}]" + (f" {msg.text.strip()}" if msg.text.strip() else "")
         self.store.add_message(msg.channel, msg.chat_id, "customer", label, now)
+        lang = self._lang(key, msg.text, msg.lang)
         owner_id = await self._notify(key, "attachment")
-        return self._say(key, ATTACHMENT_TEXT), owner_id
+        return self._say(key, CANNED[lang]["attachment"]), owner_id
+
+    def _lang(self, key: tuple[str, str], text: str, hint: str = "") -> str:
+        """Language for the fixed lines: this message's, else the customer's last
+        known one, else the channel's hint, else Chinese. Remembered per customer."""
+        lang = detect_lang(text)
+        if lang:
+            self.store.set_lang(*key, lang)
+            return lang
+        c = self.store.customer(*key)
+        return (c["lang"] if c and c["lang"] else "") or hint or "zh"
 
     def _say(self, key: tuple[str, str], text: str) -> str:
         self.store.add_message(*key, "assistant", text, self.clock())

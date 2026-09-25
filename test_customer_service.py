@@ -237,4 +237,57 @@ print("PASS the Claude request uses structured output, adaptive thinking at low 
 assert cs.parse_customer_ref("123") == ("telegram", "123")
 assert cs.parse_customer_ref("wecom:abc") == ("wecom", "abc")
 
+# --- other languages ---------------------------------------------------------------------------------
+assert cs.detect_lang("你好，想做PPT") == "zh"
+assert cs.detect_lang("Hi, I need a pitch deck") == "en"
+assert cs.detect_lang("Bonjour, je voudrais un site") == "en", "non-Chinese falls back to the English lines"
+assert cs.detect_lang("👍👍 123") == ""
+assert "客户写中文就用简体中文，写英文就用英文" in system and "CNY" in system
+print("PASS the model is told to answer in the customer's language, prices in CNY")
+
+svc, model, owner, clock, sent = fresh()
+model.next = cs.Decision(reply="Sure! How many slides, and when do you need it?", summary="PPT｜未说明｜未说明")
+assert run(svc.handle(msg("Hi, I need slides for a class talk"))) == "Sure! How many slides, and when do you need it?"
+model.next = None
+for text, reason in (("How do I pay?", "要下单/付款"), ("Any discount if I order two?", "砍价"),
+                     ("Can I talk to a real person?", "要求找真人")):
+    clock.t += 30
+    assert run(svc.handle(msg(text))) == cs.CANNED["en"]["handoff"], text
+    assert reason in owner.notices[-1][1], (text, owner.notices[-1][1])
+clock.t += 30
+assert run(svc.handle(msg("in order to make it clear, the talk is 10 minutes"))) != cs.CANNED["en"]["handoff"], \
+    "'in order to' is not an order"
+clock.t += 30
+reply, _ = run(svc.handle_attachment(msg(""), "文件"))
+assert reply == cs.CANNED["en"]["attachment"], "a file with no caption keeps the customer's language"
+print("PASS English customers get English handoffs, and English ordering/bargaining/human requests reach the owner")
+
+svc, model, owner, clock, sent = fresh()
+replies = []
+for i in range(6):
+    clock.t += 1
+    replies.append(run(svc.handle(msg(f"message {i}"))))
+assert replies[5] == cs.CANNED["en"]["rate_limited"].format(limit=5), replies[5]
+svc, model, owner, clock, sent = fresh(responder=None)
+assert run(svc.handle(cs.Inbound(channel="telegram", chat_id="9", text="👍", lang="en"))) == cs.CANNED["en"]["handoff"], \
+    "no text to go on: use the channel's hint"
+print("PASS the rate-limit notice and the no-AI line follow the customer's language")
+
+# --- a database from before `lang` existed is upgraded in place --------------------------------------
+import sqlite3
+old_db = pathlib.Path(tempfile.mkdtemp()) / "old.sqlite3"
+con = sqlite3.connect(old_db)
+con.execute("CREATE TABLE customers (channel TEXT NOT NULL, chat_id TEXT NOT NULL, username TEXT DEFAULT '', "
+            "display_name TEXT DEFAULT '', ai_enabled INTEGER DEFAULT 1, summary TEXT DEFAULT '', first_seen REAL, "
+            "last_message_at REAL, last_ai_off_reply REAL DEFAULT 0, PRIMARY KEY (channel, chat_id))")
+con.execute("INSERT INTO customers (channel, chat_id, first_seen, last_message_at) VALUES ('telegram', '1', 1, 1)")
+con.commit(); con.close()
+upgraded = cs.Store(old_db)
+upgraded.set_lang("telegram", "1", "en")
+assert upgraded.customer("telegram", "1")["lang"] == "en"
+print("PASS an existing conversation database gains the language column without losing data")
+
+assert "Alipay" in catalog and "银行卡" in catalog
+print("PASS overseas customers are told they can pay by Alipay or card")
+
 print("\nALL CUSTOMER SERVICE TESTS PASSED")
