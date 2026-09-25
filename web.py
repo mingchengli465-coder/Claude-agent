@@ -81,6 +81,27 @@ def shop_name(path: Path = cs.CS_PRODUCTS_PATH) -> str:
         return ""
 
 
+_TELEGRAM_URL = re.compile(r"^https://t\.me/[A-Za-z0-9_]{4,64}$")
+_WECHAT_ID = re.compile(r"^[A-Za-z][-_A-Za-z0-9]{4,31}$")
+
+
+def owner_contacts(path: Path = cs.CS_PRODUCTS_PATH) -> tuple[str, list[str]]:
+    """(Telegram link, WeChat IDs) from 联系本人 in products.yaml; anything
+    malformed is left out rather than put on the page."""
+    try:
+        import yaml
+
+        data = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("联系本人") or {}
+    except Exception:  # noqa: BLE001 - the page still works without contacts
+        return "", []
+    telegram = str(data.get("Telegram") or "").strip()
+    wechat = data.get("微信号") or []
+    if isinstance(wechat, str):
+        wechat = [wechat]
+    return (telegram if _TELEGRAM_URL.match(telegram) else "",
+            [w for w in (str(x).strip() for x in wechat) if _WECHAT_ID.match(w)])
+
+
 class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
                  clock=time.time):
@@ -134,10 +155,20 @@ class WebChat:
     def _render(self, name: str) -> web.Response:
         body = (_STATIC / name).read_text(encoding="utf-8")
         contact = html.escape(self.contact_link, quote=True)
+        telegram, wechat = owner_contacts()
+        wechat_html = "".join(
+            f'<button type="button" class="wx" data-copy="{w}"><span>{w}</span><small data-i="wxCopy">复制</small></button>'
+            for w in (html.escape(w, quote=True) for w in wechat))
         body = (body.replace("{{TITLE}}", html.escape(self.title))
                     .replace("{{TITLE_ATTR}}", html.escape(self.title, quote=True))
                     .replace("{{CONTACT}}", contact)
-                    .replace("{{CONTACT_DISPLAY}}", "" if contact else "none"))
+                    .replace("{{CONTACT_DISPLAY}}", "" if contact else "none")
+                    .replace("{{OWNER_TG}}", html.escape(telegram, quote=True))
+                    .replace("{{OWNER_TG_HANDLE}}", html.escape("@" + telegram.rsplit("/", 1)[-1] if telegram else ""))
+                    .replace("{{OWNER_TG_DISPLAY}}", "" if telegram else "none")
+                    .replace("{{WECHAT_IDS}}", wechat_html)
+                    .replace("{{WECHAT_TEXT}}", html.escape(" / ".join(wechat)))
+                    .replace("{{WECHAT_DISPLAY}}", "" if wechat else "none"))
         return web.Response(text=body, content_type="text/html", headers={"Cache-Control": "no-cache"})
 
     async def widget(self, request: web.Request) -> web.Response:

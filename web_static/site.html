@@ -226,6 +226,21 @@
   .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
   .pills span { padding: 7px 14px; border-radius: 999px; font-size: 13.5px; color: var(--soft); }
 
+  /* contact */
+  .contacts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .contact { display: flex; flex-direction: column; }
+  .contact h3 { margin: 18px 0 6px !important; }
+  .contact .handle { font-size: 17px; color: rgba(255,255,255,.88); margin-bottom: 22px; word-break: break-all; }
+  .contact p { flex: 1; }
+  .contact .btn { width: 100%; margin-top: auto; }
+  .contact .sublink { margin-top: 14px; font-size: 13.5px; color: var(--muted); text-align: center; }
+  .contact .sublink a { color: var(--warm); }
+  .wxs { display: grid; gap: 10px; margin-top: auto; }
+  .wx { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 14px 18px; border-radius: 16px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04); cursor: pointer; font-size: 17px; letter-spacing: .02em; transition: background .2s; }
+  .wx:hover { background: rgba(255,255,255,.09); }
+  .wx small { font-size: 13px; color: var(--warm); letter-spacing: 0; }
+  .wx.done small { color: #86efac; }
+
   /* faq */
   .faq { display: grid; gap: 0; max-width: 900px; }
   details { border-top: 1px solid var(--line); }
@@ -253,7 +268,7 @@
   }
   @media (max-width: 1000px) {
     .links { display: none; }
-    .split, .about, .plans { grid-template-columns: 1fr; }
+    .split, .about, .plans, .contacts { grid-template-columns: 1fr; }
     .grid3 { grid-template-columns: 1fr; }
     .stats { grid-template-columns: 1fr 1fr; }
     .split { gap: 48px; }
@@ -292,6 +307,7 @@
       <a href="#claude-code" data-i="navCc">Claude Code</a>
       <a href="#pricing" data-i="navPricing">价格</a>
       <a href="#faq" data-i="navFaq">常见问题</a>
+      <a href="#contact" data-i="navContact">联系我</a>
     </div>
     <div class="grow"></div>
     <div class="langs" role="group" aria-label="Language">
@@ -356,7 +372,7 @@
           <li data-i="cc3">常见报错怎么处理，一起讲清楚</li>
           <li data-i="cc4">一小时左右搞定</li>
         </ul>
-        <div class="card-foot"><b data-i="ccPrice">问 AI 助理报价</b><a href="#claude-code" data-i="ccMore">了解更多 →</a></div>
+        <div class="card-foot"><b data-i="ccPrice">¥99 起</b><a href="#claude-code" data-i="ccMore">了解更多 →</a></div>
       </div>
       <div class="card glass reveal span2">
         <span class="for" data-i="otherTag">其他也能做</span>
@@ -481,6 +497,36 @@
     </div>
   </section>
 
+  <!-- contact -->
+  <section id="contact">
+    <div class="kicker reveal" data-i="contactKicker">联系我</div>
+    <h2 class="serif reveal" data-ih="contactTitle">直接找我，<em>本人回复</em></h2>
+    <p class="lead reveal" data-i="contactSub">想问得更细、准备下单，或者只是想认识一下，都可以直接加我。</p>
+    <div class="contacts">
+      <div class="card glass contact reveal" style="display: {{WECHAT_DISPLAY}}">
+        <div class="icon glass"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 4C5.4 4 2 6.8 2 10.2c0 2 1.1 3.7 2.8 4.8L4.2 17l2.4-1.3c.9.3 1.9.4 2.9.4"/><path d="M15.5 9C11.9 9 9 11.4 9 14.3s2.9 5.3 6.5 5.3c.8 0 1.6-.1 2.3-.4l2 1.1-.5-1.8c1.6-1 2.7-2.5 2.7-4.2C22 11.4 19.1 9 15.5 9z"/></svg></div>
+        <h3 class="serif" data-i="wxLabel">微信</h3>
+        <p data-i="wxDesc">点一下就能复制微信号，打开微信「添加朋友」粘贴搜索。</p>
+        <div class="wxs">{{WECHAT_IDS}}</div>
+      </div>
+      <div class="card glass contact reveal" style="display: {{OWNER_TG_DISPLAY}}">
+        <div class="icon glass"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m22 3-9.5 18-2.5-7.5L3 11z"/><path d="m22 3-12 10.5"/></svg></div>
+        <h3 class="serif">Telegram</h3>
+        <div class="handle">{{OWNER_TG_HANDLE}}</div>
+        <p data-i="tgDesc">海外客户推荐用 Telegram，消息我会亲自回。</p>
+        <a class="btn white" href="{{OWNER_TG}}" target="_blank" rel="noopener" data-i="tgBtn">打开 Telegram 聊天</a>
+      </div>
+      <div class="card glass contact reveal">
+        <div class="icon glass"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10l-5 3.6L16.8 20 12 16.4 7.2 20 9 13.6 4 10l6.1-1.2z"/></svg></div>
+        <h3 class="serif" data-i="aiLabel">AI 助理</h3>
+        <div class="handle" data-i="aiHandle">24 小时在线</div>
+        <p data-i="aiDesc">价格、流程、要多久，先问它最快；需要的时候它会叫我。</p>
+        <button class="btn clear glass" type="button" data-chat data-i="aiBtn">现在就问</button>
+        <div class="sublink" style="display: {{CONTACT_DISPLAY}}"><a href="{{CONTACT}}" target="_blank" rel="noopener" data-i="botLink">也可以在 Telegram 上找它 →</a></div>
+      </div>
+    </div>
+  </section>
+
   <!-- faq -->
   <section id="faq">
     <div class="kicker reveal" data-i="faqKicker">常见问题</div>
@@ -502,7 +548,7 @@
     <p class="lead" data-i="finalSub">价格、流程、要多久，它都能先回答你；需要的时候，我本人马上接手。</p>
     <div class="ctas">
       <button class="btn white" type="button" data-chat><span class="live"></span><span data-i="finalChat">开始聊天</span></button>
-      <a class="btn clear glass" href="{{CONTACT}}" target="_blank" rel="noopener" style="display: {{CONTACT_DISPLAY}}" data-i="finalTg">在 Telegram 找我</a>
+      <a class="btn clear glass" href="#contact" data-i="finalTg">加我微信 / Telegram</a>
     </div>
   </div>
 
@@ -525,6 +571,21 @@
     navCc: ["Claude Code", "Claude Code", "Claude Code"],
     navPricing: ["价格", "價格", "Pricing"],
     navFaq: ["常见问题", "常見問題", "FAQ"],
+    navContact: ["联系我", "聯絡我", "Contact"],
+    contactKicker: ["联系我", "聯絡我", "Contact"],
+    contactTitle: ["直接找我，<em>本人回复</em>", "直接找我，<em>本人回覆</em>", "Talk to me, <em>not a bot</em>"],
+    contactSub: ["想问得更细、准备下单，或者只是想认识一下，都可以直接加我。", "想問得更細、準備下單，或只是想認識一下，都可以直接加我。", "Detailed questions, ready to order, or just saying hi: add me directly."],
+    wxLabel: ["微信", "微信", "WeChat"],
+    wxDesc: ["点一下就能复制微信号，打开微信「添加朋友」粘贴搜索。", "點一下就能複製微信號，打開微信「添加朋友」貼上搜尋。", "Tap to copy an ID, then paste it into WeChat's Add Contacts search."],
+    wxCopy: ["复制", "複製", "Copy"],
+    wxCopied: ["已复制 ✓", "已複製 ✓", "Copied ✓"],
+    tgDesc: ["海外客户推荐用 Telegram，消息我会亲自回。", "海外客戶推薦用 Telegram，訊息我會親自回。", "Best for overseas clients. I reply personally."],
+    tgBtn: ["打开 Telegram 聊天", "打開 Telegram 聊天", "Open Telegram"],
+    aiLabel: ["AI 助理", "AI 助理", "AI assistant"],
+    aiHandle: ["24 小时在线", "24 小時在線", "Online 24/7"],
+    aiDesc: ["价格、流程、要多久，先问它最快；需要的时候它会叫我。", "價格、流程、要多久，先問它最快；需要的時候它會叫我。", "Fastest for prices, process and timing. It calls me in when needed."],
+    aiBtn: ["现在就问", "現在就問", "Ask now"],
+    botLink: ["也可以在 Telegram 上找它 →", "也可以在 Telegram 上找它 →", "Or find it on Telegram →"],
     navChat: ["问 AI 助理", "問 AI 助理", "Ask my AI"],
     badgeTag: ["新", "新", "New"],
     badge: ["AI 客服现在可以直接放进你的网站", "AI 客服現在可以直接放進你的網站", "AI assistants now live on your own website"],
@@ -564,7 +625,7 @@
     cc2: ["装好后手把手教你用", "裝好後手把手教你用", "Hands-on walkthrough after setup"],
     cc3: ["常见报错怎么处理，一起讲清楚", "常見錯誤怎麼處理，一起講清楚", "Common errors explained"],
     cc4: ["一小时左右搞定", "一小時左右搞定", "About an hour"],
-    ccPrice: ["问 AI 助理报价", "問 AI 助理報價", "Ask for a quote"],
+    ccPrice: ["¥99 起", "¥99 起", "From ¥99"],
     ccMore: ["了解更多 →", "了解更多 →", "Learn more →"],
     otherTag: ["其他也能做", "其他也能做", "Also available"],
     otherTitle: ["写代码、做 PPT、做网站、写文案", "寫程式、做簡報、做網站、寫文案", "Code, slides, websites, copy"],
@@ -669,7 +730,7 @@
     finalTitle: ["有想法？<br><em>先跟 AI 助理聊两句</em>", "有想法？<br><em>先跟 AI 助理聊兩句</em>", "Got an idea?<br><em>Start with my AI.</em>"],
     finalSub: ["价格、流程、要多久，它都能先回答你；需要的时候，我本人马上接手。", "價格、流程、要多久，它都能先回答你；需要的時候，我本人馬上接手。", "It can answer prices, process and timing right away, and I step in whenever it's needed."],
     finalChat: ["开始聊天", "開始聊天", "Start chatting"],
-    finalTg: ["在 Telegram 找我", "在 Telegram 找我", "Message me on Telegram"],
+    finalTg: ["加我微信 / Telegram", "加我微信 / Telegram", "WeChat / Telegram"],
     footNote: ["不接课程作业、论文、考试的代写或代考。", "不接課程作業、論文、考試的代寫或代考。", "I don't do coursework, theses or exams for students."]
   };
   var META = {
@@ -929,6 +990,26 @@
       var tag = b.getAttribute("data-lang");
       try { localStorage.setItem("siteLang", tag); } catch (e) {}
       apply(tag);
+    });
+  });
+  document.querySelectorAll("[data-copy]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var id = b.getAttribute("data-copy"), label = b.querySelector("small");
+      function done() {
+        b.classList.add("done");
+        label.textContent = I.wxCopied[lang];
+        setTimeout(function () { b.classList.remove("done"); label.textContent = I.wxCopy[lang]; }, 1800);
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(id).then(done, function () { fallback(); });
+      } else { fallback(); }
+      function fallback() {
+        var t = document.createElement("textarea");
+        t.value = id; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+        document.body.appendChild(t); t.select();
+        try { document.execCommand("copy"); done(); } catch (e) {}
+        t.remove();
+      }
     });
   });
   document.querySelectorAll("[data-chat]").forEach(function (b) {

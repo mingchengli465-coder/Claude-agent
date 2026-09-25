@@ -24,9 +24,14 @@ for s in data["服务"]:
 for field in ("付款方式", "修改次数", "常见问题"):
     assert field in data, field
 assert "例如" not in catalog, "comments (examples) must never reach the model"
-assert cs.PLACEHOLDER in catalog
+assert "https://t.me/Vinceeeeentttt" in catalog and "Vinc100327" in catalog, "the AI can hand out the owner's contacts"
+for s in data["服务"]:
+    assert cs.PLACEHOLDER not in str(s["价格区间"]), (s["名称"], "every service has a price the AI can quote")
 system = cs.build_system_prompt(catalog)
 assert catalog in system and "只能依据" in system and "待填" in system
+# Prices the catalog has are answered, never handed off; vague messages get a question back.
+for rule in ("不许因为这些问题转给本人", "把几种都报出来", "不要转给本人", "联系本人"):
+    assert rule in system, rule
 print(f"PASS products.yaml has the {len(names)} services with every field; examples stay out of the prompt ({catalog.count('待填')} blanks)")
 
 

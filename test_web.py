@@ -51,11 +51,15 @@ async def main():
         for tag in ("zh-CN", "zh-TW", "en"):
             assert f'data-lang="{tag}"' in site, tag
         assert 'href="/demo"' in site, "the site links to the merchant demo"
+        # The owner's own contacts come from products.yaml.
+        assert 'href="https://t.me/Vinceeeeentttt"' in site and "@Vinceeeeentttt" in site
+        assert 'data-copy="Vinc100327"' in site and 'data-copy="Abide2837"' in site
         r = await client.get("/demo")
         page = await r.text()
         assert r.status == 200 and "text/html" in r.headers["Content-Type"]
         assert "小店&lt;b&gt;" in page and "小店<b>" not in page, "the title is escaped"
-        assert "https://t.me/emilyhanbot" in page and "{{" not in page
+        assert "{{" not in page
+        assert "Vinc100327 / Abide2837" in page and "https://t.me/Vinceeeeentttt" in page
         assert '<script src="/widget.js"' in page
         r = await client.get("/widget.js")
         js = await r.text()
@@ -148,6 +152,10 @@ async def main():
     print("PASS the server starts and stops cleanly")
 
     assert web.shop_name() == "vinc的ai铺子", web.shop_name()
+    bad = pathlib.Path(tempfile.mkdtemp()) / "p.yaml"
+    bad.write_text("联系本人:\n  Telegram: javascript:alert(1)\n  微信号: ['ok_id123', '<script>', 'x']\n", encoding="utf-8")
+    assert web.owner_contacts(bad) == ("", ["ok_id123"]), "malformed contacts never reach the page"
+    assert web.owner_contacts(pathlib.Path("/nonexistent.yaml")) == ("", [])
     print("PASS the shop name comes from products.yaml")
 
 
