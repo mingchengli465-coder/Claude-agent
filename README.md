@@ -381,7 +381,8 @@ companies. No links or @mentions.
 
 ## Telegram link
 
-Set `X_TELEGRAM_LINK` (`https://t.me/name`, `@name` or `name`) and every tweet
+Set `X_TELEGRAM_LINK` (`https://t.me/name`, `@name`, `name`, or `bot` for this
+bot itself, so tweets lead into its customer-service mode) and every tweet
 gets a reply underneath with that link. The link goes in a reply rather than the
 tweet because X shows posts containing links to fewer people. The Telegram
 notification says whether the reply went up; if it fails, the tweet is still

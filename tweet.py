@@ -96,8 +96,17 @@ X_SERVICE_BRIEF = os.environ.get("X_SERVICE_BRIEF", "").strip() or DEFAULT_SERVI
 
 # Posted as a reply under every tweet, so the tweet itself stays link-free (X
 # shows posts with links to fewer people). Empty X_TELEGRAM_LINK turns it off.
-# Accepts https://t.me/name, t.me/name, @name or just name.
+# Accepts https://t.me/name, t.me/name, @name or just name. "bot" means this
+# Telegram bot itself (its customer-service mode), looked up at startup.
 X_TELEGRAM_LINK = os.environ.get("X_TELEGRAM_LINK", "").strip()
+BOT_LINK_VALUES = ("bot", "@bot", "self")
+_bot_username = ""
+
+
+def set_bot_username(username: str | None) -> None:
+    """Called once the bot knows its own @username (bot.py's post_init)."""
+    global _bot_username
+    _bot_username = (username or "").strip().lstrip("@")
 DEFAULT_LINK_REPLY_TEXT = "Have a website or deck in mind? Message me on Telegram:\n{link}"
 X_LINK_REPLY_TEXT = os.environ.get("X_LINK_REPLY_TEXT", "").strip() or DEFAULT_LINK_REPLY_TEXT
 
@@ -551,6 +560,8 @@ async def publish(tweet: Tweet) -> str:
 def telegram_link(raw: str | None = None) -> str:
     """Normalise X_TELEGRAM_LINK to https://t.me/name, or "" when unset."""
     value = (X_TELEGRAM_LINK if raw is None else raw).strip()
+    if value.lower() in BOT_LINK_VALUES:
+        value = _bot_username  # "" until the bot has looked itself up: no reply rather than a wrong link
     if not value:
         return ""
     value = re.sub(r"^(https?://)?(www\.)?(t\.me|telegram\.me)/", "", value, flags=re.I)
