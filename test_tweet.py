@@ -328,4 +328,27 @@ assert tw.telegram_link() == "https://t.me/someone_else", "an explicit link stil
 tw.X_TELEGRAM_LINK = ""
 print("PASS X_TELEGRAM_LINK=bot links tweets to the bot's own username")
 
+# --- a model that never finishes is abandoned, and the next one gets its turn -----------------------
+# OpenRouter keeps slow requests open with whitespace, so only a hard deadline stops them.
+class Hangs:
+    def __init__(self): self.models = []
+    async def create(self, **kw):
+        self.models.append(kw["model"])
+        if kw["model"] == tw.X_MODEL:
+            await asyncio.sleep(3600)
+        m = types.SimpleNamespace(content=payload, model_extra={})
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=m, finish_reason="stop")])
+saved_timeout = tw.X_REQUEST_TIMEOUT
+tw.X_REQUEST_TIMEOUT = 0.05
+h = Hangs()
+tw.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=h))
+import time as _t
+started = _t.monotonic()
+assert asyncio.run(tw.generate_tweet("d")).text == payload
+assert _t.monotonic() - started < 2, "must not wait on the hung model"
+assert h.models == [tw.X_MODEL, "openrouter/free"], h.models
+tw.X_REQUEST_TIMEOUT = saved_timeout
+assert tw.X_REQUEST_TIMEOUT == 90
+print("PASS a hung model is dropped at the deadline and the fallback answers")
+
 print("\nALL TWEET TESTS PASSED")

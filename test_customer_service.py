@@ -338,4 +338,20 @@ svc.responder, _ = deepseek_with("抱歉我无法回答")
 assert run(svc.handle(msg("在吗"))) == cs.HANDOFF_TEXT and "AI 出错" in owner.notices[-1][1]
 print("PASS DeepSeek uses JSON mode; fences are tolerated, anything unusable hands off")
 
+# --- a customer never waits on a hung model ----------------------------------------------------------
+class HangingCompletions:
+    async def create(self, **kw):
+        await asyncio.sleep(3600)
+r = cs.OpenAICompatibleResponder.__new__(cs.OpenAICompatibleResponder)
+r.model = cs.CS_DEEPSEEK_MODEL
+r.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=HangingCompletions()))
+saved = cs.CS_REQUEST_TIMEOUT
+cs.CS_REQUEST_TIMEOUT = 0.05
+svc, model, owner, clock, sent = fresh()
+svc.responder = r
+assert run(svc.handle(msg("在吗"))) == cs.HANDOFF_TEXT
+assert "AI 出错" in owner.notices[-1][1]
+cs.CS_REQUEST_TIMEOUT = saved
+print("PASS a hung model hands the customer to the owner at the deadline")
+
 print("\nALL CUSTOMER SERVICE TESTS PASSED")

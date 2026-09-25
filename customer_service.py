@@ -41,6 +41,8 @@ CS_EFFORT = os.environ.get("CS_EFFORT", "low")
 CS_PRODUCTS_PATH = Path(os.environ.get("CS_PRODUCTS_PATH", Path(__file__).parent / "products.yaml"))
 CS_DB_PATH = Path(os.environ.get("CS_DB_PATH", "cs.sqlite3"))
 CS_HISTORY = int(os.environ.get("CS_HISTORY", "10"))
+# A customer waiting longer than this gets handed to the owner instead.
+CS_REQUEST_TIMEOUT = float(os.environ.get("CS_REQUEST_TIMEOUT", "60"))
 CS_RATE_LIMIT = int(os.environ.get("CS_RATE_LIMIT", "5"))
 CS_RATE_WINDOW = float(os.environ.get("CS_RATE_WINDOW", "60"))
 CS_TIMEZONE = ZoneInfo(os.environ.get("CS_TIMEZONE", "Asia/Shanghai"))
@@ -219,7 +221,11 @@ class ClaudeResponder:
         self.effort = effort
 
     async def __call__(self, system: str, messages: list[dict]) -> Decision:
-        response = await self.client.beta.messages.create(
+        response = await asyncio.wait_for(self._request(system, messages), CS_REQUEST_TIMEOUT)
+        return self._decision(response)
+
+    async def _request(self, system: str, messages: list[dict]):
+        return await self.client.beta.messages.create(
             model=self.model,
             max_tokens=16000,
             # The catalog is the same on every call, so cache it.
@@ -234,6 +240,8 @@ class ClaudeResponder:
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
         )
+
+    def _decision(self, response) -> Decision:
         if response.stop_reason == "refusal":
             logger.warning("Claude 拒绝回答（%s），转给本人", getattr(response.stop_details, "category", None))
             return Decision(reply="", handoff=True, reason="out_of_scope")
@@ -303,14 +311,14 @@ class OpenAICompatibleResponder:
         self.model = model
 
     async def __call__(self, system: str, messages: list[dict]) -> Decision:
-        response = await self.client.chat.completions.create(
+        response = await asyncio.wait_for(self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": system + JSON_FORMAT_SUFFIX}] + messages,
             response_format={"type": "json_object"},
             temperature=0.3,
             # Room for a model that thinks before answering; the reply itself is short.
             max_tokens=4000,
-        )
+        ), CS_REQUEST_TIMEOUT)
         if not response.choices:
             raise RuntimeError("模型返回了空的 choices")
         choice = response.choices[0]

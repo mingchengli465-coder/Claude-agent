@@ -569,7 +569,9 @@ async def _create(kwargs: dict, use_json: bool, use_reasoning: bool):
         params["extra_body"] = {
             "reasoning": {"exclude": XHS_REASONING_EXCLUDE, "effort": XHS_REASONING_EFFORT}
         }
-    return await client.chat.completions.create(**params)
+    # Hard deadline: OpenRouter trickles whitespace to keep slow requests open,
+    # so the SDK's socket timeout alone would let /xhs hang for minutes.
+    return await asyncio.wait_for(client.chat.completions.create(**params), XHS_REQUEST_TIMEOUT)
 
 
 async def _one_call(domain: str, avoid: list[str], model: str = XHS_MODEL) -> Note:
