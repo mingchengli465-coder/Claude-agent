@@ -1,6 +1,7 @@
 """The website chat window: a small web server next to the Telegram bot.
 
-    GET  /            a demo page to send merchants (the chat window is on it)
+    GET  /            the owner's own site: services, prices, and the chat window
+    GET  /demo        a demo page to send merchants (the chat window is on it)
     GET  /widget.js   the chat window itself; one <script> tag embeds it in any site
     POST /api/chat    a visitor's message -> the AI's reply (customer_service.handle)
     GET  /api/messages  new messages for a visitor, so the owner's replies show up
@@ -96,7 +97,8 @@ class WebChat:
 
     def app(self) -> web.Application:
         app = web.Application(client_max_size=64 * 1024)
-        app.router.add_get("/", self.page)
+        app.router.add_get("/", self.site)
+        app.router.add_get("/demo", self.page)
         app.router.add_get("/widget.js", self.widget)
         app.router.add_get("/healthz", self.health)
         app.router.add_post("/api/chat", self.chat)
@@ -117,8 +119,14 @@ class WebChat:
 
     # ---- pages -------------------------------------------------------------------
 
+    async def site(self, request: web.Request) -> web.Response:
+        return self._render("site.html")
+
     async def page(self, request: web.Request) -> web.Response:
-        body = (_STATIC / "demo.html").read_text(encoding="utf-8")
+        return self._render("demo.html")
+
+    def _render(self, name: str) -> web.Response:
+        body = (_STATIC / name).read_text(encoding="utf-8")
         contact = html.escape(self.contact_link, quote=True)
         body = (body.replace("{{TITLE}}", html.escape(self.title))
                     .replace("{{TITLE_ATTR}}", html.escape(self.title, quote=True))

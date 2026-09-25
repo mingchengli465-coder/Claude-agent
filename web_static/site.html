@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>vinc · AI 客服搭建 & Claude Code 安装</title>
+<meta name="description" content="帮商家搭建 24 小时在线的 AI 客服，帮个人装好 Claude Code / Codex。中英双语，一对一。">
+<meta name="theme-color" content="#07070a">
+<meta property="og:title" content="vinc · AI 客服搭建 & Claude Code 安装">
+<meta property="og:description" content="帮商家搭建 24 小时在线的 AI 客服，帮个人装好 Claude Code / Codex。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff7a59'/%3E%3Cstop offset='1' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-family='Arial' font-size='34' font-weight='700' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #07070a;
+    --bg2: #0d0d12;
+    --text: #f5f5f7;
+    --muted: #a1a1aa;
+    --faint: #71717a;
+    --line: rgba(255,255,255,.08);
+    --line2: rgba(255,255,255,.14);
+    --glass: rgba(255,255,255,.035);
+    --a1: #ff7a59;
+    --a2: #a78bfa;
+    --a3: #38bdf8;
+    --grad: linear-gradient(120deg, var(--a1), #f472b6 45%, var(--a2));
+    --radius: 24px;
+    --max: 1160px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); line-height: 1.6; overflow-x: hidden;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "PingFang TC",
+                 "Hiragino Sans GB", "Microsoft YaHei", "Microsoft JhengHei", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+  /* ---- background ---- */
+  .aurora { position: fixed; inset: 0; z-index: -2; pointer-events: none; overflow: hidden; }
+  .aurora::before, .aurora::after {
+    content: ""; position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; filter: blur(90px); opacity: .32;
+  }
+  .aurora::before { background: radial-gradient(circle, var(--a1), transparent 60%); top: -35vmax; left: -15vmax; animation: drift 22s ease-in-out infinite alternate; }
+  .aurora::after { background: radial-gradient(circle, var(--a2), transparent 60%); top: -30vmax; right: -25vmax; animation: drift 26s ease-in-out infinite alternate-reverse; }
+  .grid-bg {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 64px 64px; opacity: .35;
+    -webkit-mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 30%, transparent 75%);
+            mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 30%, transparent 75%);
+  }
+  @keyframes drift { to { transform: translate(8vmax, 6vmax) scale(1.08); } }
+
+  /* ---- nav ---- */
+  nav {
+    position: sticky; top: 0; z-index: 50; border-bottom: 1px solid transparent; transition: background .3s, border-color .3s;
+  }
+  nav.scrolled { background: rgba(7,7,10,.72); border-color: var(--line); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 68px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.01em; font-size: 17px; }
+  .logo i { width: 30px; height: 30px; border-radius: 9px; background: var(--grad); display: grid; place-items: center; font-style: normal; font-size: 16px; color: #fff; box-shadow: 0 6px 20px rgba(255,122,89,.35); }
+  .links { display: flex; gap: 26px; margin-left: 8px; font-size: 14px; color: var(--muted); }
+  .links a:hover { color: var(--text); }
+  .spacer { flex: 1; }
+  .langs { display: flex; padding: 3px; border: 1px solid var(--line2); border-radius: 999px; background: var(--glass); }
+  .langs button {
+    border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  }
+  .langs button[aria-pressed="true"] { background: rgba(255,255,255,.12); color: var(--text); }
+
+  /* ---- buttons ---- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; font: inherit; font-weight: 600;
+    font-size: 15px; padding: 13px 22px; cursor: pointer; border: 1px solid transparent; transition: transform .2s, box-shadow .2s, background .2s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.primary { background: var(--grad); color: #fff; box-shadow: 0 10px 30px -8px rgba(255,122,89,.6), inset 0 1px 0 rgba(255,255,255,.25); }
+  .btn.primary:hover { box-shadow: 0 14px 38px -8px rgba(255,122,89,.75), inset 0 1px 0 rgba(255,255,255,.25); }
+  .btn.ghost { border-color: var(--line2); background: var(--glass); color: var(--text); }
+  .btn.ghost:hover { background: rgba(255,255,255,.07); }
+  .btn.small { padding: 8px 16px; font-size: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 4px rgba(52,211,153,.18); animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 7px rgba(52,211,153,0); } }
+
+  /* ---- hero ---- */
+  .hero { padding: 88px 0 72px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 8px; border: 1px solid var(--line2); border-radius: 999px;
+    background: var(--glass); font-size: 13px; color: var(--muted);
+  }
+  .eyebrow b { background: var(--grad); color: #fff; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; }
+  h1 { font-size: clamp(40px, 6.4vw, 76px); line-height: 1.04; letter-spacing: -.035em; margin: 22px 0 22px; font-weight: 750; }
+  h1 em, h2 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { font-size: clamp(17px, 1.6vw, 19px); color: var(--muted); max-width: 580px; margin: 0 0 32px; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+  .note { margin-top: 18px; font-size: 13.5px; color: var(--faint); display: flex; align-items: center; gap: 8px; }
+
+  /* hero chat mock */
+  .mock {
+    position: relative; border-radius: 28px; padding: 1px; background: linear-gradient(160deg, rgba(255,255,255,.22), rgba(255,255,255,.04) 40%, rgba(167,139,250,.35));
+    box-shadow: 0 40px 100px -30px rgba(167,139,250,.35), 0 20px 60px -30px rgba(255,122,89,.4);
+  }
+  .mock-in { border-radius: 27px; background: rgba(13,13,18,.92); overflow: hidden; }
+  .mock-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .mock-av { width: 36px; height: 36px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; }
+  .mock-head small { display: block; color: var(--faint); font-size: 12px; }
+  .mock-body { padding: 18px 18px 44px; display: flex; flex-direction: column; gap: 10px; }
+  .bub { max-width: 84%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; opacity: 0; transform: translateY(8px); animation: in .5s forwards; }
+  .bub.c { align-self: flex-end; background: linear-gradient(120deg, var(--a1), #f472b6); color: #fff; border-bottom-right-radius: 5px; }
+  .bub.a { align-self: flex-start; background: rgba(255,255,255,.07); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+  .bub:nth-child(1) { animation-delay: .3s; } .bub:nth-child(2) { animation-delay: 1.1s; }
+  .bub:nth-child(3) { animation-delay: 2s; } .bub:nth-child(4) { animation-delay: 2.8s; }
+  @keyframes in { to { opacity: 1; transform: none; } }
+  .toast {
+    position: absolute; left: -34px; bottom: -26px; display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 16px;
+    background: rgba(20,20,26,.92); border: 1px solid var(--line2); box-shadow: 0 20px 50px -15px rgba(0,0,0,.8);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-size: 13.5px; max-width: 290px;
+    opacity: 0; transform: translateY(10px) scale(.97); animation: in .6s 3.8s forwards;
+  }
+  .toast .ic { font-size: 22px; }
+  .toast small { display: block; color: var(--faint); font-size: 12px; }
+
+  /* ---- stats ---- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: var(--radius); background: var(--glass); overflow: hidden; }
+  .stat { padding: 26px 24px; border-right: 1px solid var(--line); }
+  .stat:last-child { border-right: 0; }
+  .stat b { display: block; font-size: 30px; letter-spacing: -.03em; font-weight: 700; }
+  .stat span { color: var(--muted); font-size: 14px; }
+
+  /* ---- sections ---- */
+  section { padding: 110px 0 0; scroll-margin-top: 70px; }
+  .kicker { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--a1); font-weight: 600; }
+  h2 { font-size: clamp(30px, 4.2vw, 50px); letter-spacing: -.03em; line-height: 1.1; margin: 12px 0 16px; font-weight: 720; }
+  .sub { color: var(--muted); font-size: 17px; max-width: 640px; margin: 0 0 44px; }
+
+  .card {
+    position: relative; border: 1px solid var(--line); border-radius: var(--radius); padding: 30px;
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015)); overflow: hidden; transition: border-color .3s, transform .3s;
+  }
+  .card:hover { border-color: var(--line2); }
+  .card.glow::before {
+    content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(140deg, rgba(255,122,89,.7), transparent 35%, transparent 65%, rgba(167,139,250,.7));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(255,122,89,.12); color: #ffb39f; border: 1px solid rgba(255,122,89,.25); }
+  .tag.v { background: rgba(167,139,250,.12); color: #cdbcff; border-color: rgba(167,139,250,.28); }
+  .tag.s { background: rgba(56,189,248,.1); color: #9bdcfb; border-color: rgba(56,189,248,.25); }
+  .card h3 { font-size: 24px; letter-spacing: -.02em; margin: 16px 0 10px; }
+  .card p { color: var(--muted); margin: 0 0 18px; }
+  ul.ticks { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 10px; }
+  ul.ticks li { display: flex; gap: 10px; font-size: 15px; color: #d4d4d8; }
+  ul.ticks li::before { content: ""; flex: none; width: 18px; height: 18px; margin-top: 3px; border-radius: 50%; background: rgba(52,211,153,.14) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2334d399'%3E%3Cpath d='M8.1 13.4 4.7 10l-1.2 1.2 4.6 4.6 9.4-9.4-1.2-1.2z'/%3E%3C/svg%3E") center/13px no-repeat; }
+  .price-line { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+  .price-line b { font-size: 20px; letter-spacing: -.02em; }
+  .price-line a { color: var(--a1); font-weight: 600; font-size: 15px; }
+
+  .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; }
+  .bento .big { grid-column: span 4; }
+  .bento .tall { grid-column: span 2; grid-row: span 2; }
+  .bento .half { grid-column: span 2; }
+  .bento .wide { grid-column: span 4; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { display: flex; flex-direction: column; padding: 12px 16px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255,255,255,.03); min-width: 130px; }
+  .chip b { font-size: 15px; }
+  .chip span { font-size: 13px; color: var(--muted); }
+
+  .notifs { display: grid; gap: 10px; }
+  .notif { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid var(--line); }
+  .notif .ic { font-size: 20px; line-height: 1.3; }
+  .notif b { display: block; font-size: 14.5px; }
+  .notif span { font-size: 13px; color: var(--muted); }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: s; }
+  .step { counter-increment: s; }
+  .step::before {
+    content: "0" counter(s); display: block; font-size: 14px; font-weight: 700; letter-spacing: .08em; margin-bottom: 18px;
+    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .step h4 { margin: 0 0 8px; font-size: 19px; letter-spacing: -.01em; }
+  .step p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: stretch; }
+  .terminal { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px; background: #0a0a0e; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .terminal .bar { display: flex; gap: 7px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .terminal .bar i { width: 11px; height: 11px; border-radius: 50%; background: #3f3f46; }
+  .terminal .bar i:nth-child(1) { background: #ff5f57; } .terminal .bar i:nth-child(2) { background: #febc2e; } .terminal .bar i:nth-child(3) { background: #28c840; }
+  .terminal pre { margin: 0; padding: 18px; color: #d4d4d8; white-space: pre-wrap; line-height: 1.75; }
+  .terminal .p { color: #a78bfa; } .terminal .ok { color: #34d399; } .terminal .cm { color: #71717a; }
+
+  .pricing { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .plan .amount { font-size: 44px; font-weight: 750; letter-spacing: -.04em; margin: 14px 0 2px; }
+  .plan .amount small { font-size: 16px; color: var(--muted); font-weight: 500; letter-spacing: 0; }
+  .plan .monthly { font-size: 17px; color: #e4e4e7; margin-bottom: 22px; }
+  .perk { margin-top: 18px; padding: 16px 18px; border-radius: 16px; border: 1px dashed var(--line2); color: var(--muted); font-size: 14.5px; }
+  .perk b { color: var(--text); }
+
+  .about { display: grid; grid-template-columns: auto 1fr; gap: 32px; align-items: center; }
+  .avatar-big { width: 120px; height: 120px; border-radius: 32px; background: var(--grad); display: grid; place-items: center; font-size: 54px; font-weight: 800; color: #fff; box-shadow: 0 20px 60px -20px rgba(255,122,89,.6); }
+  .about p { color: #d4d4d8; font-size: 17px; margin: 0 0 12px; }
+  .about .langs-tag { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+
+  .faq { display: grid; gap: 12px; max-width: 860px; }
+  details { border: 1px solid var(--line); border-radius: 18px; background: var(--glass); padding: 0 22px; transition: border-color .2s; }
+  details[open] { border-color: var(--line2); }
+  summary { cursor: pointer; list-style: none; padding: 20px 0; font-weight: 600; font-size: 16.5px; display: flex; justify-content: space-between; gap: 16px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; font-size: 22px; line-height: 1; color: var(--muted); transition: transform .2s; }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { margin: 0 0 20px; color: var(--muted); }
+
+  .final {
+    margin-top: 120px; text-align: center; padding: 80px 24px; border-radius: 32px; border: 1px solid var(--line); position: relative; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 120%, rgba(255,122,89,.28), transparent 60%), radial-gradient(ellipse at 50% -20%, rgba(167,139,250,.22), transparent 60%), var(--bg2);
+  }
+  .final h2 { margin-top: 0; }
+  .final .sub { margin: 0 auto 32px; }
+  .final .ctas { justify-content: center; }
+  footer { padding: 48px 0 110px; color: var(--faint); font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
+
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); }
+  .reveal.shown { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .reveal, .bub, .toast { opacity: 1; transform: none; }
+  }
+
+  @media (max-width: 980px) {
+    .hero { grid-template-columns: 1fr; padding-top: 56px; gap: 64px; }
+    .mock { max-width: 460px; margin: 0 auto 20px; width: 100%; }
+    .toast { left: 12px; }
+    .bento .big, .bento .tall, .bento .half, .bento .wide { grid-column: span 6; grid-row: auto; }
+    .split, .pricing { grid-template-columns: 1fr; }
+    .links { display: none; }
+  }
+  @media (max-width: 680px) {
+    .wrap { padding: 0 16px; }
+    nav .wrap { gap: 10px; }
+    .logo span { display: none; }
+    nav .btn.small { display: none; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .stat { border-bottom: 1px solid var(--line); }
+    .stat:nth-child(2) { border-right: 0; }
+    .stat:nth-child(n+3) { border-bottom: 0; }
+    .steps { grid-template-columns: 1fr; }
+    .card { padding: 24px; }
+    .about { grid-template-columns: 1fr; }
+    section { padding-top: 84px; }
+    .final { padding: 56px 20px; margin-top: 90px; }
+    .ctas .btn { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="aurora"></div>
+<div class="grid-bg"></div>
+
+<nav id="nav">
+  <div class="wrap">
+    <a class="logo" href="#top"><i>v</i><span data-i="brand">vinc的ai铺子</span></a>
+    <div class="links">
+      <a href="#services" data-i="navServices">服务</a>
+      <a href="#ai-cs" data-i="navCs">AI 客服</a>
+      <a href="#claude-code" data-i="navCc">Claude Code 安装</a>
+      <a href="#pricing" data-i="navPricing">价格</a>
+      <a href="#faq" data-i="navFaq">常见问题</a>
+    </div>
+    <div class="spacer"></div>
+    <div class="langs" role="group" aria-label="Language">
+      <button type="button" data-lang="zh-CN">简</button>
+      <button type="button" data-lang="zh-TW">繁</button>
+      <button type="button" data-lang="en">EN</button>
+    </div>
+    <button class="btn primary small" type="button" data-chat data-i="navChat">问 AI 助理</button>
+  </div>
+</nav>
+
+<main class="wrap" id="top">
+  <header class="hero">
+    <div>
+      <div class="eyebrow reveal"><b data-i="eyebrowTag">接单中</b><span data-i="eyebrow">个人 AI 工作室 · 中英双语 · 一对一</span></div>
+      <h1 class="reveal" data-ih="heroTitle">让 AI<br><em>真正替你干活</em></h1>
+      <p class="lead reveal" data-i="heroLead">我帮商家搭建 24 小时在线的 AI 客服，也帮个人把 Claude Code、Codex 这些 AI 编程助手装进自己的电脑。说人话、一对一、装好教会为止。</p>
+      <div class="ctas reveal">
+        <button class="btn primary" type="button" data-chat><span class="dot"></span><span data-i="ctaChat">和我的 AI 助理聊聊</span></button>
+        <a class="btn ghost" href="#services" data-i="ctaServices">看看有哪些服务 →</a>
+      </div>
+      <div class="note reveal" data-i="heroNote">右下角就是我的 AI 助理，它和我给商家搭的是同一款。</div>
+    </div>
+
+    <div class="mock reveal" aria-hidden="true">
+      <div class="mock-in">
+        <div class="mock-head">
+          <div class="mock-av">🤖</div>
+          <div><b data-i="mockName">某某烘焙 · AI 客服</b><small data-i="mockStatus">在线 · 几秒内回复</small></div>
+        </div>
+        <div class="mock-body">
+          <div class="bub c" data-i="mock1">生日蛋糕 6 寸多少钱？明天能拿吗？</div>
+          <div class="bub a" data-i="mock2">6 寸 168 元，今天下午 6 点前下单明天就能取～想要什么口味呀？🎂</div>
+          <div class="bub c" data-i="mock3">巧克力的，那就订一个吧</div>
+          <div class="bub a" data-i="mock4">好的！我请老板跟你确认付款和取货时间，稍等哦</div>
+        </div>
+      </div>
+      <div class="toast">
+        <div class="ic">💰</div>
+        <div><b data-i="toastTitle">客户准备购买了</b><small data-i="toastSub">已推送到老板手机 · 附聊天记录</small></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="stats reveal">
+    <div class="stat"><b>24/7</b><span data-i="stat1">全天自动接待客户</span></div>
+    <div class="stat"><b data-i="stat2n">多语言</b><span data-i="stat2">客户说什么语言就回什么</span></div>
+    <div class="stat"><b data-i="stat3n">2–3 天</b><span data-i="stat3">资料给齐后上线</span></div>
+    <div class="stat"><b>1 : 1</b><span data-i="stat4">本人全程跟进</span></div>
+  </div>
+
+  <!-- services -->
+  <section id="services">
+    <div class="kicker reveal" data-i="svcKicker">服务</div>
+    <h2 class="reveal" data-ih="svcTitle">我能帮你做<em>什么</em></h2>
+    <p class="sub reveal" data-i="svcSub">两件主要的事：给商家装一个会接待客户的 AI，给个人装好会写代码的 AI。其他小活也能接。</p>
+
+    <div class="bento">
+      <div class="card glow big reveal">
+        <span class="tag" data-i="csTag">给商家</span>
+        <h3 data-i="csTitle">AI 客服搭建</h3>
+        <p data-i="csDesc">按你的价目表和常见问题，自动回答客户、主动问清需求。要下单、砍价、它答不了的，马上转到你手机上，你直接回。</p>
+        <ul class="ticks">
+          <li data-i="cs1">接到 Telegram，或者直接放进你的网站（右下角聊天窗口）</li>
+          <li data-i="cs2">新客户来了、有购买意向、要付款时，都第一时间通知你</li>
+          <li data-i="cs3">中文、英文等多种语言自动切换</li>
+          <li data-i="cs4">价目表、常见问题随时帮你更新</li>
+        </ul>
+        <div class="price-line"><b data-i="csPrice">国内 ¥300–400 搭建 + ¥99/月</b><a href="/demo" data-i="csDemo">看演示页 →</a></div>
+      </div>
+
+      <div class="card tall reveal">
+        <span class="tag v" data-i="ccTag">给个人</span>
+        <h3 data-i="ccTitle">帮你装好 Claude Code / Codex</h3>
+        <p data-i="ccDesc">远程屏幕共享，在你自己的电脑上装好、配好、跑通，再带你用它完成第一个小任务。</p>
+        <ul class="ticks">
+          <li data-i="cc1">Windows / Mac 都可以</li>
+          <li data-i="cc2">装好后手把手教你用</li>
+          <li data-i="cc3">常见报错怎么处理，一起讲清楚</li>
+          <li data-i="cc4">一小时左右搞定</li>
+        </ul>
+        <div class="price-line"><b data-i="ccPrice">价格问 AI 助理</b><a href="#claude-code" data-i="ccMore">了解更多 →</a></div>
+      </div>
+
+      <div class="card wide reveal">
+        <span class="tag s" data-i="otherTag">其他也能做</span>
+        <h3 data-i="otherTitle">写代码、做 PPT、做网站、写文案</h3>
+        <p data-i="otherDesc">用 AI 提效，交付前本人逐一检查。具体需求直接问右下角的助理。</p>
+        <div class="chips">
+          <div class="chip"><b data-i="o1">写代码</b><span data-i="o1p">¥149 · 24 小时内</span></div>
+          <div class="chip"><b data-i="o2">做 PPT</b><span data-i="o2p">¥1.5/页 · 两小时内</span></div>
+          <div class="chip"><b data-i="o3">简单网站</b><span data-i="o3p">¥69–99 · 12 小时</span></div>
+          <div class="chip"><b data-i="o4">文案</b><span data-i="o4p">¥15–30</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI customer service -->
+  <section id="ai-cs">
+    <div class="kicker reveal" data-i="howKicker">AI 客服</div>
+    <h2 class="reveal" data-ih="howTitle">它接待客户，<em>你只管成交</em></h2>
+    <p class="sub reveal" data-i="howSub">大部分重复的问题交给 AI，真正要花钱的那一刻，它会叫你。</p>
+    <div class="split">
+      <div class="steps" style="grid-template-columns:1fr">
+        <div class="card step reveal"><h4 data-i="st1">把资料发给我</h4><p data-i="st1d">你卖什么、价格、常见问题。有价目表最好，没有我帮你整理。</p></div>
+        <div class="card step reveal"><h4 data-i="st2">我来搭建</h4><p data-i="st2d">按你的店名、颜色和说话风格调好，2–3 天上线。</p></div>
+        <div class="card step reveal"><h4 data-i="st3">客户来了它接待</h4><p data-i="st3d">24 小时回复、问清需求；到了下单、砍价这一步，转给你本人。</p></div>
+      </div>
+      <div class="card glow reveal">
+        <span class="tag" data-i="notifTag">你会收到的通知</span>
+        <h3 data-i="notifTitle">重要的事，第一时间告诉你</h3>
+        <p data-i="notifDesc">通知直接发到你手机上，附带聊天记录；回复通知，就能直接跟客户说话。</p>
+        <div class="notifs">
+          <div class="notif"><div class="ic">👋</div><div><b data-i="n1">有客户来咨询了</b><span data-i="n1d">新客户第一次开口，AI 已经在接待</span></div></div>
+          <div class="notif"><div class="ic">🔥</div><div><b data-i="n2">客户有购买意向</b><span data-i="n2d">在问具体价格、时间，认真在考虑</span></div></div>
+          <div class="notif"><div class="ic">💰</div><div><b data-i="n3">客户准备购买了</b><span data-i="n3d">明确想买，该你出场了</span></div></div>
+          <div class="notif"><div class="ic">🔔</div><div><b data-i="n4">需要你接手</b><span data-i="n4d">要付款、砍价，或者 AI 答不了的问题</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Claude Code -->
+  <section id="claude-code">
+    <div class="kicker reveal" data-i="ccKicker">Claude Code / Codex</div>
+    <h2 class="reveal" data-ih="cc2Title">最强的 AI 编程助手，<em>我帮你装好</em></h2>
+    <p class="sub reveal" data-i="cc2Sub">官方文档是英文的，命令行对新手不友好，报错看不懂。我用中文或英文，陪你一步一步来。</p>
+    <div class="split">
+      <div class="terminal reveal" aria-hidden="true">
+        <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="cm" data-i="t1"># 第 1 步：装好</span>
+<span class="p">$</span> npm install -g @anthropic-ai/claude-code
+<span class="ok">✓</span> <span data-i="t2">安装完成</span>
+
+<span class="cm" data-i="t3"># 第 2 步：登录你自己的账号，跑通</span>
+<span class="p">$</span> claude
+<span class="ok">✓</span> <span data-i="t4">已登录，可以开始了</span>
+
+<span class="cm" data-i="t5"># 第 3 步：带你做第一个小任务</span>
+<span class="p">&gt;</span> <span data-i="t6">帮我做一个记账的小网页</span>
+<span class="ok">✓</span> <span data-i="t7">已创建 index.html、app.js</span></pre>
+      </div>
+      <div class="card reveal">
+        <span class="tag v" data-i="incTag">包含什么</span>
+        <h3 data-i="incTitle">装好、会用，才算完成</h3>
+        <ul class="ticks">
+          <li data-i="inc1">约好时间，远程屏幕共享</li>
+          <li data-i="inc2">装好 Claude Code 或 Codex（两个都装也可以）</li>
+          <li data-i="inc3">配置好、跑通，确认能正常使用</li>
+          <li data-i="inc4">带你用它完成第一个小任务</li>
+          <li data-i="inc5">讲清楚常见报错和日常用法</li>
+        </ul>
+        <div class="perk" data-ih="incNote"><b>说明：</b>账号或 API 需要你本人按官方条款注册和付费，我不代充、不卖也不共享账号。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- pricing -->
+  <section id="pricing">
+    <div class="kicker reveal" data-i="prKicker">价格</div>
+    <h2 class="reveal" data-ih="prTitle">AI 客服，<em>明码标价</em></h2>
+    <p class="sub reveal" data-i="prSub">一次性搭建费 + 月费。月费包含服务器、AI 用量、价目表和常见问题的更新；按月付，不想续随时可以停。</p>
+    <div class="pricing">
+      <div class="card plan reveal">
+        <span class="tag" data-i="pl1Tag">国内商户</span>
+        <div class="amount">¥300–400 <small data-i="once">一次性搭建</small></div>
+        <div class="monthly" data-i="pl1M">之后 ¥99 / 月</div>
+        <ul class="ticks">
+          <li data-i="plA">Telegram 或你的网站</li>
+          <li data-i="plB">多语言自动回复</li>
+          <li data-i="plC">新客户、购买意向、付款通知</li>
+          <li data-i="plD">价目表更新包含在月费里</li>
+        </ul>
+        <button class="btn ghost" type="button" data-chat data-i="plCta">问问 AI 助理 →</button>
+      </div>
+      <div class="card plan glow reveal">
+        <span class="tag v" data-i="pl2Tag">海外商户</span>
+        <div class="amount">¥500–600 <small data-i="once2">一次性搭建（人民币）</small></div>
+        <div class="monthly" data-i="pl2M">之后 US$19.99 / 月</div>
+        <ul class="ticks">
+          <li data-i="plA2">Telegram 或你的网站</li>
+          <li data-i="plB2">中英文等多语言接待</li>
+          <li data-i="plC2">新客户、购买意向、付款通知</li>
+          <li data-i="plD2">支持 Alipay 或银行卡付款</li>
+        </ul>
+        <button class="btn primary" type="button" data-chat data-i="plCta2">问问 AI 助理 →</button>
+      </div>
+    </div>
+    <div class="perk reveal" data-ih="referral">🎁 <b>推荐有礼：</b>每成功介绍一家商户开通，你免 1 个月月费。</div>
+  </section>
+
+  <!-- about -->
+  <section id="about">
+    <div class="card about reveal">
+      <div class="avatar-big">v</div>
+      <div>
+        <div class="kicker" data-i="aboutKicker">关于我</div>
+        <h2 style="font-size:clamp(26px,3vw,36px)" data-i="aboutTitle">你好，我是 vinc 👋</h2>
+        <p data-i="about1">新加坡华人，现在在中国读大学。平时自己就在用 Claude Code、Codex 这些工具做项目，这个网站和右下角的 AI 助理也都是我自己搭的。</p>
+        <p data-i="about2">我接的每一单都是本人跟进、交付前逐一检查。中文、英文都可以直接聊。</p>
+        <div class="langs-tag"><span class="tag s">中文</span><span class="tag s">English</span><span class="tag s" data-i="aboutTag">AI 工具落地</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- faq -->
+  <section id="faq">
+    <div class="kicker reveal" data-i="faqKicker">常见问题</div>
+    <h2 class="reveal" data-i="faqTitle">你可能想问</h2>
+    <div class="faq">
+      <details class="reveal"><summary data-i="q1">怎么付款？</summary><p data-i="a1">先付 50% 定金再开工，交付后付尾款。国内客户用微信或支付宝；海外客户用 Alipay 或银行卡。</p></details>
+      <details class="reveal"><summary data-i="q2">做完不满意怎么办？</summary><p data-i="a2">交付后免费小改 3 次，大改另议；不满意可以重做。</p></details>
+      <details class="reveal"><summary data-i="q3">可以加急吗？</summary><p data-i="a3">可以加急，具体多快请本人确认。</p></details>
+      <details class="reveal"><summary data-i="q4">AI 客服的月费包含什么？</summary><p data-i="a4">服务器、AI 用量、价目表和常见问题的更新。按月付，随时可以停。</p></details>
+      <details class="reveal"><summary data-i="q5">我电脑不太会用，也能装 Claude Code 吗？</summary><p data-i="a5">可以。全程远程屏幕共享，我带着你一步一步操作，装好之后还会教你怎么用。</p></details>
+      <details class="reveal"><summary data-i="q6">能开发票吗？</summary><p data-i="a6">不能开发票。</p></details>
+      <details class="reveal"><summary data-i="q7">跟我聊天的是真人吗？</summary><p data-i="a7">右下角是 AI 助理，随时在线；要报价、下单或者细节确认时，会由我本人亲自回复你。</p></details>
+    </div>
+  </section>
+
+  <div class="final reveal">
+    <h2 data-ih="finalTitle">有想法？<em>先跟 AI 助理聊两句</em></h2>
+    <p class="sub" data-i="finalSub">价格、流程、要多久，它都能先回答你；需要的时候，我本人马上接手。</p>
+    <div class="ctas">
+      <button class="btn primary" type="button" data-chat><span class="dot"></span><span data-i="finalChat">开始聊天</span></button>
+      <a class="btn ghost" href="{{CONTACT}}" target="_blank" rel="noopener" style="display: {{CONTACT_DISPLAY}}" data-i="finalTg">在 Telegram 找我</a>
+    </div>
+  </div>
+
+  <footer>
+    <span>© <span data-i="brand2">vinc的ai铺子</span></span>
+    <span data-i="footNote">不接课程作业、论文、考试的代写或代考。</span>
+  </footer>
+</main>
+
+<script src="/widget.js" data-color="#f0634a" defer></script>
+<script>
+(function () {
+  // [简体, 繁體, English]
+  var I = {
+    brand: ["vinc的ai铺子", "vinc的ai鋪子", "vinc · AI studio"],
+    brand2: ["vinc的ai铺子", "vinc的ai鋪子", "vinc · AI studio"],
+    navServices: ["服务", "服務", "Services"],
+    navCs: ["AI 客服", "AI 客服", "AI assistant"],
+    navCc: ["Claude Code 安装", "Claude Code 安裝", "Claude Code setup"],
+    navPricing: ["价格", "價格", "Pricing"],
+    navFaq: ["常见问题", "常見問題", "FAQ"],
+    navChat: ["问 AI 助理", "問 AI 助理", "Ask my AI"],
+    eyebrowTag: ["接单中", "接案中", "Available"],
+    eyebrow: ["个人 AI 工作室 · 中英双语 · 一对一", "個人 AI 工作室 · 中英雙語 · 一對一", "Solo AI studio · English & Chinese · 1-on-1"],
+    heroTitle: ["让 AI<br><em>真正替你干活</em>", "讓 AI<br><em>真正替你做事</em>", "Put AI to work<br><em>for real.</em>"],
+    heroLead: ["我帮商家搭建 24 小时在线的 AI 客服，也帮个人把 Claude Code、Codex 这些 AI 编程助手装进自己的电脑。说人话、一对一、装好教会为止。",
+               "我幫商家架設 24 小時在線的 AI 客服，也幫個人把 Claude Code、Codex 這些 AI 程式助手裝進自己的電腦。講人話、一對一、裝好教會為止。",
+               "I build 24/7 AI customer-service assistants for businesses, and set up AI coding tools like Claude Code and Codex on your own computer. Plain language, one-on-one, until it works and you know how to use it."],
+    ctaChat: ["和我的 AI 助理聊聊", "和我的 AI 助理聊聊", "Chat with my AI assistant"],
+    ctaServices: ["看看有哪些服务 →", "看看有哪些服務 →", "See what I do →"],
+    heroNote: ["右下角就是我的 AI 助理，它和我给商家搭的是同一款。", "右下角就是我的 AI 助理，和我幫商家架的是同一款。", "The assistant in the corner is the same one I build for businesses."],
+    mockName: ["某某烘焙 · AI 客服", "某某烘焙 · AI 客服", "Sunny Bakery · AI assistant"],
+    mockStatus: ["在线 · 几秒内回复", "在線 · 幾秒內回覆", "Online · replies in seconds"],
+    mock1: ["生日蛋糕 6 寸多少钱？明天能拿吗？", "生日蛋糕 6 吋多少錢？明天能拿嗎？", "How much is a 6-inch birthday cake? Can I pick it up tomorrow?"],
+    mock2: ["6 寸 168 元，今天下午 6 点前下单明天就能取～想要什么口味呀？🎂", "6 吋 168 元，今天下午 6 點前訂明天就能取～想要什麼口味呢？🎂", "It's $38, and if you order before 6pm today it's ready tomorrow. Which flavour would you like? 🎂"],
+    mock3: ["巧克力的，那就订一个吧", "巧克力的，那就訂一個吧", "Chocolate please, let's order one"],
+    mock4: ["好的！我请老板跟你确认付款和取货时间，稍等哦", "好的！我請老闆跟你確認付款和取貨時間，稍等喔", "Great! Let me get the owner to confirm payment and pick-up time with you."],
+    toastTitle: ["客户准备购买了", "客戶準備購買了", "Customer is ready to buy"],
+    toastSub: ["已推送到老板手机 · 附聊天记录", "已推播到老闆手機 · 附聊天紀錄", "Sent to the owner's phone with the chat"],
+    stat1: ["全天自动接待客户", "全天自動接待客戶", "Answers customers around the clock"],
+    stat2n: ["多语言", "多語言", "Multilingual"],
+    stat2: ["客户说什么语言就回什么", "客戶說什麼語言就回什麼", "Replies in the customer's language"],
+    stat3n: ["2–3 天", "2–3 天", "2–3 days"],
+    stat3: ["资料给齐后上线", "資料給齊後上線", "From your info to live"],
+    stat4: ["本人全程跟进", "本人全程跟進", "Handled by me personally"],
+    svcKicker: ["服务", "服務", "Services"],
+    svcTitle: ["我能帮你做<em>什么</em>", "我能幫你做<em>什麼</em>", "What I can <em>do for you</em>"],
+    svcSub: ["两件主要的事：给商家装一个会接待客户的 AI，给个人装好会写代码的 AI。其他小活也能接。",
+             "兩件主要的事：幫商家裝一個會接待客戶的 AI，幫個人裝好會寫程式的 AI。其他小案子也能接。",
+             "Two main things: an AI that looks after your customers, and an AI that writes code on your computer. Smaller jobs welcome too."],
+    csTag: ["给商家", "給商家", "For businesses"],
+    csTitle: ["AI 客服搭建", "AI 客服架設", "AI customer-service assistant"],
+    csDesc: ["按你的价目表和常见问题，自动回答客户、主动问清需求。要下单、砍价、它答不了的，马上转到你手机上，你直接回。",
+             "依照你的價目表和常見問題，自動回答客戶、主動問清需求。要下單、殺價、它答不了的，馬上轉到你手機上，你直接回。",
+             "Answers customers from your own price list and FAQ, and asks the right questions. Orders, haggling and anything it can't answer go straight to your phone."],
+    cs1: ["接到 Telegram，或者直接放进你的网站（右下角聊天窗口）", "接到 Telegram，或直接放進你的網站（右下角聊天視窗）", "On Telegram, or right on your website as a chat window"],
+    cs2: ["新客户来了、有购买意向、要付款时，都第一时间通知你", "新客戶來了、有購買意向、要付款時，都第一時間通知你", "You're told the moment someone new arrives, gets interested, or wants to pay"],
+    cs3: ["中文、英文等多种语言自动切换", "中文、英文等多種語言自動切換", "Chinese, English and more, automatically"],
+    cs4: ["价目表、常见问题随时帮你更新", "價目表、常見問題隨時幫你更新", "Price list and FAQ updates included"],
+    csPrice: ["国内 ¥300–400 搭建 + ¥99/月", "中國大陸 ¥300–400 架設 + ¥99/月", "From ¥500–600 setup + US$19.99/mo"],
+    csDemo: ["看演示页 →", "看示範頁 →", "See the demo →"],
+    ccTag: ["给个人", "給個人", "For individuals"],
+    ccTitle: ["帮你装好 Claude Code / Codex", "幫你裝好 Claude Code / Codex", "Claude Code / Codex, set up for you"],
+    ccDesc: ["远程屏幕共享，在你自己的电脑上装好、配好、跑通，再带你用它完成第一个小任务。", "遠端螢幕分享，在你自己的電腦上裝好、設定好、跑通，再帶你用它完成第一個小任務。", "Over screen share, I install and configure it on your own computer, make sure it runs, then walk you through your first task."],
+    cc1: ["Windows / Mac 都可以", "Windows / Mac 都可以", "Windows or Mac"],
+    cc2: ["装好后手把手教你用", "裝好後手把手教你用", "Hands-on walkthrough after setup"],
+    cc3: ["常见报错怎么处理，一起讲清楚", "常見錯誤怎麼處理，一起講清楚", "Common errors explained"],
+    cc4: ["一小时左右搞定", "一小時左右搞定", "About an hour"],
+    ccPrice: ["价格问 AI 助理", "價格問 AI 助理", "Ask my AI for a quote"],
+    ccMore: ["了解更多 →", "了解更多 →", "Learn more →"],
+    otherTag: ["其他也能做", "其他也能做", "Also available"],
+    otherTitle: ["写代码、做 PPT、做网站、写文案", "寫程式、做簡報、做網站、寫文案", "Code, slides, websites, copywriting"],
+    otherDesc: ["用 AI 提效，交付前本人逐一检查。具体需求直接问右下角的助理。", "用 AI 提升效率，交付前本人逐一檢查。具體需求直接問右下角的助理。", "AI-assisted, checked by me before delivery. Ask the assistant for details."],
+    o1: ["写代码", "寫程式", "Code"], o1p: ["¥149 · 24 小时内", "¥149 · 24 小時內", "¥149 · within 24h"],
+    o2: ["做 PPT", "做簡報", "Slides"], o2p: ["¥1.5/页 · 两小时内", "¥1.5/頁 · 兩小時內", "¥1.5/slide · within 2h"],
+    o3: ["简单网站", "簡單網站", "Simple website"], o3p: ["¥69–99 · 12 小时", "¥69–99 · 12 小時", "¥69–99 · 12h"],
+    o4: ["文案", "文案", "Copywriting"], o4p: ["¥15–30", "¥15–30", "¥15–30"],
+    howKicker: ["AI 客服", "AI 客服", "AI assistant"],
+    howTitle: ["它接待客户，<em>你只管成交</em>", "它接待客戶，<em>你只管成交</em>", "It handles the questions. <em>You close the deals.</em>"],
+    howSub: ["大部分重复的问题交给 AI，真正要花钱的那一刻，它会叫你。", "大部分重複的問題交給 AI，真正要付錢的那一刻，它會叫你。", "The AI takes the repetitive questions and calls you in when money is on the table."],
+    st1: ["把资料发给我", "把資料傳給我", "Send me your info"],
+    st1d: ["你卖什么、价格、常见问题。有价目表最好，没有我帮你整理。", "你賣什麼、價格、常見問題。有價目表最好，沒有我幫你整理。", "What you sell, prices, common questions. No price list yet? I'll help you put one together."],
+    st2: ["我来搭建", "我來架設", "I build it"],
+    st2d: ["按你的店名、颜色和说话风格调好，2–3 天上线。", "依照你的店名、顏色和說話風格調好，2–3 天上線。", "Your shop's name, colours and tone of voice. Live in 2–3 days."],
+    st3: ["客户来了它接待", "客戶來了它接待", "It looks after customers"],
+    st3d: ["24 小时回复、问清需求；到了下单、砍价这一步，转给你本人。", "24 小時回覆、問清需求；到了下單、殺價這一步，轉給你本人。", "Replies 24/7 and finds out what people need. Orders and haggling go to you."],
+    notifTag: ["你会收到的通知", "你會收到的通知", "What you'll hear about"],
+    notifTitle: ["重要的事，第一时间告诉你", "重要的事，第一時間告訴你", "The important moments, instantly"],
+    notifDesc: ["通知直接发到你手机上，附带聊天记录；回复通知，就能直接跟客户说话。", "通知直接傳到你手機上，附上聊天紀錄；回覆通知，就能直接跟客戶說話。", "Notices arrive on your phone with the chat so far. Reply to one to talk to the customer directly."],
+    n1: ["有客户来咨询了", "有客戶來詢問了", "New customer"], n1d: ["新客户第一次开口，AI 已经在接待", "新客戶第一次開口，AI 已經在接待", "Someone new started chatting; the AI is on it"],
+    n2: ["客户有购买意向", "客戶有購買意向", "Customer is interested"], n2d: ["在问具体价格、时间，认真在考虑", "在問具體價格、時間，認真在考慮", "Asking about prices and timing"],
+    n3: ["客户准备购买了", "客戶準備購買了", "Customer is ready to buy"], n3d: ["明确想买，该你出场了", "明確想買，換你上場了", "Time for you to step in"],
+    n4: ["需要你接手", "需要你接手", "Needs you"], n4d: ["要付款、砍价，或者 AI 答不了的问题", "要付款、殺價，或是 AI 答不了的問題", "Payment, haggling, or something the AI can't answer"],
+    ccKicker: ["Claude Code / Codex", "Claude Code / Codex", "Claude Code / Codex"],
+    cc2Title: ["最强的 AI 编程助手，<em>我帮你装好</em>", "最強的 AI 程式助手，<em>我幫你裝好</em>", "The best AI coding tools, <em>set up for you</em>"],
+    cc2Sub: ["官方文档是英文的，命令行对新手不友好，报错看不懂。我用中文或英文，陪你一步一步来。", "官方文件是英文的，命令列對新手不友善，錯誤訊息看不懂。我用中文或英文，陪你一步一步來。", "The docs assume you know your way around a terminal. I'll take you through it step by step, in English or Chinese."],
+    t1: ["# 第 1 步：装好", "# 第 1 步：裝好", "# Step 1: install"],
+    t2: ["安装完成", "安裝完成", "Installed"],
+    t3: ["# 第 2 步：登录你自己的账号，跑通", "# 第 2 步：登入你自己的帳號，跑通", "# Step 2: sign in with your own account"],
+    t4: ["已登录，可以开始了", "已登入，可以開始了", "Signed in, ready to go"],
+    t5: ["# 第 3 步：带你做第一个小任务", "# 第 3 步：帶你做第一個小任務", "# Step 3: your first task together"],
+    t6: ["帮我做一个记账的小网页", "幫我做一個記帳的小網頁", "Build me a small expense-tracker page"],
+    t7: ["已创建 index.html、app.js", "已建立 index.html、app.js", "Created index.html, app.js"],
+    incTag: ["包含什么", "包含什麼", "What's included"],
+    incTitle: ["装好、会用，才算完成", "裝好、會用，才算完成", "Done means installed and you can use it"],
+    inc1: ["约好时间，远程屏幕共享", "約好時間，遠端螢幕分享", "A scheduled remote screen-share session"],
+    inc2: ["装好 Claude Code 或 Codex（两个都装也可以）", "裝好 Claude Code 或 Codex（兩個都裝也可以）", "Claude Code or Codex installed (or both)"],
+    inc3: ["配置好、跑通，确认能正常使用", "設定好、跑通，確認能正常使用", "Configured and tested"],
+    inc4: ["带你用它完成第一个小任务", "帶你用它完成第一個小任務", "Your first task, done together"],
+    inc5: ["讲清楚常见报错和日常用法", "講清楚常見錯誤和日常用法", "Common errors and everyday use explained"],
+    incNote: ["<b>说明：</b>账号或 API 需要你本人按官方条款注册和付费，我不代充、不卖也不共享账号。",
+              "<b>說明：</b>帳號或 API 需要你本人依官方條款註冊和付費，我不代儲、不賣也不共用帳號。",
+              "<b>Note:</b> you sign up and pay for your own account or API under the official terms. I don't sell, top up or share accounts."],
+    prKicker: ["价格", "價格", "Pricing"],
+    prTitle: ["AI 客服，<em>明码标价</em>", "AI 客服，<em>明碼標價</em>", "AI assistant, <em>clear pricing</em>"],
+    prSub: ["一次性搭建费 + 月费。月费包含服务器、AI 用量、价目表和常见问题的更新；按月付，不想续随时可以停。",
+            "一次性架設費 + 月費。月費包含伺服器、AI 用量、價目表和常見問題的更新；按月付，不想續隨時可以停。",
+            "A one-off setup fee plus a monthly fee covering hosting, AI usage and updates to your price list and FAQ. Monthly, cancel any time."],
+    pl1Tag: ["国内商户", "中國大陸商戶", "Mainland China"],
+    once: ["一次性搭建", "一次性架設", "one-off setup"],
+    pl1M: ["之后 ¥99 / 月", "之後 ¥99 / 月", "then ¥99 / month"],
+    plA: ["Telegram 或你的网站", "Telegram 或你的網站", "Telegram or your website"],
+    plB: ["多语言自动回复", "多語言自動回覆", "Multilingual replies"],
+    plC: ["新客户、购买意向、付款通知", "新客戶、購買意向、付款通知", "New-customer, buying-intent and payment alerts"],
+    plD: ["价目表更新包含在月费里", "價目表更新包含在月費裡", "Price-list updates included"],
+    plCta: ["问问 AI 助理 →", "問問 AI 助理 →", "Ask my AI →"],
+    pl2Tag: ["海外商户", "海外商戶", "Overseas"],
+    once2: ["一次性搭建（人民币）", "一次性架設（人民幣）", "one-off setup (RMB)"],
+    pl2M: ["之后 US$19.99 / 月", "之後 US$19.99 / 月", "then US$19.99 / month"],
+    plA2: ["Telegram 或你的网站", "Telegram 或你的網站", "Telegram or your website"],
+    plB2: ["中英文等多语言接待", "中英文等多語言接待", "English, Chinese and more"],
+    plC2: ["新客户、购买意向、付款通知", "新客戶、購買意向、付款通知", "New-customer, buying-intent and payment alerts"],
+    plD2: ["支持 Alipay 或银行卡付款", "支援 Alipay 或銀行卡付款", "Pay by Alipay or card"],
+    plCta2: ["问问 AI 助理 →", "問問 AI 助理 →", "Ask my AI →"],
+    referral: ["🎁 <b>推荐有礼：</b>每成功介绍一家商户开通，你免 1 个月月费。", "🎁 <b>推薦有禮：</b>每成功介紹一家商戶開通，你免 1 個月月費。", "🎁 <b>Referral:</b> for every business you refer that signs up, you get a month free."],
+    aboutKicker: ["关于我", "關於我", "About"],
+    aboutTitle: ["你好，我是 vinc 👋", "你好，我是 vinc 👋", "Hi, I'm vinc 👋"],
+    about1: ["新加坡华人，现在在中国读大学。平时自己就在用 Claude Code、Codex 这些工具做项目，这个网站和右下角的 AI 助理也都是我自己搭的。",
+             "新加坡華人，現在在中國讀大學。平常自己就在用 Claude Code、Codex 這些工具做專案，這個網站和右下角的 AI 助理也都是我自己架的。",
+             "I'm Singaporean-Chinese, studying at university in China. I use Claude Code and Codex for my own projects every day. This site and the assistant in the corner are my own work."],
+    about2: ["我接的每一单都是本人跟进、交付前逐一检查。中文、英文都可以直接聊。", "我接的每一個案子都是本人跟進、交付前逐一檢查。中文、英文都可以直接聊。", "Every job is handled by me and checked before delivery. Talk to me in English or Chinese."],
+    aboutTag: ["AI 工具落地", "AI 工具落地", "Practical AI"],
+    faqKicker: ["常见问题", "常見問題", "FAQ"],
+    faqTitle: ["你可能想问", "你可能想問", "You might be wondering"],
+    q1: ["怎么付款？", "怎麼付款？", "How do I pay?"],
+    a1: ["先付 50% 定金再开工，交付后付尾款。国内客户用微信或支付宝；海外客户用 Alipay 或银行卡。", "先付 50% 訂金再開工，交付後付尾款。中國大陸客戶用微信或支付寶；海外客戶用 Alipay 或銀行卡。", "50% deposit to start, the rest on delivery. WeChat Pay or Alipay in mainland China; Alipay or card from overseas."],
+    q2: ["做完不满意怎么办？", "做完不滿意怎麼辦？", "What if I'm not happy with it?"],
+    a2: ["交付后免费小改 3 次，大改另议；不满意可以重做。", "交付後免費小改 3 次，大改另議；不滿意可以重做。", "Three rounds of small changes are free; bigger changes are discussed. If you're not happy, I'll redo it."],
+    q3: ["可以加急吗？", "可以加急嗎？", "Can you rush it?"],
+    a3: ["可以加急，具体多快请本人确认。", "可以加急，具體多快請本人確認。", "Yes. I'll confirm exactly how fast."],
+    q4: ["AI 客服的月费包含什么？", "AI 客服的月費包含什麼？", "What does the monthly fee cover?"],
+    a4: ["服务器、AI 用量、价目表和常见问题的更新。按月付，随时可以停。", "伺服器、AI 用量、價目表和常見問題的更新。按月付，隨時可以停。", "Hosting, AI usage, and updates to your price list and FAQ. Monthly, cancel any time."],
+    q5: ["我电脑不太会用，也能装 Claude Code 吗？", "我電腦不太會用，也能裝 Claude Code 嗎？", "I'm not very technical. Can I still use Claude Code?"],
+    a5: ["可以。全程远程屏幕共享，我带着你一步一步操作，装好之后还会教你怎么用。", "可以。全程遠端螢幕分享，我帶著你一步一步操作，裝好之後還會教你怎麼用。", "Yes. We do it together over screen share, step by step, and I show you how to use it afterwards."],
+    q6: ["能开发票吗？", "能開發票嗎？", "Can you issue an invoice?"],
+    a6: ["不能开发票。", "不能開發票。", "Sorry, I can't issue invoices."],
+    q7: ["跟我聊天的是真人吗？", "跟我聊天的是真人嗎？", "Am I talking to a real person?"],
+    a7: ["右下角是 AI 助理，随时在线；要报价、下单或者细节确认时，会由我本人亲自回复你。", "右下角是 AI 助理，隨時在線；要報價、下單或細節確認時，會由我本人親自回覆你。", "The chat in the corner is my AI assistant, always online. For quotes, orders and details, I reply personally."],
+    finalTitle: ["有想法？<em>先跟 AI 助理聊两句</em>", "有想法？<em>先跟 AI 助理聊兩句</em>", "Got an idea? <em>Start with my AI.</em>"],
+    finalSub: ["价格、流程、要多久，它都能先回答你；需要的时候，我本人马上接手。", "價格、流程、要多久，它都能先回答你；需要的時候，我本人馬上接手。", "It can answer prices, process and timing right away, and I step in whenever it's needed."],
+    finalChat: ["开始聊天", "開始聊天", "Start chatting"],
+    finalTg: ["在 Telegram 找我", "在 Telegram 找我", "Message me on Telegram"],
+    footNote: ["不接课程作业、论文、考试的代写或代考。", "不接課程作業、論文、考試的代寫或代考。", "I don't do coursework, theses or exams for students."]
+  };
+  var META = {
+    title: ["vinc · AI 客服搭建 & Claude Code 安装", "vinc · AI 客服架設 & Claude Code 安裝", "vinc · AI assistants & Claude Code setup"],
+    desc: ["帮商家搭建 24 小时在线的 AI 客服，帮个人装好 Claude Code / Codex。中英双语，一对一。",
+           "幫商家架設 24 小時在線的 AI 客服，幫個人裝好 Claude Code / Codex。中英雙語，一對一。",
+           "24/7 AI customer-service assistants for businesses, and Claude Code / Codex set up on your computer. One-on-one, in English or Chinese."]
+  };
+  var TAGS = ["zh-CN", "zh-TW", "en"];
+
+  function indexFor(tag) {
+    tag = String(tag || "").toLowerCase();
+    if (!/^zh/.test(tag)) return 2;
+    return /hant|tw|hk|mo/.test(tag) ? 1 : 0;
+  }
+  function apply(tag) {
+    var n = indexFor(tag);
+    document.documentElement.lang = TAGS[n];
+    document.querySelectorAll("[data-i]").forEach(function (el) {
+      var t = I[el.getAttribute("data-i")];
+      if (t) el.textContent = t[n];
+    });
+    document.querySelectorAll("[data-ih]").forEach(function (el) {
+      var t = I[el.getAttribute("data-ih")];
+      if (t) el.innerHTML = t[n];  // our own fixed strings above, never user input
+    });
+    document.title = META.title[n];
+    document.querySelector('meta[name="description"]').setAttribute("content", META.desc[n]);
+    document.querySelectorAll(".langs button").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(indexFor(b.getAttribute("data-lang")) === n));
+    });
+    var widget = document.querySelector('script[src="/widget.js"]');
+    if (widget) widget.setAttribute("data-title", I.brand[n]);
+    if (window.aiChatSetLang) window.aiChatSetLang(TAGS[n]);
+  }
+
+  var saved = null;
+  try { saved = localStorage.getItem("siteLang"); } catch (e) {}
+  apply(saved || navigator.language || "zh-CN");
+
+  document.querySelectorAll(".langs button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var tag = b.getAttribute("data-lang");
+      try { localStorage.setItem("siteLang", tag); } catch (e) {}
+      apply(tag);
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) {
+    b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); });
+  });
+
+  var nav = document.getElementById("nav");
+  function onScroll() { nav.classList.toggle("scrolled", window.scrollY > 8); }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var items = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add("shown"); io.unobserve(e.target); }
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    items.forEach(function (el) { io.observe(el); });
+  } else {
+    items.forEach(function (el) { el.classList.add("shown"); });
+  }
+})();
+</script>
+</body>
+</html>

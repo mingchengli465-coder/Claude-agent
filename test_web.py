@@ -44,6 +44,14 @@ async def main():
     chat, svc, model, owner, clock = fresh()
     async with TestClient(TestServer(chat.app())) as client:
         r = await client.get("/")
+        site = await r.text()
+        assert r.status == 200 and "text/html" in r.headers["Content-Type"]
+        assert "Claude Code" in site and "AI 客服" in site and '<script src="/widget.js"' in site
+        assert "https://t.me/emilyhanbot" in site and "{{" not in site
+        for tag in ("zh-CN", "zh-TW", "en"):
+            assert f'data-lang="{tag}"' in site, tag
+        assert 'href="/demo"' in site, "the site links to the merchant demo"
+        r = await client.get("/demo")
         page = await r.text()
         assert r.status == 200 and "text/html" in r.headers["Content-Type"]
         assert "小店&lt;b&gt;" in page and "小店<b>" not in page, "the title is escaped"
@@ -57,7 +65,7 @@ async def main():
         assert (await client.get("/healthz")).status == 200
         r = await client.options("/api/chat")
         assert r.status == 204 and r.headers["Access-Control-Allow-Origin"] == "*"
-    print("PASS the demo page, the widget script and CORS are served; the shop name is escaped")
+    print("PASS the personal site, the demo page, the widget script and CORS are served; the shop name is escaped")
 
     # --- a visitor chats; the owner is told and replies; the widget picks it up ----------
     chat, svc, model, owner, clock = fresh()
