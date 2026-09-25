@@ -163,7 +163,9 @@ Four separate messages, so each can be long-pressed and copied on its own:
 ## Topic selection
 
 Every note promotes the 代做 service (PPT, résumés, copywriting, Excel for
-university students). Six service lines rotate one per note, so the account
+university students) and answers the two objections a reader will have:
+"why not just use 豆包/千问?" and "why not use Claude myself?" (overseas
+card, overseas phone number, a fiddly sign-up). Six service lines rotate one per note, so the account
 doesn't post the same pitch every day:
 
 > 课程汇报 PPT · 简历优化排版 · 毕业答辩 PPT · Excel 表格整理 · 比赛与路演 PPT · 小红书 / 公众号文案
@@ -182,13 +184,17 @@ differently". The history lives in `xhs_state.json`.
 Six rules are written into every request, and the model is told that breaking
 them means the note is a failure:
 
-- no attacks on any group, and no running down competitors
+- no attacks on any group, and no running down competitors. Comparisons with
+  豆包/千问 must concede what they do well first, then speak from "my
+  experience" — no invented benchmarks (China's 广告法 bans disparaging
+  other products)
 - nothing invented: no order counts, reviews, customer quotes, pass rates or
   case stories, and nothing about the service beyond the brief
 - no 作业/论文代写 or 代考, and no promises of grades, passing a defence or a job
 - no off-platform contact of any kind (微信, QQ, 闲鱼, links, QR codes, 加V) —
   小红书 throttles or bans accounts for it. Only "评论区留言" or "私信"
-- no AI product or company names; just "AI"
+- Claude, Codex, 豆包 and 千问 may be named, only as the brief puts it; never
+  翻墙/梯子/VPN, and never selling accounts, top-ups or relay access — only 代做
 - no medical or investment advice, nothing political
 
 ## The cover

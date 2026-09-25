@@ -414,12 +414,16 @@ assert 6 <= len(ex["tags"]) <= 8 and not any(t.startswith("#") for t in ex["tags
 assert len(ex["cover"]["main"]) == 2 and all(6 <= len(m) <= 10 for m in ex["cover"]["main"]), ex["cover"]["main"]
 assert len(ex["cover"]["question"]) <= 15
 assert len(ex["cover"]["small"]) == 3 and all(8 <= len(m) <= 14 for m in ex["cover"]["small"]), ex["cover"]["small"]
-banned = ["微信", "QQ", "闲鱼", "淘宝", "加V", "二维码", "http", "ChatGPT", "Claude", "Kimi", "豆包",
-          "已帮", "好评", "通过率"]
+banned = ["微信", "QQ", "闲鱼", "淘宝", "加V", "二维码", "http", "翻墙", "梯子", "VPN", "科学上网",
+          "垃圾", "没用", "已帮", "好评", "通过率", "卖号", "代充"]
 blob = xhs.EXAMPLE_JSON
 for word in banned:
     assert word not in blob, f"example breaks its own rules: {word}"
 assert "评论区留言" in ex["body"] and "私信" in ex["body"], "example must show the allowed call to action"
+# the two objections the user asked every note to answer
+for must in ("豆包", "千问", "Claude", "海外支付卡", "海外手机号"):
+    assert must in ex["body"], f"example must make the {must} argument"
+assert "豆包" in xhs.SERVICE_BRIEF and "海外支付卡" in xhs.SERVICE_BRIEF
 print(f"PASS the example note obeys every rule it teaches (body {len(ex['body'])} chars)")
 
 prompt = xhs._build_user_prompt(xhs.DOMAINS[0], [])
