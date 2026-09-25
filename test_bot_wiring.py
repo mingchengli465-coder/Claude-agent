@@ -472,4 +472,18 @@ bot.schedule_daily_note(app6); bot.schedule_daily_tweets(app6)
 assert sorted(j.name for j in app6.job_queue.jobs()) == ["tweet-daily-1200", "tweet-daily-2000", "xhs-daily"]
 print("PASS the 小红书 and tweet schedules are unchanged")
 
+# --- which AI customer service uses --------------------------------------------------------------
+fake_bot = types.SimpleNamespace()
+saved_keys = (bot.ANTHROPIC_API_KEY, bot.DEEPSEEK_API_KEY)
+cs_mod.CS_DB_PATH = pathlib.Path(tempfile.mkdtemp()) / "cs.sqlite3"
+cs_mod.Store.__init__.__defaults__ = (cs_mod.CS_DB_PATH,)
+bot.ANTHROPIC_API_KEY, bot.DEEPSEEK_API_KEY = "", ""
+assert bot.build_customer_service(fake_bot).responder is None
+bot.DEEPSEEK_API_KEY = "sk-deepseek-test"
+assert type(bot.build_customer_service(fake_bot).responder).__name__ == "OpenAICompatibleResponder"
+bot.ANTHROPIC_API_KEY = "sk-ant-test"
+assert type(bot.build_customer_service(fake_bot).responder).__name__ == "ClaudeResponder", "Claude wins when both are set"
+bot.ANTHROPIC_API_KEY, bot.DEEPSEEK_API_KEY = saved_keys
+print("PASS customer service picks Claude, else DeepSeek, else hands everything to the owner")
+
 print("\nALL BOT WIRING TESTS PASSED")

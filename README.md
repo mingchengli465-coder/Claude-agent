@@ -500,10 +500,16 @@ real person……），命中就一定转。
 
 ## 模型
 
-`claude-opus-5`（`CS_MODEL`），自适应思考、`effort: low`（`CS_EFFORT`），结构化输出
-（每次回复都是固定格式的 JSON，决定回复内容、要不要转人工、需求摘要），系统提示
-缓存，并开启了服务端 `fallbacks: "default"`：请求被 Claude 安全机制拒绝时，自动改由
-推荐的备用模型处理。
+按顺序选第一个有钥匙的：
+
+1. **Claude**（`ANTHROPIC_API_KEY`）：`claude-opus-5`（`CS_MODEL`），自适应思考、
+   `effort: low`，结构化输出，系统提示缓存，服务端 `fallbacks: "default"`。
+2. **DeepSeek**（`DEEPSEEK_API_KEY`）：`deepseek-flash`（`CS_DEEPSEEK_MODEL`），JSON 模式。
+   支付宝就能充值。`deepseek-chat` 已在 2026 年 7 月下线，不要再用。
+3. 都没有：客户消息全部转给你。
+
+两种模型都只输出固定格式（回复内容、要不要转人工、需求摘要）；模型回了格式不对的
+东西，一律当作出错转给你，不会发给客户。
 
 ## 接企业微信
 
@@ -522,6 +528,8 @@ if reply: await send(chat_id, reply)
 | `OWNER_CHAT_ID` | 是* | `ADMIN_CHAT_ID` | 你本人的 chat ID；都没设则客服模式关闭 |
 | `ANTHROPIC_API_KEY` | 是* | — | Claude API 密钥；没有则客户消息全部转给你 |
 | `CS_MODEL` | 否 | `claude-opus-5` | 客服用的 Claude 模型 |
+| `DEEPSEEK_API_KEY` | 否 | — | 没有 Claude 钥匙时用 DeepSeek |
+| `CS_DEEPSEEK_MODEL` | 否 | `deepseek-flash` | DeepSeek 模型 |
 | `CS_EFFORT` | 否 | `low` | 思考深度：low / medium / high |
 | `CS_PRODUCTS_PATH` | 否 | `products.yaml` | 业务资料文件 |
 | `CS_DB_PATH` | 否 | `cs.sqlite3` | 对话数据库。Railway 重新部署会清空，要保留就挂 Volume 并指向它 |

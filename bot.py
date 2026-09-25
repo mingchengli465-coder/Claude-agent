@@ -61,6 +61,7 @@ ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "").strip()
 # gets customer-service mode. Falls back to ADMIN_CHAT_ID, which is the same person.
 OWNER_CHAT_ID = os.environ.get("OWNER_CHAT_ID", "").strip() or ADMIN_CHAT_ID
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "").strip()
 XHS_DAILY_TIME = os.environ.get("XHS_DAILY_TIME", "09:00")
 XHS_TIMEZONE = os.environ.get("XHS_TIMEZONE", "Asia/Taipei")
 # Tweets go out twice a day by default, in the same timezone.
@@ -651,11 +652,15 @@ def build_customer_service(bot) -> cs.CustomerService | None:
         logger.exception("products.yaml 读取失败，客服 AI 停用，客户消息会全部转给你")
         catalog = ""
 
-    responder = None
-    if not ANTHROPIC_API_KEY:
-        logger.warning("没有 ANTHROPIC_API_KEY，客服 AI 停用，客户消息会全部转给你")
-    elif catalog:
-        responder = cs.ClaudeResponder(ANTHROPIC_API_KEY)
+    responder, model = None, ""
+    if not catalog:
+        pass
+    elif ANTHROPIC_API_KEY:
+        responder, model = cs.ClaudeResponder(ANTHROPIC_API_KEY), cs.CS_MODEL
+    elif DEEPSEEK_API_KEY:
+        responder, model = cs.OpenAICompatibleResponder(DEEPSEEK_API_KEY), cs.CS_DEEPSEEK_MODEL
+    else:
+        logger.warning("没有 ANTHROPIC_API_KEY 也没有 DEEPSEEK_API_KEY，客服 AI 停用，客户消息会全部转给你")
 
     async def notify_owner(text: str) -> int | None:
         sent = await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=_fit_notice(text))
@@ -667,8 +672,8 @@ def build_customer_service(bot) -> cs.CustomerService | None:
 
     svc = cs.CustomerService(cs.Store(), catalog, responder, owner_notify=notify_owner)
     svc.register_channel("telegram", send_telegram)
-    logger.info("客服模式已启用：模型 %s，AI %s，本人 chat %s",
-                cs.CS_MODEL, "开" if responder else "关（只转人工）", OWNER_CHAT_ID)
+    logger.info("客服模式已启用：AI %s，本人 chat %s",
+                f"开（{model}）" if responder else "关（只转人工）", OWNER_CHAT_ID)
     return svc
 
 
