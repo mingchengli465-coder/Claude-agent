@@ -17,7 +17,7 @@ catalog = cs.load_catalog(pathlib.Path(__file__).with_name("products.yaml"))
 import yaml
 data = yaml.safe_load(pathlib.Path(__file__).with_name("products.yaml").read_text(encoding="utf-8"))
 names = [s["名称"] for s in data["服务"]]
-assert names == ["写代码", "做 PPT", "写文案 / 小红书文案", "做简单网站"], names
+assert names == ["写代码", "做 PPT", "写文案 / 小红书文案", "做简单网站", "帮商户搭建 AI 客服"], names
 for s in data["服务"]:
     for field in ("说明", "价格区间", "交付周期", "需要客户提供"):
         assert field in s, (s["名称"], field)
@@ -27,7 +27,7 @@ assert "例如" not in catalog, "comments (examples) must never reach the model"
 assert cs.PLACEHOLDER in catalog
 system = cs.build_system_prompt(catalog)
 assert catalog in system and "只能依据" in system and "待填" in system
-print(f"PASS products.yaml has the 4 services with every field; examples stay out of the prompt ({catalog.count('待填')} blanks)")
+print(f"PASS products.yaml has the {len(names)} services with every field; examples stay out of the prompt ({catalog.count('待填')} blanks)")
 
 
 # --- fakes -------------------------------------------------------------------------

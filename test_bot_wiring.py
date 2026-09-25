@@ -531,4 +531,37 @@ assert asyncio.run(bot.ask_model(31337, "再问一次")) == "free model here" an
 bot.ds_client, bot.client = saved
 print("PASS the owner's chat uses DeepSeek first and falls back to OpenRouter")
 
+# --- /post: the owner's own text, exactly as written, with an optional reply underneath -------------
+posted, replies_x, link_replies = [], [], []
+async def fake_pub(item):
+    posted.append(item.full_text())
+    return "https://x.com/me/status/42"
+async def fake_reply(url, text): replies_x.append((url, text)); return "43"
+async def fake_link(url): link_replies.append(url); return "44"
+saved_fns = tweet_mod.publish, tweet_mod.post_reply, tweet_mod.post_link_reply
+tweet_mod.publish, tweet_mod.post_reply, tweet_mod.post_link_reply = fake_pub, fake_reply, fake_link
+
+u = Upd(424242, "/post Line one.\nLine two with https://example.com/x\n---\nDemo: https://t.me/emilyhanbot\nMe: https://t.me/someone")
+run_route(bot.post_command, u)
+assert posted == ["Line one.\nLine two with https://example.com/x"], posted
+assert replies_x == [("https://x.com/me/status/42", "Demo: https://t.me/emilyhanbot\nMe: https://t.me/someone")]
+assert link_replies == [], "an explicit reply replaces the automatic link reply"
+assert "已发推" in u.effective_message.replies[-1] and "https://x.com/me/status/42" in u.effective_message.replies[-1]
+
+posted.clear(); replies_x.clear()
+u = Upd(424242, "/post@emilyhanbot Just the tweet")
+run_route(bot.post_command, u)
+assert posted == ["Just the tweet"] and link_replies == ["https://x.com/me/status/42"], "no --- : the bot link goes underneath"
+
+posted.clear()
+for text, why in (("/post", "用法"), ("/post " + "长" * 141, "太长"), ("/post ok\n---\n" + "x" * 281, "太长")):
+    u = Upd(424242, text)
+    run_route(bot.post_command, u)
+    assert posted == [] and why in u.effective_message.replies[-1], (text[:20], u.effective_message.replies)
+u = Upd(555, "/post hi"); run_route(bot.post_command, u)
+assert posted == [] and u.effective_message.replies == [bot.XHS_DENIED_TEXT], "owner only"
+assert tweet_mod.x_length("see https://" + "a" * 100 + ".com") == 4 + 23, "a link counts as 23 like on X"
+tweet_mod.publish, tweet_mod.post_reply, tweet_mod.post_link_reply = saved_fns
+print("PASS /post publishes the owner's text as written, with their reply or the bot link underneath")
+
 print("\nALL BOT WIRING TESTS PASSED")
