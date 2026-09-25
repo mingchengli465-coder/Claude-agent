@@ -308,8 +308,9 @@ Neither needs a token, an API key, or a network connection.
 
 # X Auto-Poster
 
-`tweet.py` writes one short, opinionated post about **AI and AI agents** in
-Traditional Chinese and publishes it straight to X. There is no approval step —
+`tweet.py` writes one short English post promoting **custom design work** —
+client websites, landing pages and presentation decks — and publishes it
+straight to X. There is no approval step —
 Telegram only gets told afterwards.
 
 ## How it runs
@@ -359,36 +360,31 @@ hashtags are dropped if they would push the post over.
 
 ## What it writes about
 
-Six sub-areas rotate, one per post:
+Six service lines rotate, one per post, so the feed isn't one pitch on repeat:
 
-> AI agent 的實際能力與限制 · 用 AI 寫程式的體驗和踩坑 · AI 工具比較與選擇 ·
-> AI 對工作和職業的影響 · 自動化工作流的想法 · 對 AI 產業趨勢的觀察
+> custom websites for small businesses · pitch decks for founders · landing
+> pages · presentation redesign · portfolio and personal-brand websites · sales
+> and client-proposal decks
 
-The prompt pushes for something **specific** — how an agent differed from its
-pitch, a mistake a model keeps making, a concrete difference between two tools —
-rather than general commentary.
+Each tweet takes one angle — a design tip a client can use today, a common
+mistake, what custom gets you over a template, a sign someone needs a redesign,
+or a direct offer — and ends with a short call to action ("DMs open.").
+
+What a tweet may claim about the service comes from one block of text, and the
+model is told it can't add to it. To change the offer (add prices, turnaround,
+a new service), set `X_SERVICE_BRIEF` in Railway. The default is
+`DEFAULT_SERVICE_BRIEF` in `tweet.py`.
+
+The prompt forbids invented clients, projects, results, numbers, reviews and
+quotes; prices or deadlines not in the brief; and naming or knocking other
+companies. No links or @mentions.
 
 ## Language
 
-Each tweet draws its language before generation: **70% English, 30% Simplified
-Chinese** (`X_ENGLISH_RATIO`). The draw fills the prompt's `{language}` slot and
-picks the character ceiling — **270 for English, 130 for Chinese**, since a
-Chinese character weighs 2 against X's 280 budget. The chosen language is logged
-and recorded in the history row.
-
-## Style
-
-- **2 to 4 sentences.** Not a three-part story; no scene-setting.
-- The opinion or finding goes in the first sentence.
-- The ending doesn't have to be a question — an assertion often lands harder.
-- Traditional Chinese, with technical terms left in English (agent, context,
-  prompt, token, API, MCP).
-- At most **2 hashtags**, preferring the usual English ones (`AI`, `AIAgent`,
-  `LLM`, `Claude`, `Cursor`, `vibecoding`).
-
-Three worked examples are embedded in the prompt. A test asserts they obey the
-same 2–4 sentence and 2-tag rules they teach, and that they don't all end on a
-question — otherwise the model would copy whatever the examples actually do.
+**English only** by default (`X_ENGLISH_RATIO=1.0`), since the clients are
+English-speaking. The ratio still works if you want some Simplified Chinese
+posts back: the draw fills the prompt's `{language}` slot and picks the
+character ceiling — 270 for English, 130 for Chinese.
 
 ## Content rules
 
@@ -416,6 +412,8 @@ of a usable object, because a tweet's "done" looks nothing like a note's.
 | `X_ACCESS_TOKEN`         | to post  | —                  | Must be regenerated after setting Read+Write  |
 | `X_ACCESS_TOKEN_SECRET`  | to post  | —                  |                                               |
 | `X_MODEL`                | no       | `google/gemma-4-26b-a4b-it:free` | Model used for tweets. No longer falls back to `MODEL` |
+| `X_SERVICE_BRIEF`        | no       | `DEFAULT_SERVICE_BRIEF` | Everything a tweet may say about the service |
+| `X_ENGLISH_RATIO`        | no       | `1.0`              | Share of English tweets; the rest are Simplified Chinese |
 | `X_DAILY_TIMES`          | no       | `12:00,20:00`      | Daily posting times                           |
 | `X_TIMEZONE`             | no       | `Asia/Taipei`      | Timezone for those times                      |
 | `X_TWEET_CHAR_LIMIT`     | no       | `140`              | Character limit                               |

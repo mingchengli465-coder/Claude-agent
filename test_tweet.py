@@ -54,60 +54,34 @@ assert "www." not in tw.strip_urls("去 www.example.com 看看")
 assert tw.strip_urls("沒有網址的文字") == "沒有網址的文字"
 print("PASS URLs are removed, plain text untouched")
 
-# --- the prompt is stored verbatim ------------------------------------------
-SUPPLIED = """You are a sharp, independent builder who posts on X about AI and AI agents. Write ONE original tweet in {language}.
+# --- the prompt sells the design service, in English -------------------------
+built = tw._build_prompt(tw.ENGLISH, ["Your homepage has one job.", "Slide 1 should say what you do."],
+                         tw.DOMAINS[1])
+for slot in ("{language}", "{recent_tweets}", "{service}", "{domain}"):
+    assert slot not in built, f"{slot} left unfilled"
+assert tw.X_SERVICE_BRIEF in built, "the model must see what it is selling"
+assert "This tweet's focus: pitch decks for founders" in built
+assert "- Your homepage has one job.\n- Slide 1 should say what you do." in built
+assert "Write ONE original tweet in English" in built
+for rule in ("Never invent clients", "No prices", "call to action", "No links"):
+    assert rule in built, f"rule missing: {rule}"
+assert "(none yet)" in tw._build_prompt(tw.ENGLISH, [])
+print("PASS the prompt carries the service brief, the focus, the history and the honesty rules")
 
-Rules:
-- Write entirely in {language}. Do not mix languages, except for common technical terms like "AI agent", "LLM", "prompt".
-- If English: under 270 characters total, including hashtags.
-- If Chinese: under 130 Chinese characters total, including hashtags. Natural, conversational Chinese, not translated-sounding.
-- Sound like a real person sharing a thought, not a brand or a press release.
-- Pick ONE angle per tweet: a practical tip, a hot take, a lesson from building with AI agents, a tool you find useful, or a prediction.
-- Be specific. Concrete examples beat vague hype.
-- Short sentences. Line breaks are fine. At most 1 emoji, or none.
-- 0\u20132 relevant hashtags at the end. Never more than 2.
-- No links, no @mentions, no quotation marks around the whole tweet.
+assert all(any(k in d for k in ("website", "deck", "landing", "presentation")) for d in tw.DOMAINS), tw.DOMAINS
+assert all(ord(c) < 128 for d in tw.DOMAINS for c in d), "domains are English now"
+for word in ("website", "PowerPoint", "DM"):
+    assert word in tw.DEFAULT_SERVICE_BRIEF
+print(f"PASS {len(tw.DOMAINS)} design service lines rotate")
 
-Recent tweets (do not repeat these topics or openings):
-{recent_tweets}
-
-Output ONLY the tweet text. No explanation, no preamble."""
-
-assert tw.TWEET_PROMPT == SUPPLIED, "the stored prompt must stay byte-identical"
-print("PASS TWEET_PROMPT matches the supplied prompt exactly")
-
-built = tw._build_prompt(tw.ENGLISH, ["Agents fail on undefined tasks.", "Review is the bottleneck."])
-assert "{language}" not in built and "{recent_tweets}" not in built, "placeholders must be filled"
-assert built.count("English") >= 2, "both {language} slots must be filled"
-restored = (built
-            .replace("- Agents fail on undefined tasks.\n- Review is the bottleneck.", "{recent_tweets}")
-            .replace("Write ONE original tweet in English.", "Write ONE original tweet in {language}.")
-            .replace("- Write entirely in English.", "- Write entirely in {language}."))
-assert restored == SUPPLIED, "only the two placeholders may differ"
-print("PASS {language} and {recent_tweets} are filled, nothing else altered")
-
-zh = tw._build_prompt(tw.CHINESE, [])
-assert "Write ONE original tweet in Simplified Chinese." in zh
-assert "- Write entirely in Simplified Chinese." in zh
-assert "(none yet)" in zh
-print("PASS the Chinese draw renders 'Simplified Chinese' in both slots")
-
-# --- the 70/30 language draw ------------------------------------------------
-import random as _random
-_random.seed(11)
-draws = [tw.pick_language() for _ in range(4000)]
-share = draws.count(tw.ENGLISH) / len(draws)
-assert set(draws) == {tw.ENGLISH, tw.CHINESE}, set(draws)
-assert 0.67 < share < 0.73, f"English share {share:.3f} is not ~0.70"
-print(f"PASS pick_language draws {share:.1%} English over 4000 samples (target 70%)")
-
+# --- English only by default -------------------------------------------------
+assert tw.ENGLISH_RATIO == 1.0, tw.ENGLISH_RATIO
+assert {tw.pick_language() for _ in range(200)} == {tw.ENGLISH}
 saved = tw.ENGLISH_RATIO
 tw.ENGLISH_RATIO = 0.0
 assert {tw.pick_language() for _ in range(50)} == {tw.CHINESE}
-tw.ENGLISH_RATIO = 1.0
-assert {tw.pick_language() for _ in range(50)} == {tw.ENGLISH}
 tw.ENGLISH_RATIO = saved
-print("PASS X_ENGLISH_RATIO at 0 and 1 pins the draw to one language")
+print("PASS every tweet is drawn in English; X_ENGLISH_RATIO still overrides it")
 
 # --- the model -------------------------------------------------------------
 assert tw.X_MODEL == "google/gemma-4-26b-a4b-it:free", tw.X_MODEL
@@ -201,6 +175,7 @@ assert t1.text == payload, t1.text
 assert c.seen["max_tokens"] == tw.X_MAX_TOKENS
 assert c.seen["model"] == "google/gemma-4-26b-a4b-it:free", c.seen["model"]
 assert "response_format" not in c.seen, "JSON mode would fight a bare-text prompt"
+assert "This tweet's focus: d\n" in c.seen["messages"][0]["content"], "the rotated domain must reach the model"
 print("PASS a plain-text reply is used as-is, and no response_format is sent")
 
 # empty content -> reasoning trace

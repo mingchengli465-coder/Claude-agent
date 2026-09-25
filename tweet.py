@@ -51,10 +51,11 @@ CHINESE_CHAR_LIMIT = int(os.environ.get("X_TWEET_CHAR_LIMIT_ZH", "130"))
 ENGLISH = "English"
 CHINESE = "Simplified Chinese"
 LANGUAGE_LIMITS = {ENGLISH: TWEET_CHAR_LIMIT, CHINESE: CHINESE_CHAR_LIMIT}
-# Share of tweets written in English; the rest are Simplified Chinese.
-ENGLISH_RATIO = float(os.environ.get("X_ENGLISH_RATIO", "0.7"))
+# Share of tweets written in English; the rest are Simplified Chinese. The
+# account sells design work to English-speaking clients, so English only.
+ENGLISH_RATIO = float(os.environ.get("X_ENGLISH_RATIO", "1.0"))
 X_WEIGHTED_LIMIT = 280
-# Two at most, and English ones read better on an AI timeline.
+# Two at most; more reads as spam on a promotional account.
 MAX_TAGS = int(os.environ.get("X_MAX_TAGS", "2"))
 
 # X credentials — the same four x_bot.py uses.
@@ -63,15 +64,27 @@ X_API_SECRET = os.environ.get("X_API_SECRET", "")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", "")
 X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", "")
 
-# Six sub-areas of AI / AI agents, rotated one per post.
+# Each tweet promotes one service line, rotated so the feed isn't one pitch
+# on repeat (X also treats identical promotional posts as spam).
 DOMAINS = [
-    "AI agent 的實際能力與限制",
-    "用 AI 寫程式的體驗和踩坑",
-    "AI 工具比較與選擇",
-    "AI 對工作和職業的影響",
-    "自動化工作流的想法",
-    "對 AI 產業趨勢的觀察",
+    "custom websites for small businesses",
+    "pitch decks for founders",
+    "landing pages",
+    "presentation redesign: turning a cluttered deck into a clear one",
+    "portfolio and personal-brand websites",
+    "sales and client-proposal decks",
 ]
+
+# Everything a tweet may claim about the service. The model is told it can't
+# add to this, so set X_SERVICE_BRIEF in Railway to change the offer (prices,
+# turnaround, a new service) instead of editing the prompt.
+DEFAULT_SERVICE_BRIEF = """I design custom websites and presentations for clients.
+Websites: small-business sites, landing pages, portfolio and personal-brand sites. Designed around the client's brand and content, not a template.
+Presentations: pitch decks, sales and proposal decks, talks and conference or class presentations. Clear structure, clean visuals.
+Clients get the finished website, or an editable deck file (PowerPoint, which also opens in Keynote and Google Slides).
+Pricing: quoted per project.
+How to start: send me a DM."""
+X_SERVICE_BRIEF = os.environ.get("X_SERVICE_BRIEF", "").strip() or DEFAULT_SERVICE_BRIEF
 
 client = AsyncOpenAI(
     api_key=OPENROUTER_API_KEY,
@@ -251,20 +264,28 @@ def take_domain(state: dict) -> str:
 # Generation
 # --------------------------------------------------------------------------- #
 
-# The account's prompt, kept verbatim. {language} and {recent_tweets} are the
-# only placeholders; they are filled by str.replace rather than str.format so
-# nothing else in the text has to be escaped.
-TWEET_PROMPT = """You are a sharp, independent builder who posts on X about AI and AI agents. Write ONE original tweet in {language}.
+# Placeholders are filled by str.replace rather than str.format, so nothing
+# else in the text has to be escaped.
+TWEET_PROMPT = """You run a small independent design studio and post on X to win clients. Write ONE original tweet in {language} that promotes your custom design work.
+
+What you sell (you may only claim what is written here):
+{service}
+
+This tweet's focus: {domain}
 
 Rules:
-- Write entirely in {language}. Do not mix languages, except for common technical terms like "AI agent", "LLM", "prompt".
+- Write entirely in {language}.
 - If English: under 270 characters total, including hashtags.
-- If Chinese: under 130 Chinese characters total, including hashtags. Natural, conversational Chinese, not translated-sounding.
-- Sound like a real person sharing a thought, not a brand or a press release.
-- Pick ONE angle per tweet: a practical tip, a hot take, a lesson from building with AI agents, a tool you find useful, or a prediction.
-- Be specific. Concrete examples beat vague hype.
+- If Chinese: under 130 Chinese characters total, including hashtags.
+- Sound like a real designer talking to potential clients, not an ad agency or a press release.
+- Pick ONE angle: a design tip a client can use today, a common mistake you fix, what "custom" gets you that a template doesn't, a sign someone needs a redesign, or a direct offer.
+- Every tweet must make it clear you take on this kind of work, and end with a short call to action such as "DMs open." or "DM me if that's you."
+- Be specific. One concrete detail beats three adjectives.
+- Never invent clients, projects, results, numbers, reviews or quotes. No "I just shipped a site for...", no "conversions up 40%".
+- No prices, discounts, deadlines or turnaround times unless they are in the list above.
+- Don't name or knock other companies, tools or designers.
 - Short sentences. Line breaks are fine. At most 1 emoji, or none.
-- 0\u20132 relevant hashtags at the end. Never more than 2.
+- 0\u20132 relevant hashtags at the end, such as #WebDesign #PitchDeck. Never more than 2.
 - No links, no @mentions, no quotation marks around the whole tweet.
 
 Recent tweets (do not repeat these topics or openings):
@@ -278,10 +299,12 @@ def pick_language() -> str:
     return ENGLISH if random.random() < ENGLISH_RATIO else CHINESE
 
 
-def _build_prompt(language: str, recent: list[str]) -> str:
-    """Fill {language} and {recent_tweets}; leave the rest of the prompt alone."""
+def _build_prompt(language: str, recent: list[str], domain: str = DOMAINS[0]) -> str:
+    """Fill the placeholders; leave the rest of the prompt alone."""
     block = "\n".join(f"- {t}" for t in recent) if recent else "(none yet)"
     return (TWEET_PROMPT
+            .replace("{service}", X_SERVICE_BRIEF)
+            .replace("{domain}", domain)
             .replace("{language}", language)
             .replace("{recent_tweets}", block))
 
@@ -340,7 +363,7 @@ async def _one_call(domain: str, recent: list[str], language: str,
     # would fight it.
     response = await client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": _build_prompt(language, recent)}],
+        messages=[{"role": "user", "content": _build_prompt(language, recent, domain)}],
         temperature=1.0,
         max_tokens=X_MAX_TOKENS,
     )
