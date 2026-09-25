@@ -63,6 +63,7 @@ assert tw.X_SERVICE_BRIEF in built, "the model must see what it is selling"
 assert "This tweet's focus: pitch decks for founders" in built
 assert "- Your homepage has one job.\n- Slide 1 should say what you do." in built
 assert "Write ONE original tweet in English" in built
+assert "220\u2013270 characters" in built and "never over 270" in built, "tweets should use the full length"
 for rule in ("Never invent clients", "No prices", "call to action", "No links"):
     assert rule in built, f"rule missing: {rule}"
 assert "(none yet)" in tw._build_prompt(tw.ENGLISH, [])
