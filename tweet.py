@@ -331,6 +331,33 @@ def _enforce_hashtag_cap(text: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", text).strip()
 
 
+_NOTES_MARKERS = re.compile(
+    r"analy[sz]e the request|\bconstraints?:|\bdraft(ing)? \d|\bdraft:|\brole:|\bgoal:"
+    r"|\bplatform:|\btone:|\bself-correction|\bcharacter count|\bokay, (so|let)",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_notes(text: str, language: str = ENGLISH) -> str:
+    """Why this reply is a model's working notes rather than a tweet, or "".
+
+    Trimming can make anything fit, so length alone never stopped a bad post.
+    These are the shapes a planning trace takes and a finished tweet doesn't.
+    A numbered list is left alone: "3 signs you need a redesign: 1. 2. 3." is
+    a fine tweet.
+    """
+    limit = LANGUAGE_LIMITS.get(language, TWEET_CHAR_LIMIT)
+    if len(text) > limit * 3:
+        return f"長度 {len(text)} 字，是上限的 {len(text) // limit} 倍"
+    # X doesn't render Markdown, so a finished tweet never carries **bold**.
+    if "**" in text:
+        return "含 Markdown 粗體 **"
+    marker = _NOTES_MARKERS.search(text)
+    if marker:
+        return f"含草稿用語「{marker.group(0)}」"
+    return ""
+
+
 def _parse_tweet(raw: str, domain: str, language: str = ENGLISH) -> Tweet:
     """Turn the model's plain-text reply into a Tweet.
 
@@ -353,6 +380,10 @@ def _parse_tweet(raw: str, domain: str, language: str = ENGLISH) -> Tweet:
 
     if not text:
         raise GenerationError("模型回傳了空的貼文內容")
+
+    problem = _looks_like_notes(text, language)
+    if problem:
+        raise GenerationError(f"模型回傳的不是推文（{problem}），不發布。開頭：{text[:80]!r}")
 
     limit = LANGUAGE_LIMITS.get(language, TWEET_CHAR_LIMIT)
     text = fit_tweet(_enforce_hashtag_cap(strip_urls(text)), limit)
@@ -382,14 +413,11 @@ async def _one_call(domain: str, recent: list[str], language: str,
     choice = response.choices[0]
     finish = getattr(choice, "finish_reason", "?")
     text = (choice.message.content or "").strip()
+    # Deliberately no fallback to the reasoning trace. Notes xhs.py can still
+    # validate as JSON; a tweet is bare text, so a trace would be trimmed and
+    # posted as-is. That happened: "1. **Analyze the Request:**" went public.
     if not text:
-        # A reasoning model can burn the budget thinking and return empty
-        # content, leaving the tweet in its trace.
-        text = xhs._reasoning_text(choice.message).strip()
-        if text:
-            logger.warning("content 為空，改從 reasoning 欄位取內容")
-    if not text:
-        raise GenerationError(f"模型回傳了空內容（finish_reason={finish}）")
+        raise GenerationError(f"模型回傳了空內容（finish_reason={finish}），可能是推理模型把額度花在思考上")
 
     try:
         return _parse_tweet(text, domain, language)

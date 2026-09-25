@@ -109,13 +109,14 @@ wrapped = json.dumps({"text": "Unwrapped from JSON. #AI"}, ensure_ascii=False)
 assert tw._parse_tweet(wrapped, "d").text == "Unwrapped from JSON. #AI"
 print("PASS a model that returns JSON anyway is still unwrapped")
 
-long_en = " ".join(f"Sentence number {i} here." for i in range(1, 40))
+# ~1.5x the limit: a real over-long draft. Far longer is treated as notes (below).
+long_en = " ".join(f"Sentence number {i} here." for i in range(1, 18))
 fitted = tw._parse_tweet(long_en, "d", tw.ENGLISH).text
 assert len(fitted) <= tw.TWEET_CHAR_LIMIT and fitted.endswith("."), len(fitted)
 print(f"PASS an over-long English tweet trims to {len(fitted)} chars (limit {tw.TWEET_CHAR_LIMIT})")
 
 # Chinese has its own, lower ceiling.
-long_zh = "。".join(f"这是第{i}句话用来测试中文的裁切" for i in range(1, 30)) + "。"
+long_zh = "。".join(f"这是第{i}句话用来测试中文的裁切" for i in range(1, 14)) + "。"
 fitted_zh = tw._parse_tweet(long_zh, "d", tw.CHINESE).text
 assert len(fitted_zh) <= tw.CHINESE_CHAR_LIMIT, (len(fitted_zh), tw.CHINESE_CHAR_LIMIT)
 assert tw.weighted_length(fitted_zh) <= 280, tw.weighted_length(fitted_zh)
@@ -179,11 +180,46 @@ assert "response_format" not in c.seen, "JSON mode would fight a bare-text promp
 assert "This tweet's focus: d\n" in c.seen["messages"][0]["content"], "the rotated domain must reach the model"
 print("PASS a plain-text reply is used as-is, and no response_format is sent")
 
-# empty content -> reasoning trace
+# empty content must NOT fall back to the reasoning trace (it got posted once)
 c = with_model("", reasoning=payload)
-t2 = asyncio.run(tw._one_call("d", [], tw.ENGLISH))
-assert t2.text == payload
-print("PASS empty content still falls back to the reasoning trace")
+try:
+    asyncio.run(tw._one_call("d", [], tw.ENGLISH))
+    raise AssertionError("empty content must fail, not borrow the reasoning trace")
+except tw.GenerationError as exc:
+    assert "空內容" in str(exc), exc
+print("PASS empty content fails instead of posting the reasoning trace")
+
+# --- working notes are never posted -------------------------------------------
+# The reply that went public on 2026-09-25, as the model produced it.
+LEAKED = ("1. **Analyze the Request:**\n    * **Role:** Small independent design studio owner.\n"
+          "    * **Platform:** X (Twitter).\n    * **Goal:** Win clients.\n"
+          "2. **Draft 1:** Your homepage has five seconds...\n" + "More planning. " * 400)
+for bad in (LEAKED, LEAKED[:300], "Okay, so the user wants a tweet about landing pages.",
+            "Constraints: under 270 chars. Tone: friendly."):
+    assert tw._looks_like_notes(bad), bad[:60]
+    try:
+        tw._parse_tweet(bad, "d")
+        raise AssertionError(f"notes were accepted as a tweet: {bad[:60]!r}")
+    except tw.GenerationError as exc:
+        assert "不是推文" in str(exc), exc
+c = with_model(LEAKED)
+try:
+    asyncio.run(tw._one_call("d", [], tw.ENGLISH))
+    raise AssertionError("the leaked trace must not become a tweet")
+except tw.GenerationError:
+    pass
+
+GOOD_TWEETS = [
+    "3 signs your site needs a redesign:\n1. It takes a scroll to see what you do.\n"
+    "2. The button says Submit.\n3. It looks different on a phone.\nI build custom sites that fix all three. DMs open.\n#WebDesign",
+    "Your pitch deck isn't a script. Let me say that again: slides back you up, they don't talk for you.\n"
+    "One idea per slide, a headline that states the point.\nI design decks built that way. DM me if that's you.",
+    payload,
+]
+for good in GOOD_TWEETS:
+    assert tw._looks_like_notes(good) == "", (good[:40], tw._looks_like_notes(good))
+    assert tw._parse_tweet(good, "d").text
+print("PASS drafting notes are refused; lists and 'let me' in real tweets still pass")
 
 # --- a rate-limited X_MODEL retries on the fallback model -------------------
 # The 429 that broke the 12:00 post: gemma's shared free pool was exhausted and
