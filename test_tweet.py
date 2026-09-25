@@ -5,6 +5,7 @@ No credentials, no network: run `python test_tweet.py`.
 import asyncio
 import json
 import os
+import pathlib
 import re
 import sys
 import tempfile
@@ -207,5 +208,42 @@ c = with_model("", reasoning=payload)
 t2 = asyncio.run(tw._one_call("d", [], tw.ENGLISH))
 assert t2.text == payload
 print("PASS empty content still falls back to the reasoning trace")
+
+# --- a rate-limited X_MODEL retries on the fallback model -------------------
+# The 429 that broke the 12:00 post: gemma's shared free pool was exhausted and
+# the immediate retry on the same model failed the same way.
+assert tw.X_FALLBACK_MODEL == "openrouter/free", tw.X_FALLBACK_MODEL
+
+class Flaky:
+    def __init__(self): self.models = []
+    async def create(self, **kw):
+        self.models.append(kw["model"])
+        if kw["model"] == tw.X_MODEL:
+            raise RuntimeError("Error code: 429 - temporarily rate-limited upstream")
+        m = types.SimpleNamespace(content=payload, model_extra={})
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=m, finish_reason="stop")])
+
+flaky = Flaky()
+tw.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=flaky))
+tw.X_TWEET_STATE_FILE = pathlib.Path(tempfile.mkdtemp()) / "fallback.json"
+got = asyncio.run(tw.generate_tweet("d"))
+assert got.text == payload, got.text
+assert flaky.models == [tw.X_MODEL, "openrouter/free"], flaky.models
+print("PASS a rate-limited X_MODEL is retried once on openrouter/free")
+
+class Down(Flaky):
+    async def create(self, **kw):
+        self.models.append(kw["model"])
+        raise RuntimeError("429")
+down = Down()
+tw.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=down))
+try:
+    asyncio.run(tw.generate_tweet("d"))
+    raise AssertionError("should have failed")
+except tw.GenerationError:
+    pass
+assert down.models == [tw.X_MODEL, "openrouter/free"], "still exactly two calls"
+print("PASS when both fail it still stops after two calls")
 
 print("\nALL TWEET TESTS PASSED")

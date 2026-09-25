@@ -33,6 +33,11 @@ OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.
 # No fallback to MODEL any more: MODEL is the Telegram chat model and is
 # normally set, so falling back to it would quietly stop tweets using this one.
 X_MODEL = os.environ.get("X_MODEL", "google/gemma-4-26b-a4b-it:free")
+# The retry goes here instead of back to X_MODEL. A single :free model shares
+# one upstream pool with everyone, so when it is rate-limited an immediate retry
+# on it fails too; OpenRouter's free router picks whichever free model is up.
+# Set X_FALLBACK_MODEL to the same value as X_MODEL to retry on it instead.
+X_FALLBACK_MODEL = os.environ.get("X_FALLBACK_MODEL", "openrouter/free").strip() or X_MODEL
 X_REQUEST_TIMEOUT = float(os.environ.get("X_REQUEST_TIMEOUT", "120"))
 X_MAX_TOKENS = int(os.environ.get("X_MAX_TOKENS", "2000"))
 X_TWEET_STATE_FILE = Path(os.environ.get("X_TWEET_STATE_FILE", "x_tweet_state.json"))
@@ -326,14 +331,15 @@ def _parse_tweet(raw: str, domain: str, language: str = ENGLISH) -> Tweet:
     return Tweet(domain=domain, topic=text[:60], text=text, tags=[])
 
 
-async def _one_call(domain: str, recent: list[str], language: str) -> Tweet:
+async def _one_call(domain: str, recent: list[str], language: str,
+                    model: str = X_MODEL) -> Tweet:
     if client is None:
         raise GenerationError("OPENROUTER_API_KEY 沒有設定")
 
     # No response_format here: the prompt asks for bare text, and JSON mode
     # would fight it.
     response = await client.chat.completions.create(
-        model=X_MODEL,
+        model=model,
         messages=[{"role": "user", "content": _build_prompt(language, recent)}],
         temperature=1.0,
         max_tokens=X_MAX_TOKENS,
@@ -363,7 +369,7 @@ async def _one_call(domain: str, recent: list[str], language: str) -> Tweet:
 
 
 async def generate_tweet(domain: str | None = None) -> Tweet:
-    """Generate one tweet, retrying once before giving up."""
+    """Generate one tweet, retrying once (on X_FALLBACK_MODEL) before giving up."""
     state = load_state()
     chosen = domain or take_domain(state)
     recent = recent_tweet_texts(state)
@@ -371,13 +377,15 @@ async def generate_tweet(domain: str | None = None) -> Tweet:
     logger.info("這則用 %s 生成", language)
 
     last_error: Exception | None = None
-    for attempt in (1, 2):
+    for attempt, model in enumerate((X_MODEL, X_FALLBACK_MODEL), start=1):
         try:
-            tweet = await _one_call(chosen, recent, language)
+            tweet = await _one_call(chosen, recent, language, model)
         except Exception as exc:  # noqa: BLE001 - retry once, then report
             last_error = exc
-            logger.warning("推文生成第 %d 次失敗：%s", attempt, exc, exc_info=True)
+            logger.warning("推文生成第 %d 次失敗（%s）：%s", attempt, model, exc, exc_info=True)
             continue
+        if attempt > 1:
+            logger.info("改用備用模型 %s 生成成功", model)
 
         state.setdefault("history", []).append(
             {
