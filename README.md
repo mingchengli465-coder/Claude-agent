@@ -162,9 +162,18 @@ Four separate messages, so each can be long-pressed and copied on its own:
 
 ## Topic selection
 
-Six domains rotate one per day, so no single area takes over the account:
+Every note promotes the 代做 service (PPT, résumés, copywriting, Excel for
+university students) and answers the two objections a reader will have:
+"why not just use 豆包/千问?" and "why not use Claude myself?" (overseas
+card, overseas phone number, a fiddly sign-up). Six service lines rotate one per note, so the account
+doesn't post the same pitch every day:
 
-> 搞钱与职场 · 消费观 · 感情与生活选择 · AI 与未来 · 年轻人现状 · 反常识观点
+> 课程汇报 PPT · 简历优化排版 · 毕业答辩 PPT · Excel 表格整理 · 比赛与路演 PPT · 小红书 / 公众号文案
+
+What the notes may say about the service comes from one block of text, and the
+model is told it can't add anything to it. To change the offer (add prices,
+drop a line), set `XHS_SERVICE_BRIEF` in Railway. The default is
+`DEFAULT_SERVICE_BRIEF` in `xhs.py`.
 
 Topics written in the last `XHS_AVOID_DAYS` days (7 by default) are passed back
 to the model as things not to repeat — including "the same thing said
@@ -172,20 +181,27 @@ differently". The history lives in `xhs_state.json`.
 
 ## Content rules
 
-Four rules are written into every request, and the model is told that breaking
+Six rules are written into every request, and the model is told that breaking
 them means the note is a failure:
 
-- no attacks on any group — gender, region, ethnicity, occupation, age, and so on
-- no invented news, statistics, study findings or quotes from real people
-  (personal anecdotes are fine; anything dressed up as fact is not)
-- no medical advice, no investment advice
-- nothing political
+- no attacks on any group, and no running down competitors. Comparisons with
+  豆包/千问 must concede what they do well first, then speak from "my
+  experience" — no invented benchmarks (China's 广告法 bans disparaging
+  other products)
+- nothing invented: no order counts, reviews, customer quotes, pass rates or
+  case stories, and nothing about the service beyond the brief
+- no 作业/论文代写 or 代考, and no promises of grades, passing a defence or a job
+- no off-platform contact of any kind (微信, QQ, 闲鱼, links, QR codes, 加V) —
+  小红书 throttles or bans accounts for it. Only "评论区留言" or "私信"
+- Claude, Codex, 豆包 and 千问 may be named, only as the brief puts it; never
+  翻墙/梯子/VPN, and never selling accounts, top-ups or relay access — only 代做
+- no medical or investment advice, nothing political
 
 ## The cover
 
 Rendered locally with Pillow at 1080×1440: yellow `#FFE14D` ground, black
 headline, the argumentative question in a red `#E8322E` rounded box, and a
-black 「真实经历」 tag in the top-left corner.
+black 「接单中」 tag in the top-left corner (`XHS_BADGE_TEXT` to change it).
 
 The font (**Noto Sans SC**) is committed to `fonts/` rather than taken from the
 system — a server without a CJK font renders every character as tofu. One
