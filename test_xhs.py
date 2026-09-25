@@ -406,4 +406,33 @@ except xhs.GenerationError as exc:
     assert "截断" in str(exc) and "XHS_MAX_TOKENS" in str(exc), exc
 print("PASS finish_reason=length is reported as truncation, pointing at XHS_MAX_TOKENS")
 
+# --- the notes promote the 代做 service, and the example obeys its own rules --
+ex = xhs.EXAMPLE_NOTE
+assert len(ex["title"]) <= 20, len(ex["title"])
+assert 300 <= len(ex["body"]) <= 600, len(ex["body"])
+assert 6 <= len(ex["tags"]) <= 8 and not any(t.startswith("#") for t in ex["tags"])
+assert len(ex["cover"]["main"]) == 2 and all(6 <= len(m) <= 10 for m in ex["cover"]["main"]), ex["cover"]["main"]
+assert len(ex["cover"]["question"]) <= 15
+assert len(ex["cover"]["small"]) == 3 and all(8 <= len(m) <= 14 for m in ex["cover"]["small"]), ex["cover"]["small"]
+banned = ["微信", "QQ", "闲鱼", "淘宝", "加V", "二维码", "http", "ChatGPT", "Claude", "Kimi", "豆包",
+          "已帮", "好评", "通过率"]
+blob = xhs.EXAMPLE_JSON
+for word in banned:
+    assert word not in blob, f"example breaks its own rules: {word}"
+assert "评论区留言" in ex["body"] and "私信" in ex["body"], "example must show the allowed call to action"
+print(f"PASS the example note obeys every rule it teaches (body {len(ex['body'])} chars)")
+
+prompt = xhs._build_user_prompt(xhs.DOMAINS[0], [])
+assert xhs.SERVICE_BRIEF in prompt, "the model must see the service it is selling"
+assert "论文代写" in prompt and "作业代写" in prompt, "the no-ghostwriting line must reach the model"
+assert xhs.DOMAINS[0] in prompt
+assert xhs.EXAMPLE_JSON in prompt
+assert "{" not in xhs.SERVICE_BRIEF, "a brace in the brief would break nothing, but keep it plain"
+# the example parses through the real pipeline
+note = xhs._normalize(json.loads(xhs.EXAMPLE_JSON), xhs.DOMAINS[0])
+assert note.title == ex["title"] and note.cover_main == ex["cover"]["main"]
+assert xhs.BADGE_TEXT == "接单中"
+assert all("PPT" in d or "简历" in d or "Excel" in d or "文案" in d for d in xhs.DOMAINS), xhs.DOMAINS
+print(f"PASS the prompt carries the service brief and rotates {len(xhs.DOMAINS)} service lines")
+
 print("\nALL XHS TESTS PASSED")
