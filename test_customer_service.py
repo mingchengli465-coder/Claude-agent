@@ -303,10 +303,14 @@ print("PASS overseas customers are told they can pay by Alipay or card")
 
 # --- DeepSeek (OpenAI-compatible, JSON mode) ----------------------------------------------------------
 class FakeCompletions:
-    def __init__(self, content, finish="stop"): self.content, self.finish, self.kwargs = content, finish, None
+    """Answers with `content`, or with each item of a list in turn."""
+    def __init__(self, content, finish="stop"):
+        self.content, self.finish, self.kwargs, self.calls = content, finish, None, []
     async def create(self, **kw):
         self.kwargs = kw
-        m = types.SimpleNamespace(content=self.content)
+        self.calls.append(kw)
+        content = self.content.pop(0) if isinstance(self.content, list) else self.content
+        m = types.SimpleNamespace(content=content)
         return types.SimpleNamespace(choices=[types.SimpleNamespace(message=m, finish_reason=self.finish)])
 
 def deepseek_with(content, finish="stop"):
@@ -343,11 +347,26 @@ try:
 except RuntimeError:
     pass
 
-# end to end: garbage from the model hands off instead of reaching the customer
+# DeepSeek's JSON mode sometimes answers with nothing at all: ask again in plain mode.
+good = json.dumps({"reply": "AI 客服国内 300–400 元搭建，之后每月 99 元～", "handoff": False, "reason": "",
+                   "summary": "AI客服｜未说明｜未说明", "intent": "interested"}, ensure_ascii=False)
+r, fc = deepseek_with(["", good])
+d = run(r(system, [{"role": "user", "content": "多少钱"}]))
+assert d.reply.startswith("AI 客服国内") and not d.handoff, d
+assert len(fc.calls) == 2 and "response_format" in fc.calls[0] and "response_format" not in fc.calls[1]
+# ...and a plain-mode answer that isn't JSON is still an answer, not a handoff.
+r, fc = deepseek_with(["", "```\n国内商户 300–400 元，海外 500–600 元～\n```"])
+assert run(r(system, [{"role": "user", "content": "多少钱"}])) == cs.Decision(reply="国内商户 300–400 元，海外 500–600 元～")
+# Only when both attempts come back empty does the owner step in.
 svc, model, owner, clock, sent = fresh()
-svc.responder, _ = deepseek_with("抱歉我无法回答")
+svc.responder, fc = deepseek_with(["", ""])
 assert run(svc.handle(msg("在吗"))) == cs.HANDOFF_TEXT and "AI 出错" in owner.notices[-1][1]
-print("PASS DeepSeek uses JSON mode; fences are tolerated, anything unusable hands off")
+# end to end: an empty JSON-mode answer no longer lands on the owner
+svc, model, owner, clock, sent = fresh()
+svc.responder, fc = deepseek_with(["", good])
+assert run(svc.handle(msg("多少钱"))).startswith("AI 客服国内")
+assert all("需要你接手" not in n for _, n in owner.notices), owner.notices
+print("PASS DeepSeek uses JSON mode; an empty answer is retried in plain mode, fences are tolerated")
 
 # --- a customer never waits on a hung model ----------------------------------------------------------
 class HangingCompletions:

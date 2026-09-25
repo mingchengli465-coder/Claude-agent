@@ -338,7 +338,12 @@ def parse_decision(text: str) -> Decision:
 
 
 class OpenAICompatibleResponder:
-    """DeepSeek (or any OpenAI-compatible API) with JSON mode."""
+    """DeepSeek (or any OpenAI-compatible API) with JSON mode.
+
+    DeepSeek's JSON mode sometimes comes back with an empty message. Rather than
+    hand every such customer to the owner, a failed JSON-mode call is retried
+    once as a plain chat call, and a plain answer that isn't JSON is used as the
+    reply itself (the keyword safety net in CustomerService still applies)."""
 
     def __init__(self, api_key: str, model: str = CS_DEEPSEEK_MODEL, base_url: str = CS_DEEPSEEK_BASE_URL):
         from openai import AsyncOpenAI  # only needed when this provider is chosen
@@ -346,21 +351,37 @@ class OpenAICompatibleResponder:
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=60.0, max_retries=1)
         self.model = model
 
-    async def __call__(self, system: str, messages: list[dict]) -> Decision:
+    async def _ask(self, system: str, messages: list[dict], json_mode: bool) -> str:
+        extra = {"response_format": {"type": "json_object"}} if json_mode else {}
         response = await asyncio.wait_for(self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": system + JSON_FORMAT_SUFFIX}] + messages,
-            response_format={"type": "json_object"},
             temperature=0.3,
             # Room for a model that thinks before answering; the reply itself is short.
             max_tokens=4000,
+            **extra,
         ), CS_REQUEST_TIMEOUT)
         if not response.choices:
             raise RuntimeError("模型返回了空的 choices")
         choice = response.choices[0]
         if getattr(choice, "finish_reason", "") == "length":
             raise RuntimeError("模型回复被截断（max_tokens）")
-        return parse_decision(choice.message.content or "")
+        return (choice.message.content or "").strip()
+
+    async def __call__(self, system: str, messages: list[dict]) -> Decision:
+        try:
+            return parse_decision(await self._ask(system, messages, json_mode=True))
+        except ValueError as exc:  # empty or not JSON; timeouts and API errors go up as before
+            logger.warning("JSON 模式没拿到可用的回复（%s），换普通模式再问一次", str(exc)[:120])
+        text = await self._ask(system, messages, json_mode=False)
+        try:
+            return parse_decision(text)
+        except ValueError:
+            if not text:
+                raise
+            reply = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", text).strip()
+            logger.warning("模型没按 JSON 格式回答，直接用它的原话回复客户")
+            return Decision(reply=reply[:1500])
 
 
 # --------------------------------------------------------------------------- #
