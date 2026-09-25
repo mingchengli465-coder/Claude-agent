@@ -32,6 +32,8 @@
   .ask span { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 14px; color: #3a3a3c; }
   pre { background: #1d1d1f; color: #f5f5f7; padding: 14px 16px; border-radius: 12px; overflow-x: auto; font-size: 13px; margin: 0; }
   .contact a { color: var(--c); font-weight: 600; }
+  .socials { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .socials .social span { margin-left: 6px; font-weight: 400; color: var(--muted); }
   footer { padding: 40px 0 120px; color: var(--muted); font-size: 13px; }
   html:not([data-en]) [lang-en], html[data-en] [lang-zh] { display: none !important; }
 </style>
@@ -102,6 +104,7 @@
     <p lang-en>Ask the assistant in the corner, or reach me directly:</p>
     <p style="display: {{WECHAT_DISPLAY}}"><span lang-zh>微信：</span><span lang-en>WeChat: </span><b>{{WECHAT_TEXT}}</b></p>
     <p style="display: {{OWNER_TG_DISPLAY}}">Telegram：<a href="{{OWNER_TG}}" target="_blank" rel="noopener">{{OWNER_TG_HANDLE}}</a></p>
+    <p class="socials" style="display: {{SOCIAL_DISPLAY}}">{{SOCIAL_LINKS}}</p>
   </section>
 
   <footer>© {{TITLE}}</footer>

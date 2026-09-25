@@ -240,6 +240,11 @@
   .wx:hover { background: rgba(255,255,255,.09); }
   .wx small { font-size: 13px; color: var(--warm); letter-spacing: 0; }
   .wx.done small { color: #86efac; }
+  .socials { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+  .social { flex: 1 1 220px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 22px; border-radius: 20px; transition: background .2s; min-width: 0; }
+  .social:hover { background: rgba(255,255,255,.06); }
+  .social b { font-weight: 500; font-size: 15px; }
+  .social span { color: var(--muted); font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* faq */
   .faq { display: grid; gap: 0; max-width: 900px; }
@@ -525,6 +530,7 @@
         <div class="sublink" style="display: {{CONTACT_DISPLAY}}"><a href="{{CONTACT}}" target="_blank" rel="noopener" data-i="botLink">也可以在 Telegram 上找它 →</a></div>
       </div>
     </div>
+    <div class="socials reveal" style="display: {{SOCIAL_DISPLAY}}">{{SOCIAL_LINKS}}</div>
   </section>
 
   <!-- faq -->
