@@ -63,6 +63,9 @@ async def main():
         assert r.headers["Access-Control-Allow-Origin"] == "*"
         assert "textContent" in js and "innerHTML = text" not in js, "messages are never parsed as HTML"
         assert (await client.get("/healthz")).status == 200
+        r = await client.get("/favicon.ico")
+        assert r.status == 200 and "svg" in r.headers["Content-Type"]
+        assert 'rel="icon"' in page, "the demo page has its own icon"
         for font in ("instrument-serif-latin-400-italic.woff2", "barlow-latin-300-normal.woff2", "serif-sc.woff2", "serif-tc.woff2"):
             assert f"/fonts/{font}" in site, font
             r = await client.get(f"/fonts/{font}")
