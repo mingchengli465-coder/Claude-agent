@@ -379,6 +379,16 @@ The prompt forbids invented clients, projects, results, numbers, reviews and
 quotes; prices or deadlines not in the brief; and naming or knocking other
 companies. No links or @mentions.
 
+## Telegram link
+
+Set `X_TELEGRAM_LINK` (`https://t.me/name`, `@name` or `name`) and every tweet
+gets a reply underneath with that link. The link goes in a reply rather than the
+tweet because X shows posts containing links to fewer people. The Telegram
+notification says whether the reply went up; if it fails, the tweet is still
+reported as posted. Change the wording with `X_LINK_REPLY_TEXT` (`{link}` is
+filled in). Note that the reply is a second post, and on X's pay-per-use API a
+post with a link costs more than one without.
+
 ## Language
 
 **English only** by default (`X_ENGLISH_RATIO=1.0`), since the clients are
@@ -413,6 +423,7 @@ of a usable object, because a tweet's "done" looks nothing like a note's.
 | `X_ACCESS_TOKEN_SECRET`  | to post  | —                  |                                               |
 | `X_MODEL`                | no       | `google/gemma-4-26b-a4b-it:free` | Model used for tweets. No longer falls back to `MODEL` |
 | `X_SERVICE_BRIEF`        | no       | `DEFAULT_SERVICE_BRIEF` | Everything a tweet may say about the service |
+| `X_TELEGRAM_LINK`        | no       | —                  | Telegram link replied under every tweet; empty turns it off |
 | `X_ENGLISH_RATIO`        | no       | `1.0`              | Share of English tweets; the rest are Simplified Chinese |
 | `X_DAILY_TIMES`          | no       | `12:00,20:00`      | Daily posting times                           |
 | `X_TIMEZONE`             | no       | `Asia/Taipei`      | Timezone for those times                      |

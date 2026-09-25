@@ -86,6 +86,13 @@ Pricing: quoted per project.
 How to start: send me a DM."""
 X_SERVICE_BRIEF = os.environ.get("X_SERVICE_BRIEF", "").strip() or DEFAULT_SERVICE_BRIEF
 
+# Posted as a reply under every tweet, so the tweet itself stays link-free (X
+# shows posts with links to fewer people). Empty X_TELEGRAM_LINK turns it off.
+# Accepts https://t.me/name, t.me/name, @name or just name.
+X_TELEGRAM_LINK = os.environ.get("X_TELEGRAM_LINK", "").strip()
+DEFAULT_LINK_REPLY_TEXT = "Have a website or deck in mind? Message me on Telegram:\n{link}"
+X_LINK_REPLY_TEXT = os.environ.get("X_LINK_REPLY_TEXT", "").strip() or DEFAULT_LINK_REPLY_TEXT
+
 client = AsyncOpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url=OPENROUTER_BASE_URL,
@@ -487,3 +494,36 @@ def _publish_sync(text: str) -> str:
 async def publish(tweet: Tweet) -> str:
     """Post the tweet and return its URL. tweepy is blocking, so use a thread."""
     return await asyncio.to_thread(_publish_sync, tweet.full_text())
+
+
+def telegram_link(raw: str | None = None) -> str:
+    """Normalise X_TELEGRAM_LINK to https://t.me/name, or "" when unset."""
+    value = (X_TELEGRAM_LINK if raw is None else raw).strip()
+    if not value:
+        return ""
+    value = re.sub(r"^(https?://)?(www\.)?(t\.me|telegram\.me)/", "", value, flags=re.I)
+    value = value.lstrip("@").strip("/ ")
+    return f"https://t.me/{value}" if value else ""
+
+
+def link_reply_text() -> str:
+    """The reply posted under each tweet, or "" when no link is configured."""
+    link = telegram_link()
+    return X_LINK_REPLY_TEXT.replace("{link}", link) if link else ""
+
+
+def _reply_sync(tweet_id: str, text: str) -> str:
+    client_ = build_x_client()
+    response = client_.create_tweet(text=text, in_reply_to_tweet_id=tweet_id)
+    reply_id = str(response.data["id"])
+    logger.info("已在 %s 底下回覆 Telegram 連結（%s）", tweet_id, reply_id)
+    return reply_id
+
+
+async def post_link_reply(tweet_url_: str) -> str | None:
+    """Reply under the posted tweet with the Telegram link. None when not configured."""
+    text = link_reply_text()
+    if not text:
+        return None
+    tweet_id = tweet_url_.rstrip("/").rsplit("/", 1)[-1]
+    return await asyncio.to_thread(_reply_sync, tweet_id, text)

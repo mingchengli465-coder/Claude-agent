@@ -333,6 +333,9 @@ TWEET_PUBLISH_FAILED_TEXT = (
     "😵 推文發布失敗。\n\n{error}\n\n———\n這則的內容，要手動發的話：\n\n{text}"
 )
 TWEET_SENT_TEXT = "🚀 已發推（{domain}）\n\n{text}\n\n———\n{url}"
+TWEET_LINK_REPLY_OK = "\n\n💬 已在底下回覆 Telegram 連結"
+# The tweet itself is up, so this is a warning, not a failure.
+TWEET_LINK_REPLY_FAILED = "\n\n⚠️ 推文已發出，但底下的 Telegram 連結回覆失敗：{error}"
 TWEET_PAUSED_TEXT = "⏸ 自動發推已暫停。/resume 恢復。"
 TWEET_RESUMED_TEXT = "▶️ 自動發推已恢復。"
 TWEET_ALREADY_PAUSED = "⏸ 本來就是暫停狀態。/resume 恢復。"
@@ -363,9 +366,18 @@ async def produce_and_post_tweet(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         return
 
     logger.info("推文已發布：%s", url)
+
+    reply_note = ""
+    try:
+        if await tweet_mod.post_link_reply(url):
+            reply_note = TWEET_LINK_REPLY_OK
+    except Exception as exc:  # noqa: BLE001 - the tweet is already out
+        logger.exception("Telegram 連結回覆失敗")
+        reply_note = TWEET_LINK_REPLY_FAILED.format(error=exc)
+
     await context.bot.send_message(
         chat_id=chat_id,
-        text=TWEET_SENT_TEXT.format(domain=item.domain, text=full, url=url),
+        text=TWEET_SENT_TEXT.format(domain=item.domain, text=full, url=url) + reply_note,
     )
 
 
