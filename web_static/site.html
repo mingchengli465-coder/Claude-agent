@@ -919,7 +919,9 @@
     feedVisible = termVisible = true;
   }
 
-  apply(saved || navigator.language || "zh-CN");
+  // Chinese unless the visitor picked another language; a Traditional-Chinese
+  // browser gets 繁體, everyone else 简体. English only by choice.
+  apply(saved || (indexFor(navigator.language) === 1 ? "zh-TW" : "zh-CN"));
   try { sky(); } catch (e) {}
 
   document.querySelectorAll(".langs button").forEach(function (b) {
