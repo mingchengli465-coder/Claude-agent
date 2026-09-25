@@ -17,7 +17,7 @@ catalog = cs.load_catalog(pathlib.Path(__file__).with_name("products.yaml"))
 import yaml
 data = yaml.safe_load(pathlib.Path(__file__).with_name("products.yaml").read_text(encoding="utf-8"))
 names = [s["名称"] for s in data["服务"]]
-assert names == ["写代码", "做 PPT", "写文案 / 小红书文案", "做简单网站", "帮商户搭建 AI 客服"], names
+assert names == ["写代码", "做 PPT", "写文案 / 小红书文案", "做简单网站", "帮商户搭建 AI 客服", "帮你装好 Claude Code / Codex"], names
 for s in data["服务"]:
     for field in ("说明", "价格区间", "交付周期", "需要客户提供"):
         assert field in s, (s["名称"], field)
@@ -248,7 +248,7 @@ assert cs.detect_lang("你好，想做PPT") == "zh"
 assert cs.detect_lang("Hi, I need a pitch deck") == "en"
 assert cs.detect_lang("Bonjour, je voudrais un site") == "en", "non-Chinese falls back to the English lines"
 assert cs.detect_lang("👍👍 123") == ""
-assert "客户写中文就用简体中文，写英文就用英文" in system and "CNY" in system
+assert "写繁体中文就用繁体，写英文就用英文" in system and "CNY" in system
 print("PASS the model is told to answer in the customer's language, prices in CNY")
 
 svc, model, owner, clock, sent = fresh()

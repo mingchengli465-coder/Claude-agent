@@ -8,6 +8,7 @@
  *   data-color="#e8543a"        主色
  *   data-welcome="你好～"        开场白
  *   data-open="true"            打开页面就展开窗口
+ *   data-lang="zh-TW"           语言（不写就跟网页 / 浏览器）：简体、繁體、English
  */
 (function () {
   "use strict";
@@ -22,35 +23,57 @@
   var base = script && script.src ? new URL(script.src, location.href).origin : location.origin;
   var cfg = (script && script.dataset) || {};
 
-  var zh = /^zh/i.test(navigator.language || "");
-  var T = zh ? {
-    title: "AI 客服",
-    status: "在线 · 一般几秒内回复",
-    welcome: "你好呀 👋 我是 AI 助理，想了解什么直接问我～价格、怎么下单、要多久都可以问。",
-    placeholder: "输入消息…",
-    send: "发送",
-    error: "网络有点问题，请稍后再试 🙏",
-    slow: "消息有点多啦，稍等一下再发哦～",
-    owner: "本人",
-    open: "打开聊天",
-    close: "关闭",
-    powered: "AI 客服由 vinc的ai铺子 搭建"
-  } : {
-    title: "AI Assistant",
-    status: "Online · usually replies in seconds",
-    welcome: "Hi there 👋 I'm the AI assistant. Ask me anything: prices, how to order, how long it takes.",
-    placeholder: "Type a message…",
-    send: "Send",
-    error: "Connection problem, please try again in a moment 🙏",
-    slow: "That's a lot of messages, please wait a moment.",
-    owner: "Owner",
-    open: "Open chat",
-    close: "Close",
-    powered: "AI assistant built by vinc's AI shop"
+  var TEXTS = {
+    hans: {
+      title: "AI 客服",
+      status: "在线 · 一般几秒内回复",
+      welcome: "你好呀 👋 我是 AI 助理，想了解什么直接问我～价格、怎么下单、要多久都可以问。",
+      placeholder: "输入消息…",
+      send: "发送",
+      error: "网络有点问题，请稍后再试 🙏",
+      slow: "消息有点多啦，稍等一下再发哦～",
+      owner: "本人",
+      open: "打开聊天",
+      close: "关闭",
+      powered: "AI 客服由 vinc的ai铺子 搭建"
+    },
+    hant: {
+      title: "AI 客服",
+      status: "在線 · 一般幾秒內回覆",
+      welcome: "你好 👋 我是 AI 助理，想了解什麼直接問我～價格、怎麼下單、要多久都可以問。",
+      placeholder: "輸入訊息…",
+      send: "傳送",
+      error: "網路有點問題，請稍後再試 🙏",
+      slow: "訊息有點多囉，稍等一下再傳～",
+      owner: "本人",
+      open: "開啟聊天",
+      close: "關閉",
+      powered: "AI 客服由 vinc的ai鋪子 搭建"
+    },
+    en: {
+      title: "AI Assistant",
+      status: "Online · usually replies in seconds",
+      welcome: "Hi there 👋 I'm the AI assistant. Ask me anything: prices, how to order, how long it takes.",
+      placeholder: "Type a message…",
+      send: "Send",
+      error: "Connection problem, please try again in a moment 🙏",
+      slow: "That's a lot of messages, please wait a moment.",
+      owner: "Owner",
+      open: "Open chat",
+      close: "Close",
+      powered: "AI assistant built by vinc's AI shop"
+    }
   };
-  var title = cfg.title || T.title;
+  // "zh-TW", "zh-HK", "zh-Hant" -> Traditional; other Chinese -> Simplified; the rest -> English.
+  function pickLang(tag) {
+    tag = String(tag || "").toLowerCase();
+    if (!/^zh/.test(tag)) return "en";
+    return /hant|tw|hk|mo/.test(tag) ? "hant" : "hans";
+  }
+  var langTag = cfg.lang || document.documentElement.lang || navigator.language || "";
+  var lang = pickLang(langTag);
+  var T = TEXTS[lang];
   var color = /^#[0-9a-f]{3,8}$/i.test(cfg.color || "") ? cfg.color : "#e8543a";
-  var welcome = cfg.welcome || T.welcome;
 
   // One random id per browser, so the conversation survives a page reload.
   function visitorId() {
@@ -116,13 +139,18 @@
   var panel = $(".panel"), btn = $(".btn"), badge = $(".badge"), log = $(".log"),
       typing = $(".typing"), input = $("textarea"), sendBtn = $(".send"), foot = $(".foot a");
   host.style.setProperty("--c", color);
-  $(".name").textContent = title;
-  $(".status").textContent = T.status;
-  $(".x").setAttribute("aria-label", T.close);
-  btn.setAttribute("aria-label", T.open);
-  input.placeholder = T.placeholder;
-  sendBtn.textContent = T.send;
-  foot.textContent = T.powered;
+  var welcomeBubble = null;
+  function label() {
+    $(".name").textContent = cfg.title || T.title;
+    $(".status").textContent = T.status;
+    $(".x").setAttribute("aria-label", T.close);
+    btn.setAttribute("aria-label", T.open);
+    input.placeholder = T.placeholder;
+    sendBtn.textContent = T.send;
+    foot.textContent = T.powered;
+    if (welcomeBubble && !cfg.welcome) welcomeBubble.lastChild.nodeValue = T.welcome;
+  }
+  label();
   foot.href = base + "/";
 
   var seen = {}, cursor = 0, loaded = false, busy = false, unread = 0, pollTimer = null, hasHistory = false;
@@ -142,6 +170,7 @@
     }
     div.appendChild(document.createTextNode(text));
     log.insertBefore(div, typing);
+    if (quiet && id == null && !welcomeBubble) welcomeBubble = div;
     log.scrollTop = log.scrollHeight;
     if (!quiet && !panel.classList.contains("open") && role !== "customer" && role !== "err") {
       unread++;
@@ -207,7 +236,7 @@
     api("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ v: visitor, text: text.slice(0, 1000), lang: navigator.language || "" })
+      body: JSON.stringify({ v: visitor, text: text.slice(0, 1000), lang: langTag })
     }).then(function (data) {
       if (data.__status === 429) add("err", T.slow);
       else if (data.__status >= 400) add("err", T.error);
@@ -223,6 +252,13 @@
   }
 
   window.aiChatOpen = function () { setOpen(true); };
+  // A page with its own language switch keeps the chat window in step.
+  window.aiChatSetLang = function (tag) {
+    langTag = tag;
+    lang = pickLang(tag);
+    T = TEXTS[lang];
+    label();
+  };
   btn.addEventListener("click", function () { setOpen(!panel.classList.contains("open")); });
   $(".x").addEventListener("click", function () { setOpen(false); });
   sendBtn.addEventListener("click", send);
@@ -236,7 +272,7 @@
 
   function mount() {
     document.body.appendChild(host);
-    add("bot", welcome, null, true);
+    add("bot", cfg.welcome || T.welcome, null, true);
     // A returning visitor sees replies that came in while they were away.
     poll().then(function () {
       if (cfg.open === "true") setOpen(true);
