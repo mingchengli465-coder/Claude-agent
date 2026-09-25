@@ -275,8 +275,9 @@ This tweet's focus: {domain}
 
 Rules:
 - Write entirely in {language}.
-- If English: under 270 characters total, including hashtags.
-- If Chinese: under 130 Chinese characters total, including hashtags.
+- If English: use the full length. Aim for 220\u2013270 characters including hashtags, never over 270.
+- If Chinese: aim for 100\u2013130 Chinese characters including hashtags, never over 130.
+- Fill that length with substance: 4\u20136 short lines, e.g. the problem, why it costs the client, what you'd do instead, then the call to action. No filler.
 - Sound like a real designer talking to potential clients, not an ad agency or a press release.
 - Pick ONE angle: a design tip a client can use today, a common mistake you fix, what "custom" gets you that a template doesn't, a sign someone needs a redesign, or a direct offer.
 - Every tweet must make it clear you take on this kind of work, and end with a short call to action such as "DMs open." or "DM me if that's you."
