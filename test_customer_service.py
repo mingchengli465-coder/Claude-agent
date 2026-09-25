@@ -290,4 +290,52 @@ print("PASS an existing conversation database gains the language column without 
 assert "Alipay" in catalog and "银行卡" in catalog
 print("PASS overseas customers are told they can pay by Alipay or card")
 
+# --- DeepSeek (OpenAI-compatible, JSON mode) ----------------------------------------------------------
+class FakeCompletions:
+    def __init__(self, content, finish="stop"): self.content, self.finish, self.kwargs = content, finish, None
+    async def create(self, **kw):
+        self.kwargs = kw
+        m = types.SimpleNamespace(content=self.content)
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=m, finish_reason=self.finish)])
+
+def deepseek_with(content, finish="stop"):
+    r = cs.OpenAICompatibleResponder.__new__(cs.OpenAICompatibleResponder)
+    r.model = cs.CS_DEEPSEEK_MODEL
+    fc = FakeCompletions(content, finish)
+    r.client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=fc))
+    return r, fc
+
+r, fc = deepseek_with(json.dumps({"reply": "可以的～几页呀？", "handoff": False, "reason": "",
+                                  "summary": "PPT｜未说明｜未说明"}, ensure_ascii=False))
+d = run(r(system, [{"role": "user", "content": "想做PPT"}]))
+assert d == cs.Decision(reply="可以的～几页呀？", handoff=False, reason="", summary="PPT｜未说明｜未说明"), d
+kw = fc.kwargs
+assert kw["model"] == "deepseek-flash" and kw["response_format"] == {"type": "json_object"}
+assert kw["messages"][0]["role"] == "system" and kw["messages"][0]["content"].startswith(system)
+assert "JSON" in kw["messages"][0]["content"], "json_object mode needs the word JSON in the prompt"
+assert kw["messages"][1:] == [{"role": "user", "content": "想做PPT"}]
+
+# tolerant of fences and chatter, strict about the shape
+assert cs.parse_decision('```json\n{"reply":"hi","handoff":false,"reason":"","summary":""}\n```').reply == "hi"
+assert cs.parse_decision('好的：{"reply":"","handoff":"true","reason":"bargain","summary":"x"}').handoff is True
+assert cs.parse_decision('{"reply":"x","handoff":false,"reason":"made_up","summary":""}').reason == ""
+for bad in ("我不知道", "[1, 2]", ""):
+    try:
+        cs.parse_decision(bad)
+        raise AssertionError(f"accepted {bad!r}")
+    except ValueError:
+        pass
+r, fc = deepseek_with('{"reply": "被截', finish="length")
+try:
+    run(r(system, [{"role": "user", "content": "x"}]))
+    raise AssertionError("a truncated reply must not be used")
+except RuntimeError:
+    pass
+
+# end to end: garbage from the model hands off instead of reaching the customer
+svc, model, owner, clock, sent = fresh()
+svc.responder, _ = deepseek_with("抱歉我无法回答")
+assert run(svc.handle(msg("在吗"))) == cs.HANDOFF_TEXT and "AI 出错" in owner.notices[-1][1]
+print("PASS DeepSeek uses JSON mode; fences are tolerated, anything unusable hands off")
+
 print("\nALL CUSTOMER SERVICE TESTS PASSED")

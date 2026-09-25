@@ -33,6 +33,10 @@ import yaml
 logger = logging.getLogger(__name__)
 
 CS_MODEL = os.environ.get("CS_MODEL", "claude-opus-5")
+# DeepSeek is used when there's no Anthropic key: it can be topped up with Alipay.
+# deepseek-chat / deepseek-reasoner were retired in July 2026; deepseek-flash replaced them.
+CS_DEEPSEEK_MODEL = os.environ.get("CS_DEEPSEEK_MODEL", "deepseek-flash")
+CS_DEEPSEEK_BASE_URL = os.environ.get("CS_DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 CS_EFFORT = os.environ.get("CS_EFFORT", "low")
 CS_PRODUCTS_PATH = Path(os.environ.get("CS_PRODUCTS_PATH", Path(__file__).parent / "products.yaml"))
 CS_DB_PATH = Path(os.environ.get("CS_DB_PATH", "cs.sqlite3"))
@@ -243,6 +247,76 @@ class ClaudeResponder:
             reason=str(data.get("reason") or ""),
             summary=str(data.get("summary") or "").strip(),
         )
+
+
+# Models without schema-enforced output are told the shape in words, with an
+# example; json_object mode then keeps the reply to a single JSON object.
+JSON_FORMAT_SUFFIX = """
+
+【输出格式】
+只输出一个 JSON 对象，不要任何其他文字，不要用 ``` 包起来。字段：
+- reply：发给客户的话（字符串）；handoff 为 true 时写空字符串 ""
+- handoff：要不要转给本人（true / false）
+- reason：转给本人的原因，只能是 "order_or_payment"、"bargain"、"complex"、"out_of_scope"、"wants_human" 之一；不转就写 ""
+- summary：需求摘要，格式「做什么｜截止时间｜预算」，不知道的写"未说明"
+
+示例（内容不要照抄）：
+{"reply": "可以的～想做几页、什么时候要呀？", "handoff": false, "reason": "", "summary": "课程汇报PPT｜未说明｜未说明"}"""
+
+
+def parse_decision(text: str) -> Decision:
+    """A Decision from a model's JSON reply; raises on anything unusable, which
+    CustomerService turns into a handoff rather than a bad message to a customer."""
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", text).strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end <= start:
+            raise ValueError(f"模型没有返回 JSON：{text[:200]!r}")
+        data = json.loads(text[start:end + 1])
+    if not isinstance(data, dict):
+        raise ValueError(f"模型返回的不是 JSON 对象：{text[:200]!r}")
+    reason = str(data.get("reason") or "")
+    if reason not in DECISION_SCHEMA["properties"]["reason"]["enum"]:
+        reason = ""
+    handoff = data.get("handoff")
+    if isinstance(handoff, str):
+        handoff = handoff.strip().lower() in ("true", "1", "yes", "是")
+    return Decision(
+        reply=str(data.get("reply") or "").strip(),
+        handoff=bool(handoff),
+        reason=reason,
+        summary=str(data.get("summary") or "").strip(),
+    )
+
+
+class OpenAICompatibleResponder:
+    """DeepSeek (or any OpenAI-compatible API) with JSON mode."""
+
+    def __init__(self, api_key: str, model: str = CS_DEEPSEEK_MODEL, base_url: str = CS_DEEPSEEK_BASE_URL):
+        from openai import AsyncOpenAI  # only needed when this provider is chosen
+
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=60.0, max_retries=1)
+        self.model = model
+
+    async def __call__(self, system: str, messages: list[dict]) -> Decision:
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "system", "content": system + JSON_FORMAT_SUFFIX}] + messages,
+            response_format={"type": "json_object"},
+            temperature=0.3,
+            # Room for a model that thinks before answering; the reply itself is short.
+            max_tokens=4000,
+        )
+        if not response.choices:
+            raise RuntimeError("模型返回了空的 choices")
+        choice = response.choices[0]
+        if getattr(choice, "finish_reason", "") == "length":
+            raise RuntimeError("模型回复被截断（max_tokens）")
+        return parse_decision(choice.message.content or "")
 
 
 # --------------------------------------------------------------------------- #
