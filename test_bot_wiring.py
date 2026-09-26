@@ -488,13 +488,16 @@ print("PASS customer service picks Claude, else DeepSeek, else hands everything 
 
 # --- startup learns the bot's username for the tweet link ------------------------------------------
 class MeBot:
+    def __init__(self): self.sent = []
     async def get_me(self): return types.SimpleNamespace(username="vinc_design_bot")
+    async def send_message(self, chat_id, text, **kw): self.sent.append((chat_id, text))
+me_bot = MeBot()
 tweet_mod.X_TELEGRAM_LINK = "bot"
 import web as web_mod
 started = []
 async def fake_start(self, port=0): started.append(self)
 saved_start, web_mod.WebChat.start = web_mod.WebChat.start, fake_start
-asyncio.run(bot.post_init(types.SimpleNamespace(bot=MeBot())))
+asyncio.run(bot.post_init(types.SimpleNamespace(bot=me_bot)))
 web_mod.WebChat.start = saved_start
 assert tweet_mod.telegram_link() == "https://t.me/vinc_design_bot"
 tweet_mod.X_TELEGRAM_LINK = ""
@@ -503,7 +506,14 @@ assert started and bot.web_chat is started[0], "customer service on -> the websi
 assert bot.web_chat.contact_link == "https://t.me/vinc_design_bot"
 assert "web" in bot.service.senders, "owner replies to website visitors have somewhere to go"
 assert ".post_shutdown(post_shutdown)" in __import__("inspect").getsource(bot.main)
-bot.web_chat = None
+assert bot.visits is not None and bot.web_chat.visits is bot.visits, "the site counts its visitors"
+[(_, hello)] = me_bot.sent
+assert "/visits" in hello and f"?me={bot.visits.owner_token()}" in hello, "the owner gets their device links"
+asyncio.run(bot.send_owner_links_once(types.SimpleNamespace(bot=me_bot)))
+assert len(me_bot.sent) == 1, "only once, not on every restart"
+assert "visits-daily" in __import__("inspect").getsource(bot.schedule_visits_report)
+assert "schedule_visits_report(application)" in __import__("inspect").getsource(bot.main)
+bot.web_chat = bot.visits = None
 print("PASS startup opens the website chat window on the same customer service")
 
 # --- nothing waits behind a slow handler, and the chat model has a hard deadline ----------------------
