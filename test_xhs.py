@@ -445,9 +445,9 @@ for word in banned:
     assert word not in blob, f"example breaks its own rules: {word}"
 assert "评论区留言" in ex["body"] and "私信" in ex["body"], "example must show the allowed call to action"
 # the notes sell what the website sells, with its real prices, and never print the address
-for must in ("AI 客服", "300-400", "每月 50 元", "私信我要网站地址"):
+for must in ("AI 客服", "300-400", "每月 49 元", "私信我要网站地址"):
     assert must in ex["body"], f"example must carry {must}"
-for must in ("300-400 元", "每月 50 元", "19.99 美元", "装一个 99 元", "149 元", "Claude Code", "私信我要网站地址"):
+for must in ("300-400 元", "每月 49 元", "9.9 美元", "装一个 99 元", "149 元", "Claude Code", "私信我要网站地址"):
     assert must in xhs.SERVICE_BRIEF, must
 assert "railway" not in xhs.SERVICE_BRIEF and "github.io" not in xhs.SERVICE_BRIEF, "小红书 punishes links"
 print(f"PASS the example note obeys every rule it teaches (body {len(ex['body'])} chars)")
