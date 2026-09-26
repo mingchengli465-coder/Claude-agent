@@ -723,7 +723,10 @@
   try { silk(); } catch (e) {}
   cursor();
 
-  var snippet = '<script src="' + location.origin + '/widget.js" defer><\/script>';
+  // The chat server, which is this site unless the page is hosted elsewhere (GitHub Pages).
+  var widgetTag = document.querySelector('script[src$="widget.js"]');
+  var chatOrigin = widgetTag ? new URL(widgetTag.src, location.href).origin : location.origin;
+  var snippet = '<script src="' + chatOrigin + '/widget.js" defer><\/script>';
   document.getElementById("snippet").textContent = snippet;
   function copyText(text, done) {
     function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
