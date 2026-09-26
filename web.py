@@ -5,6 +5,7 @@
     GET  /widget.js   the chat window itself; one <script> tag embeds it in any site
     POST /api/chat    a visitor's message -> the AI's reply (customer_service.handle)
     GET  /api/messages  new messages for a visitor, so the owner's replies show up
+    POST /api/hit     one page view on the owner's own pages (visits.py)
 
 Visitors are customers on the "web" channel, keyed by a random id the widget
 keeps in the browser. The owner is told and replies in Telegram exactly as for
@@ -25,6 +26,7 @@ from pathlib import Path
 from aiohttp import web
 
 import customer_service as cs
+import visits as visits_mod
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ _FONT = re.compile(r"^[a-z0-9-]+\.woff2$")
 # visitor pings the owner, so this is what keeps a script from spamming them).
 IP_MESSAGES_PER_MINUTE = int(os.environ.get("WEB_IP_MESSAGES_PER_MINUTE", "20"))
 IP_NEW_VISITORS_PER_HOUR = int(os.environ.get("WEB_IP_NEW_VISITORS_PER_HOUR", "5"))
+IP_HITS_PER_MINUTE = int(os.environ.get("WEB_IP_HITS_PER_MINUTE", "30"))
 
 _STATIC = Path(__file__).with_name("web_static")
 CORS = {
@@ -131,13 +134,15 @@ def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
 
 class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
-                 clock=time.time):
+                 clock=time.time, visits: visits_mod.Visits | None = None):
         self.service = service
+        self.visits = visits
         self.title = title or "AI 客服"
         self.contact_link = contact_link
         self.clock = clock
         self.ip_messages = Window(IP_MESSAGES_PER_MINUTE, 60)
         self.ip_visitors = Window(IP_NEW_VISITORS_PER_HOUR, 3600)
+        self.ip_hits = Window(IP_HITS_PER_MINUTE, 60)
         self.runner: web.AppRunner | None = None
         # Owner replies are stored by deliver_owner_reply; the widget polls them out.
         service.register_channel(CHANNEL, self._send)
@@ -157,6 +162,7 @@ class WebChat:
         app.router.add_get("/favicon.ico", self.favicon)
         app.router.add_post("/api/chat", self.chat)
         app.router.add_get("/api/messages", self.messages)
+        app.router.add_post("/api/hit", self.hit)
         app.router.add_route("OPTIONS", "/api/{tail:.*}", self.preflight)
         return app
 
@@ -293,3 +299,24 @@ class WebChat:
         return self._json({"messages": [
             {"id": r["id"], "role": r["role"], "text": r["text"], "ts": r["ts"]} for r in rows
         ]})
+
+    async def hit(self, request: web.Request) -> web.Response:
+        if self.visits is None:
+            return self._json({"ok": False})
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001 - bad JSON, too big, wrong type
+            return self._json({"error": "bad request"}, 400)
+        if not isinstance(data, dict):
+            return self._json({"error": "bad request"}, 400)
+        visitor = str(data.get("v") or "")
+        if not _VISITOR.match(visitor):
+            return self._json({"error": "bad request"}, 400)
+        if not self.ip_hits.allow(self._ip(request), self.clock()):
+            return self._json({"error": "slow down"}, 429)
+        text = lambda key, n: str(data.get(key) or "")[:n]  # noqa: E731
+        me = text("me", 64)
+        owner = self.visits.mark_owner(visitor, me) if me else False
+        self.visits.record(visitor, text("page", 200), text("ref", 300), request.headers.get("User-Agent", ""),
+                           text("from", 20), text("lang", 16), text("host", 80))
+        return self._json({"ok": True, "owner": owner})

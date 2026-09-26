@@ -88,6 +88,26 @@
   }
   var visitor = visitorId();
 
+  // The owner's own pages (data-track) count one page view; ?me=<token> marks
+  // this browser as the owner's, so their own visits stay out of the numbers.
+  if (script && script.hasAttribute("data-track")) {
+    var params = new URLSearchParams(location.search);
+    var me = params.get("me") || "";
+    if (me) {
+      params.delete("me");
+      var rest = params.toString();
+      try { history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "") + location.hash); } catch (e) {}
+    }
+    fetch(base + "/api/hit", {
+      method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+      body: JSON.stringify({ v: visitor, page: location.pathname, ref: document.referrer.slice(0, 300),
+        from: params.get("from") || params.get("utm_source") || "", lang: navigator.language || "",
+        host: location.hostname, me: me })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (me) alert(d && d.owner ? "好了 ✅ 这台设备已标记为你自己，以后不算进访客统计。" : "这个标记链接不对，没有标记成功。");
+    }).catch(function () {});
+  }
+
   var host = document.createElement("div");
   host.style.cssText = "position:fixed;z-index:2147483000;right:0;bottom:0;";
   var root = host.attachShadow ? host.attachShadow({ mode: "open" }) : host;

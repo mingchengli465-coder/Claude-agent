@@ -34,6 +34,7 @@ from telegram.ext import (
 import customer_service as cs
 import llm
 import tweet as tweet_mod
+import visits as visits_mod
 import web
 import xhs
 
@@ -72,6 +73,14 @@ X_TIMEZONE = os.environ.get("X_TIMEZONE", "Asia/Taipei")
 # A one-off tweet (same format as /post) published a few seconds after startup,
 # for when the post is prepared without the owner at the keyboard.
 X_POST_ON_START = os.environ.get("X_POST_ON_START", "").strip()
+# The website visitor report (visits.py) goes to the owner every morning.
+VISITS_REPORT_TIME = os.environ.get("VISITS_REPORT_TIME", "09:00")
+VISITS_TIMEZONE = os.environ.get("VISITS_TIMEZONE", "Asia/Shanghai")
+# The owner's two copies of the site, for the links that mark their own devices.
+SITE_URLS = [u.strip() for u in os.environ.get(
+    "SITE_URLS",
+    "https://worker-production-42fb.up.railway.app/,https://mingchengli465-coder.github.io/Claude-agent/",
+).split(",") if u.strip()]
 
 # One "round" is a user message plus the assistant's reply.
 MAX_HISTORY_ROUNDS = int(os.environ.get("MAX_HISTORY_ROUNDS", "20"))
@@ -725,6 +734,70 @@ async def customers_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.effective_message.reply_text(chunk)
 
 
+# Set in post_init together with the website chat. None means no visitor numbers.
+visits: visits_mod.Visits | None = None
+
+
+def owner_device_links() -> str:
+    token = visits.owner_token() if visits is not None else ""
+    links = "\n".join(f"{url}{'&' if '?' in url else '?'}me={token}" for url in SITE_URLS)
+    return ("把你自己的设备标记一下，你自己看网站就不会算进访客里。"
+            "在你的手机和 iPad 上，这几个链接各点开一次就行（网页会弹出“好了 ✅”）：\n" + links)
+
+
+async def visits_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/visits — who looked at the website yesterday, today so far, and this week."""
+    if not is_owner(update.effective_chat.id):
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+    if visits is None:
+        await update.effective_message.reply_text("访客统计没有启用（网站没有开）。")
+        return
+    text = visits.report(ZoneInfo(VISITS_TIMEZONE), today_too=True)
+    text += f"\n\n你已经标记了 {visits.owner_devices()} 个自己的设备。\n" + owner_device_links()
+    for chunk in split_message(text):
+        await update.effective_message.reply_text(chunk, disable_web_page_preview=True)
+
+
+async def visits_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    if visits is None or not OWNER_CHAT_ID:
+        return
+    text = visits.report(ZoneInfo(VISITS_TIMEZONE))
+    if not visits.owner_devices():
+        text += "\n\n" + owner_device_links()
+    try:
+        await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text, disable_web_page_preview=True)
+    except TelegramError:
+        logger.exception("每日访客报告发送失败")
+
+
+async def send_owner_links_once(application: Application) -> None:
+    """Right after the visitor count first goes live, tell the owner how to leave themselves out."""
+    if visits is None or not OWNER_CHAT_ID or not visits.take_flag("owner_links_sent"):
+        return
+    try:
+        await application.bot.send_message(
+            chat_id=int(OWNER_CHAT_ID), disable_web_page_preview=True,
+            text="📊 网站访客统计开好了：每天早上 " + VISITS_REPORT_TIME + " 告诉你昨天几个人来看、从哪来、"
+                 "有没有人跟 AI 客服聊。随时发 /visits 看最新的。\n\n" + owner_device_links())
+    except TelegramError:
+        logger.exception("访客统计说明发送失败")
+
+
+def schedule_visits_report(application: Application) -> None:
+    if not OWNER_CHAT_ID or application.job_queue is None:
+        return
+    try:
+        hour, minute = (int(part) for part in VISITS_REPORT_TIME.split(":"))
+        when = dt.time(hour=hour, minute=minute, tzinfo=ZoneInfo(VISITS_TIMEZONE))
+    except (ValueError, KeyError):
+        logger.error("VISITS_REPORT_TIME=%r 或 VISITS_TIMEZONE=%r 无法解析，每日访客报告跳过",
+                     VISITS_REPORT_TIME, VISITS_TIMEZONE)
+        return
+    application.job_queue.run_daily(visits_daily_job, time=when, name="visits-daily")
+    logger.info("每日访客报告：%s %s", VISITS_REPORT_TIME, VISITS_TIMEZONE)
+
+
 def _fit_notice(text: str) -> str:
     """Owner notices carry a transcript; keep the head (who/why) and the newest lines."""
     if len(text) <= OWNER_NOTICE_LIMIT:
@@ -897,21 +970,28 @@ async def post_init(application: Application) -> None:
         logger.info("机器人是 @%s；推文底下的 Telegram 链接：%s", username, link or "（没设置）")
     schedule_post_on_start(application)
     await start_web_chat(username)
+    await send_owner_links_once(application)
 
 
 async def start_web_chat(bot_username: str = "") -> None:
     """The website chat window shares the customer service (and its owner notices)."""
-    global web_chat
+    global web_chat, visits
     if service is None or not web.WEB_CHAT:
         return
     contact = f"https://t.me/{bot_username}" if bot_username else ""
-    chat = web.WebChat(service, title=web.shop_name(), contact_link=contact)
+    try:
+        counter = visits_mod.Visits(cs.CS_DB_PATH)
+    except Exception:  # noqa: BLE001 - the chat window matters more than the numbers
+        logger.exception("访客统计打不开，网站照常运行")
+        counter = None
+    chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter)
     try:
         await chat.start()
     except OSError:
         logger.exception("网站聊天窗口启动失败（端口 %s 被占用？），Telegram 机器人照常运行", web.WEB_PORT)
         return
     web_chat = chat
+    visits = counter
 
 
 async def post_shutdown(application: Application) -> None:
@@ -966,6 +1046,7 @@ def main() -> None:
     application.add_handler(CommandHandler("resume", resume_command))
     application.add_handler(CommandHandler("ai", ai_command))
     application.add_handler(CommandHandler("customers", customers_command))
+    application.add_handler(CommandHandler("visits", visits_command))
     application.add_handler(CommandHandler("post", post_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, route_text))
     application.add_handler(MessageHandler(filters.ATTACHMENT & ~filters.COMMAND, route_media))
@@ -976,6 +1057,7 @@ def main() -> None:
 
     schedule_daily_note(application)
     schedule_daily_tweets(application)
+    schedule_visits_report(application)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
