@@ -53,7 +53,7 @@ async def main():
         assert 'href="/demo"' in site, "the site links to the merchant demo"
         # The owner's own contacts come from products.yaml.
         assert 'href="https://t.me/Vinceeeeentttt"' in site and "@Vinceeeeentttt" in site
-        assert 'data-copy="Vinc100327"' in site and 'data-copy="Abide2837"' in site
+        assert 'data-copy="Vinc100327"' in site and 'data-copy="Abide2837-"' in site
         assert 'href="https://www.facebook.com/profile.php?id=61574166461675"' in site
         assert 'href="https://x.com/Vincent40769988"' in site and 'href="mailto:mingchengli465@gmail.com"' in site
         r = await client.get("/demo")
@@ -61,7 +61,7 @@ async def main():
         assert r.status == 200 and "text/html" in r.headers["Content-Type"]
         assert "小店&lt;b&gt;" in page and "小店<b>" not in page, "the title is escaped"
         assert "{{" not in page
-        assert "Vinc100327 / Abide2837" in page and "https://t.me/Vinceeeeentttt" in page
+        assert "Vinc100327 / Abide2837-" in page and "https://t.me/Vinceeeeentttt" in page
         assert '<script src="/widget.js"' in page
         r = await client.get("/widget.js")
         js = await r.text()
