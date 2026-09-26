@@ -430,7 +430,7 @@ assert got.title == GOOD["title"], got.title
 assert fm.models == [xhs.XHS_MODEL, "openrouter/free"], fm.models
 print("PASS an empty reply from XHS_MODEL is retried once on openrouter/free")
 
-# --- the notes promote the 代做 service, and the example obeys its own rules --
+# --- the notes promote the website's services, and the example obeys its own rules --
 ex = xhs.EXAMPLE_NOTE
 assert len(ex["title"]) <= 20, len(ex["title"])
 assert 300 <= len(ex["body"]) <= 600, len(ex["body"])
@@ -444,10 +444,12 @@ blob = xhs.EXAMPLE_JSON
 for word in banned:
     assert word not in blob, f"example breaks its own rules: {word}"
 assert "评论区留言" in ex["body"] and "私信" in ex["body"], "example must show the allowed call to action"
-# the two objections the user asked every note to answer
-for must in ("豆包", "千问", "Claude", "海外支付卡", "海外手机号"):
-    assert must in ex["body"], f"example must make the {must} argument"
-assert "豆包" in xhs.SERVICE_BRIEF and "海外支付卡" in xhs.SERVICE_BRIEF
+# the notes sell what the website sells, with its real prices, and never print the address
+for must in ("AI 客服", "300-400", "99 元", "私信我要网站地址"):
+    assert must in ex["body"], f"example must carry {must}"
+for must in ("300-400 元", "每月 99 元", "19.99 美元", "装一个 99 元", "149 元", "Claude Code", "私信我要网站地址"):
+    assert must in xhs.SERVICE_BRIEF, must
+assert "railway" not in xhs.SERVICE_BRIEF and "github.io" not in xhs.SERVICE_BRIEF, "小红书 punishes links"
 print(f"PASS the example note obeys every rule it teaches (body {len(ex['body'])} chars)")
 
 prompt = xhs._build_user_prompt(xhs.DOMAINS[0], [])
@@ -460,7 +462,8 @@ assert "{" not in xhs.SERVICE_BRIEF, "a brace in the brief would break nothing, 
 note = xhs._normalize(json.loads(xhs.EXAMPLE_JSON), xhs.DOMAINS[0])
 assert note.title == ex["title"] and note.cover_main == ex["cover"]["main"]
 assert xhs.BADGE_TEXT == "接单中"
-assert all("PPT" in d or "简历" in d or "Excel" in d or "文案" in d for d in xhs.DOMAINS), xhs.DOMAINS
+assert all("AI 客服" in d or "Claude Code" in d or "Codex" in d for d in xhs.DOMAINS), xhs.DOMAINS
+assert "网址" in xhs.HARD_RULES and "私信我要网站地址" in prompt
 print(f"PASS the prompt carries the service brief and rotates {len(xhs.DOMAINS)} service lines")
 
 # --- /xhs gives up on a hung model at the deadline --------------------------------------------------
