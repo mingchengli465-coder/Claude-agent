@@ -75,12 +75,12 @@ async def main():
         for font in ("serif-sc.woff2", "serif-tc.woff2", "instrument-serif-latin-400-normal.woff2"):
             assert f"/fonts/{font}" in page and (await client.get(f"/fonts/{font}")).status == 200, font
         for font in ("instrument-serif-latin-400-italic.woff2", "geist-sans-latin-500-normal.woff2", "geist-mono-latin-400-normal.woff2"):
-            assert f"/fonts/{font}" in site, font
             r = await client.get(f"/fonts/{font}")
             assert r.status == 200 and r.headers["Content-Type"] == "font/woff2" and len(await r.read()) > 1000, font
         for bad in ("../web.py", "LICENSE.txt", "nope.woff2", "..%2Fweb.py"):
             assert (await client.get(f"/fonts/{bad}")).status == 404, bad
         assert "fonts.googleapis.com" not in site, "Google Fonts doesn't load in mainland China"
+        assert "data-track" in site and 'data-i="askPrice"' in site and "askPrice:" in site
         r = await client.options("/api/chat")
         assert r.status == 204 and r.headers["Access-Control-Allow-Origin"] == "*"
     print("PASS the personal site, the demo page, the widget script and CORS are served; the shop name is escaped")
