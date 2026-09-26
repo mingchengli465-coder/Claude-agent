@@ -350,6 +350,9 @@ class OpenAICompatibleResponder:
 
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=60.0, max_retries=1)
         self.model = model
+        # Set once JSON mode has come back empty: later messages skip straight to
+        # the plain call instead of paying for a wasted round trip each time.
+        self.json_mode_broken = False
 
     async def _ask(self, system: str, messages: list[dict], json_mode: bool) -> str:
         extra = {"response_format": {"type": "json_object"}} if json_mode else {}
@@ -369,10 +372,12 @@ class OpenAICompatibleResponder:
         return (choice.message.content or "").strip()
 
     async def __call__(self, system: str, messages: list[dict]) -> Decision:
-        try:
-            return parse_decision(await self._ask(system, messages, json_mode=True))
-        except ValueError as exc:  # empty or not JSON; timeouts and API errors go up as before
-            logger.warning("JSON 模式没拿到可用的回复（%s），换普通模式再问一次", str(exc)[:120])
+        if not getattr(self, "json_mode_broken", False):
+            try:
+                return parse_decision(await self._ask(system, messages, json_mode=True))
+            except ValueError as exc:  # empty or not JSON; timeouts and API errors go up as before
+                self.json_mode_broken = True
+                logger.warning("JSON 模式没拿到可用的回复（%s），之后都直接用普通模式", str(exc)[:120])
         text = await self._ask(system, messages, json_mode=False)
         try:
             return parse_decision(text)
@@ -380,7 +385,7 @@ class OpenAICompatibleResponder:
             if not text:
                 raise
             reply = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", text).strip()
-            logger.warning("模型没按 JSON 格式回答，直接用它的原话回复客户")
+            logger.warning("模型没按 JSON 格式回答，直接用它的原话回复客户：%r", reply[:80])
             return Decision(reply=reply[:1500])
 
 

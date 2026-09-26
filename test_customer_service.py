@@ -354,6 +354,10 @@ r, fc = deepseek_with(["", good])
 d = run(r(system, [{"role": "user", "content": "多少钱"}]))
 assert d.reply.startswith("AI 客服国内") and not d.handoff, d
 assert len(fc.calls) == 2 and "response_format" in fc.calls[0] and "response_format" not in fc.calls[1]
+# Once JSON mode has failed, later messages go straight to the plain call.
+fc.content = [good]
+assert run(r(system, [{"role": "user", "content": "还有呢"}])).reply.startswith("AI 客服国内")
+assert len(fc.calls) == 3 and "response_format" not in fc.calls[2], "no wasted JSON-mode call"
 # ...and a plain-mode answer that isn't JSON is still an answer, not a handoff.
 r, fc = deepseek_with(["", "```\n国内商户 300–400 元，海外 500–600 元～\n```"])
 assert run(r(system, [{"role": "user", "content": "多少钱"}])) == cs.Decision(reply="国内商户 300–400 元，海外 500–600 元～")
