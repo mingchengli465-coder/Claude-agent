@@ -81,6 +81,8 @@ async def main():
             assert (await client.get(f"/fonts/{bad}")).status == 404, bad
         assert "fonts.googleapis.com" not in site, "Google Fonts doesn't load in mainland China"
         assert "data-track" in site and 'data-i="askPrice"' in site and "askPrice:" in site
+        assert 'html[data-theme="dark"]' in site and 'id="mode"' in site, "dark and light mode"
+        assert 'querySelectorAll(".langs button[data-lang]")' in site, "the mode switch is not a language button"
         r = await client.options("/api/chat")
         assert r.status == 204 and r.headers["Access-Control-Allow-Origin"] == "*"
     print("PASS the personal site, the demo page, the widget script and CORS are served; the shop name is escaped")
