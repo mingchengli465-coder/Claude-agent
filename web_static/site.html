@@ -824,7 +824,7 @@
     document.querySelectorAll(".langs button").forEach(function (b) {
       b.setAttribute("aria-pressed", String(indexFor(b.getAttribute("data-lang")) === lang));
     });
-    var widget = document.querySelector('script[src="/widget.js"]');
+    var widget = document.querySelector('script[src$="widget.js"]');
     if (widget) widget.setAttribute("data-title", I.brand[lang]);
     if (window.aiChatSetLang) window.aiChatSetLang(TAGS[lang]);
     restartFeed();

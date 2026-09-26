@@ -171,4 +171,18 @@ async def main():
 
 
 asyncio.run(main())
+
+# --- the GitHub Pages copy (X won't link to railway.app) ----------------------------------------
+sys.path.insert(0, str(pathlib.Path(__file__).parent / "tools"))
+import build_pages
+out = pathlib.Path(tempfile.mkdtemp()) / "_site"
+build_pages.build(out)
+index, demo = (out / "index.html").read_text(encoding="utf-8"), (out / "demo.html").read_text(encoding="utf-8")
+for html in (index, demo):
+    assert "{{" not in html and f'src="{build_pages.API}/widget.js"' in html, "the chat still comes from the server"
+    assert "url(/fonts/" not in html and 'href="/"' not in html, "no server-absolute paths left"
+assert 'href="demo.html"' in index and "Vinc100327" in demo
+assert (out / "fonts" / "serif-sc.woff2").exists() and (out / ".nojekyll").exists()
+print("PASS the GitHub Pages copy is self-contained apart from the chat server")
+
 print("\nALL WEB CHAT TESTS PASSED")
