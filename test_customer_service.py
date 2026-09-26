@@ -348,7 +348,7 @@ except RuntimeError:
     pass
 
 # DeepSeek's JSON mode sometimes answers with nothing at all: ask again in plain mode.
-good = json.dumps({"reply": "AI 客服国内 300–400 元搭建，之后每月 99 元～", "handoff": False, "reason": "",
+good = json.dumps({"reply": "AI 客服国内 300–400 元搭建，之后每月 50 元～", "handoff": False, "reason": "",
                    "summary": "AI客服｜未说明｜未说明", "intent": "interested"}, ensure_ascii=False)
 r, fc = deepseek_with(["", good])
 d = run(r(system, [{"role": "user", "content": "多少钱"}]))
