@@ -226,6 +226,16 @@
   .step h4 { margin: 0; font-size: 24px; font-weight: 600; line-height: 1.17; color: #f5f5f7; }
   .step p { margin: 10px 0 0; color: #a1a1a6; font-size: 17px; }
 
+  /* ---- platforms ---- */
+  .plat-head { margin-top: 96px; }
+  .plat-head h3 { font-size: clamp(32px, 4.4vw, 48px); line-height: 1.1; font-weight: 600; color: #f5f5f7; }
+  .plat-head h3 em { background: var(--ai); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .plats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px; }
+  .plat { display: flex; align-items: center; gap: 14px; background: var(--dark2); border-radius: 20px; padding: 20px 22px; text-align: left; }
+  .plat i { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: 16px; color: #fff; flex: none; }
+  .plat i.more-ic { background: var(--ai); font-size: 22px; font-weight: 400; }
+  .plat b { font-size: 17px; font-weight: 600; color: #f5f5f7; }
+
   /* ---- Claude Code ---- */
   .cc-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 48px; align-items: center; margin-top: 64px; text-align: left; }
   .term { border-radius: 14px; overflow: hidden; font-family: var(--mono); font-size: 14px; background: #1e1e1e; box-shadow: 0 40px 80px -30px rgba(0,0,0,.35), 0 0 0 .5px rgba(0,0,0,.4); }
@@ -320,6 +330,7 @@
     .steps, .plans, .cards { grid-template-columns: 1fr; }
     .cc-grid { grid-template-columns: 1fr; gap: 36px; }
     .chips { grid-template-columns: 1fr 1fr; }
+    .plats { grid-template-columns: 1fr 1fr; }
   }
   @media (max-width: 480px) {
     .wrap, .wide { padding: 0 16px; }
@@ -332,6 +343,10 @@
     .ctas { gap: 14px 26px; }
     .term { font-size: 12.5px; } .term pre { padding: 16px; min-height: 290px; }
     .referral { font-size: 15px; }
+    .plats { gap: 10px; }
+    .plat { padding: 14px 12px; gap: 10px; border-radius: 16px; }
+    .plat i { width: 32px; height: 32px; border-radius: 9px; font-size: 14px; }
+    .plat b { font-size: 14px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1; transform: none; transition: none; }
@@ -395,7 +410,7 @@
   </div>
   <div class="works wrap">
     <span class="label" data-i="worksLabel">支持 / 接入</span>
-    <div class="names"><span>Telegram</span><span data-i="worksWeb">网站聊天窗口</span><span>Claude Code</span><span>Codex</span><span>DeepSeek</span></div>
+    <div class="names"><span data-i="worksWx">微信</span><span>Telegram</span><span>WhatsApp</span><span data-i="worksWeb">网站聊天窗口</span><span>Claude Code</span><span>Codex</span><span>DeepSeek</span></div>
   </div>
 </header>
 
@@ -420,13 +435,13 @@
       <div class="kick" data-i="csTag">给商家</div>
       <h3 data-i="csTitle">AI 客服搭建</h3>
       <p data-i="csDesc">按你的价目表和常见问题，自动回答客户、主动问清需求。要下单、砍价、它答不了的，马上转到你手机上，你直接回。</p>
-      <div class="price" data-i="csPrice">¥300–400 起</div>
+      <div class="price" data-i="csPrice">¥200 起</div>
       <div class="ctas">
         <button class="pill blue" type="button" data-chat data-i="askPrice">问价格</button>
         <a class="more" href="/demo" data-i="csDemo">看演示页</a>
       </div>
       <ul class="ticks">
-        <li data-i="cs1">接到 Telegram，或者直接放进你的网站</li>
+        <li data-i="cs1">接到微信、Telegram 等平台，或者直接放进你的网站</li>
         <li data-i="cs2">新客户来了、有购买意向、要付款时，第一时间通知你</li>
         <li data-i="cs3">中文、英文等多种语言自动切换</li>
         <li data-i="cs4">价目表、常见问题随时帮你更新</li>
@@ -472,6 +487,19 @@
         <div class="step reveal"><span class="n ai-text">02</span><h4 data-i="st2">我来搭建</h4><p data-i="st2d">按你的店名、颜色和说话风格调好，2–3 天上线。</p></div>
         <div class="step reveal"><span class="n ai-text">03</span><h4 data-i="st3">客户来了它接待</h4><p data-i="st3d">24 小时回复、问清需求；下单、砍价这一步转给你本人。</p></div>
       </div>
+      <div class="plat-head reveal">
+        <div class="eyebrow" data-i="platKicker">接入平台</div>
+        <h3 data-ih="platTitle">客人在哪，<em>它就在哪</em></h3>
+        <p class="lead" data-i="platSub">微信、Telegram、WhatsApp，或者你自己的网站。按你店里客人最常用的平台来接。</p>
+      </div>
+      <div class="plats reveal">
+        <div class="plat"><i style="background:#07c160">微</i><b data-i="pWxOA">微信公众号</b></div>
+        <div class="plat"><i style="background:#2f7cf6">企</i><b data-i="pWecom">企业微信</b></div>
+        <div class="plat"><i style="background:#229ed9">T</i><b>Telegram</b></div>
+        <div class="plat"><i style="background:#25d366">W</i><b>WhatsApp</b></div>
+        <div class="plat"><i style="background:#8e8e93">&lt;/&gt;</i><b data-i="pWeb">你的网站</b></div>
+        <div class="plat"><i class="more-ic">+</i><b data-i="pMore">更多平台，问我</b></div>
+      </div>
       <div class="ctas reveal" style="margin-top:48px">
         <a class="pill blue" href="/demo" data-i="csDemo">看演示页</a>
       </div>
@@ -513,10 +541,10 @@
       <div class="plans">
         <div class="plan reveal">
           <div class="tag"><b data-i="pl1Tag">国内商户</b><span>CNY</span></div>
-          <div class="amount">¥300–400<small data-i="once">一次性搭建</small></div>
+          <div class="amount">¥200<small data-i="once">一次性搭建</small></div>
           <div class="monthly" data-ih="pl1M">之后 <em>¥49</em> / 月</div>
           <ul class="ticks">
-            <li data-i="plA">Telegram 或你的网站</li>
+            <li data-i="plA">微信、Telegram 或你的网站</li>
             <li data-i="plB">多语言自动回复</li>
             <li data-i="plC">新客户、购买意向、付款通知</li>
             <li data-i="plD">价目表更新包含在月费里</li>
@@ -528,7 +556,7 @@
           <div class="amount">US$70–85<small data-i="once2">一次性搭建（美元）</small></div>
           <div class="monthly" data-ih="pl2M">之后 <em>US$9.9</em> / 月</div>
           <ul class="ticks">
-            <li data-i="plA">Telegram 或你的网站</li>
+            <li data-i="plA">微信、Telegram 或你的网站</li>
             <li data-i="plB2">中英文等多语言接待</li>
             <li data-i="plC">新客户、购买意向、付款通知</li>
             <li data-i="plD2">支持 Alipay 或银行卡付款</li>
@@ -598,6 +626,7 @@
         <details><summary data-i="q4">AI 客服的月费包含什么？</summary><p data-i="a4">服务器、AI 用量、价目表和常见问题的更新。按月付，随时可以停。</p></details>
         <details><summary data-i="q5">我电脑不太会用，也能装 Claude Code 吗？</summary><p data-i="a5">可以。全程远程屏幕共享，我带着你一步一步操作，装好之后还会教你怎么用。</p></details>
         <details><summary data-i="q6">能开发票吗？</summary><p data-i="a6">不能开发票。</p></details>
+        <details><summary data-i="q8">能接入微信吗？</summary><p data-i="a8">可以。能接微信公众号、企业微信，也能接 Telegram、WhatsApp 等其他平台，按你店里客人常用的来。个人微信号因为微信的规定容易被封号，不建议接。</p></details>
         <details><summary data-i="q7">跟我聊天的是真人吗？</summary><p data-i="a7">右下角是 AI 助理，随时在线；要报价、下单或者细节确认时，会由我本人亲自回复你。</p></details>
       </div>
     </div>
@@ -657,6 +686,16 @@
     stat4: ["本人全程跟进", "本人全程跟進", "Handled by me"],
     worksLabel: ["支持 / 接入", "支援 / 接入", "Works with"],
     worksWeb: ["网站聊天窗口", "網站聊天視窗", "Your website"],
+    worksWx: ["微信", "微信", "WeChat"],
+    platKicker: ["接入平台", "接入平台", "Platforms"],
+    platTitle: ["客人在哪，<em>它就在哪</em>", "客人在哪，<em>它就在哪</em>", "Wherever your customers are, <em>it’s there</em>"],
+    platSub: ["微信、Telegram、WhatsApp，或者你自己的网站。按你店里客人最常用的平台来接。", "微信、Telegram、WhatsApp，或者你自己的網站。按你店裡客人最常用的平台來接。", "WeChat, Telegram, WhatsApp or your own website: connected wherever your customers already message you."],
+    pWxOA: ["微信公众号", "微信公眾號", "WeChat Official Account"],
+    pWecom: ["企业微信", "企業微信", "WeCom"],
+    pWeb: ["你的网站", "你的網站", "Your website"],
+    pMore: ["更多平台，问我", "更多平台，問我", "More, just ask"],
+    q8: ["能接入微信吗？", "能接入微信嗎？", "Can it work on WeChat?"],
+    a8: ["可以。能接微信公众号、企业微信，也能接 Telegram、WhatsApp 等其他平台，按你店里客人常用的来。个人微信号因为微信的规定容易被封号，不建议接。", "可以。能接微信公眾號、企業微信，也能接 Telegram、WhatsApp 等其他平台，依你店裡客人常用的來。個人微信號因為微信的規定容易被封號，不建議接。", "Yes: a WeChat Official Account or WeCom, as well as Telegram, WhatsApp and others, whichever your customers use. I don’t recommend a personal WeChat account: WeChat’s rules make it easy to get banned."],
     svcKicker: ["服务", "服務", "Services"],
     svcTitle: ["我能帮你做<em>什么</em>", "我能幫你做<em>什麼</em>", "What I can <em>do for you</em>"],
     svcSub: ["两件主要的事：给商家装一个会接待客户的 AI，给个人装好会写代码的 AI。其他小活也能接。",
@@ -667,11 +706,11 @@
     csDesc: ["按你的价目表和常见问题，自动回答客户、主动问清需求。要下单、砍价、它答不了的，马上转到你手机上，你直接回。",
              "依照你的價目表和常見問題，自動回答客戶、主動問清需求。要下單、殺價、它答不了的，馬上轉到你手機上，你直接回。",
              "Answers customers from your own price list and FAQ, and asks the right questions. Orders, haggling and anything it can't answer go straight to your phone."],
-    cs1: ["接到 Telegram，或者直接放进你的网站", "接到 Telegram，或直接放進你的網站", "On Telegram, or right on your website"],
+    cs1: ["接到微信、Telegram 等平台，或者直接放进你的网站", "接到微信、Telegram 等平台，或直接放進你的網站", "On WeChat, Telegram and more, or right on your website"],
     cs2: ["新客户来了、有购买意向、要付款时，第一时间通知你", "新客戶來了、有購買意向、要付款時，第一時間通知你", "Alerts when someone new arrives, gets interested, or wants to pay"],
     cs3: ["中文、英文等多种语言自动切换", "中文、英文等多種語言自動切換", "Chinese, English and more, automatically"],
     cs4: ["价目表、常见问题随时帮你更新", "價目表、常見問題隨時幫你更新", "Price list and FAQ updates included"],
-    csPrice: ["¥300–400 起", "¥300–400 起", "From ¥300"],
+    csPrice: ["¥200 起", "¥200 起", "From ¥200"],
     csDemo: ["看演示页", "看示範頁", "See the demo"],
     ccTag: ["给个人", "給個人", "For individuals"],
     ccTitle: ["帮你装好 Claude Code / Codex", "幫你裝好 Claude Code / Codex", "Claude Code & Codex, set up for you"],
@@ -743,7 +782,7 @@
     pl1Tag: ["国内商户", "中國大陸商戶", "Mainland China"],
     once: ["一次性搭建", "一次性架設", "one-off setup"],
     pl1M: ["之后 <em>¥49</em> / 月", "之後 <em>¥49</em> / 月", "then <em>¥49</em> / month"],
-    plA: ["Telegram 或你的网站", "Telegram 或你的網站", "Telegram or your website"],
+    plA: ["微信、Telegram 或你的网站", "微信、Telegram 或你的網站", "WeChat, Telegram or your website"],
     plB: ["多语言自动回复", "多語言自動回覆", "Multilingual replies"],
     plC: ["新客户、购买意向、付款通知", "新客戶、購買意向、付款通知", "New-customer, buying-intent and payment alerts"],
     plD: ["价目表更新包含在月费里", "價目表更新包含在月費裡", "Price-list updates included"],
