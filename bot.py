@@ -469,6 +469,37 @@ async def crosspost_channel(text: str) -> str:
     return f"\n\n📣 Telegram 频道也发了：{channel}"
 
 
+CHANNEL_HELLO = (
+    "👋 欢迎来到 vinc AI studio\n\n"
+    "我帮小店搭 24 小时在线的 AI 客服，也帮你把 Claude Code / Codex 装进自己的电脑。"
+    "这里会分享 AI 小技巧和实用案例。\n\n"
+    "👋 Welcome! I build 24/7 AI customer assistants for small businesses and set up "
+    "Claude Code / Codex on your computer. AI tips and real examples, here."
+)
+
+
+async def hello_channel_once() -> None:
+    """The first time a channel is set, post an introduction there and tell the owner
+    whether it worked (it doubles as the check that the bot is an admin)."""
+    channel = channel_chat_id()
+    if not channel or telegram_bot is None or visits is None:
+        return
+    flag = f"channel_hello:{channel}"
+    if not visits.take_flag(flag):
+        return
+    note = await crosspost_channel(CHANNEL_HELLO)
+    if "⚠️" in note:
+        visits.db.execute("DELETE FROM visit_settings WHERE key = ?", (flag,))  # try again next start
+        visits.db.commit()
+    if OWNER_CHAT_ID:
+        text = ("📣 Telegram 频道接好了，已经发了第一条欢迎介绍。以后 X 每次发帖都会同步到频道。"
+                if "⚠️" not in note else "⚠️ Telegram 频道还发不了：" + note.strip().lstrip("⚠️ "))
+        try:
+            await telegram_bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text)
+        except TelegramError:
+            logger.exception("频道状态通知发送失败")
+
+
 async def crosspost_bluesky(text: str) -> str:
     """Also post on Bluesky, if it's set up."""
     if not bluesky.enabled():
@@ -1056,6 +1087,7 @@ async def post_init(application: Application) -> None:
     schedule_post_on_start(application)
     await start_web_chat(username, application.bot)
     await send_owner_links_once(application)
+    await hello_channel_once()
 
 
 async def start_web_chat(bot_username: str = "", bot=None) -> None:
