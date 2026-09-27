@@ -74,6 +74,11 @@ X_TIMEZONE = os.environ.get("X_TIMEZONE", "Asia/Taipei")
 # A one-off tweet (same format as /post) published a few seconds after startup,
 # for when the post is prepared without the owner at the keyboard.
 X_POST_ON_START = os.environ.get("X_POST_ON_START", "").strip()
+# Added under every post that's copied to the Facebook Page (Facebook allows links in posts).
+FB_POST_SUFFIX = os.environ.get(
+    "FB_POST_SUFFIX",
+    "\n\nSee what I build and chat with my AI assistant:\nhttps://mingchengli465-coder.github.io/Claude-agent/?from=fb",
+).replace("\\n", "\n")
 # The website visitor report (visits.py) goes to the owner every morning.
 VISITS_REPORT_TIME = os.environ.get("VISITS_REPORT_TIME", "09:00")
 VISITS_TIMEZONE = os.environ.get("VISITS_TIMEZONE", "Asia/Shanghai")
@@ -410,6 +415,20 @@ TWEET_ALREADY_RUNNING = "▶️ 本來就在跑了。/pause 可以暫停。"
 TWEET_SKIPPED_TEXT = "⏸ 已暫停，這次排程跳過。"
 
 
+async def crosspost_facebook(text: str) -> str:
+    """Also publish on the Facebook Page, if it's connected. Returns a line for the owner's report."""
+    fb = web_chat.messenger if web_chat is not None else None
+    if fb is None or not fb.connected:
+        return ""
+    try:
+        url = await fb.post(text + FB_POST_SUFFIX)
+    except Exception as exc:  # noqa: BLE001 - X is unaffected
+        logger.exception("Facebook 专页发帖失败")
+        return f"\n\n⚠️ Facebook 专页没发成功：{exc}"
+    logger.info("Facebook 专页已发帖：%s", url)
+    return f"\n\n📘 Facebook 专页也发了：{url}"
+
+
 async def produce_and_post_tweet(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
     """Generate a tweet, publish it, and report the result. No approval step."""
     try:
@@ -421,6 +440,7 @@ async def produce_and_post_tweet(context: ContextTypes.DEFAULT_TYPE, chat_id: in
 
     logger.info("生成了推文：[%s] %s", item.domain, item.topic)
     full = item.full_text()
+    fb_note = await crosspost_facebook(full)
 
     try:
         url = await tweet_mod.publish(item)
@@ -428,7 +448,7 @@ async def produce_and_post_tweet(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         logger.exception("推文發布失敗")
         await context.bot.send_message(
             chat_id=chat_id,
-            text=TWEET_PUBLISH_FAILED_TEXT.format(error=exc, text=full),
+            text=TWEET_PUBLISH_FAILED_TEXT.format(error=exc, text=full) + fb_note,
         )
         return
 
@@ -444,7 +464,7 @@ async def produce_and_post_tweet(context: ContextTypes.DEFAULT_TYPE, chat_id: in
 
     await context.bot.send_message(
         chat_id=chat_id,
-        text=TWEET_SENT_TEXT.format(domain=item.domain, text=full, url=url) + reply_note,
+        text=TWEET_SENT_TEXT.format(domain=item.domain, text=full, url=url) + reply_note + fb_note,
     )
 
 
@@ -497,11 +517,12 @@ async def publish_manual(body: str) -> str:
                 "（中文一个字算 2，链接一条算 23）。删短一点再发。"
             )
 
+    fb_note = await crosspost_facebook(main)
     try:
         url = await tweet_mod.publish(tweet_mod.Tweet(domain="手動", topic=main[:60], text=main))
     except Exception as exc:  # noqa: BLE001 - tell the owner exactly why
         logger.exception("手動推文發布失敗")
-        return TWEET_PUBLISH_FAILED_TEXT.format(error=exc, text=main)
+        return TWEET_PUBLISH_FAILED_TEXT.format(error=exc, text=main) + fb_note
     logger.info("手動推文已發布：%s", url)
 
     note = ""
@@ -514,7 +535,7 @@ async def publish_manual(body: str) -> str:
     except Exception as exc:  # noqa: BLE001 - the tweet itself is already out
         logger.exception("手動推文的回覆失敗")
         note = TWEET_LINK_REPLY_FAILED.format(error=exc)
-    return f"🚀 已发推\n\n{main}\n\n———\n{url}{note}"
+    return f"🚀 已发推\n\n{main}\n\n———\n{url}{note}{fb_note}"
 
 
 async def post_on_start_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -954,6 +975,7 @@ def check_env(name: str, value: str) -> str:
 
 # Set in post_init when customer service is on. None means no website chat.
 web_chat: web.WebChat | None = None
+fb_setup_tasks: set[asyncio.Task] = set()
 
 
 async def post_init(application: Application) -> None:
@@ -970,11 +992,11 @@ async def post_init(application: Application) -> None:
         link = tweet_mod.telegram_link()
         logger.info("机器人是 @%s；推文底下的 Telegram 链接：%s", username, link or "（没设置）")
     schedule_post_on_start(application)
-    await start_web_chat(username)
+    await start_web_chat(username, application.bot)
     await send_owner_links_once(application)
 
 
-async def start_web_chat(bot_username: str = "") -> None:
+async def start_web_chat(bot_username: str = "", bot=None) -> None:
     """The website chat window shares the customer service (and its owner notices)."""
     global web_chat, visits
     if service is None or not web.WEB_CHAT:
@@ -985,7 +1007,11 @@ async def start_web_chat(bot_username: str = "") -> None:
     except Exception:  # noqa: BLE001 - the chat window matters more than the numbers
         logger.exception("访客统计打不开，网站照常运行")
         counter = None
-    fb = messenger_mod.Messenger.from_env(service)
+    async def tell_owner(text: str) -> None:
+        if bot is not None and OWNER_CHAT_ID:
+            await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text, disable_web_page_preview=True)
+
+    fb = messenger_mod.Messenger.from_env(service, notify=tell_owner)
     chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb)
     try:
         await chat.start()
@@ -995,7 +1021,8 @@ async def start_web_chat(bot_username: str = "") -> None:
     web_chat = chat
     visits = counter
     if fb is not None:
-        logger.info("Facebook Messenger 已接上：webhook 地址是 /fb/webhook")
+        # Meta calls our webhook back while we register it, so the server must be up first.
+        fb_setup_tasks.add(asyncio.get_running_loop().create_task(fb.connect()))
 
 
 async def post_shutdown(application: Application) -> None:
