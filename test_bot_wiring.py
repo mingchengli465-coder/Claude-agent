@@ -569,6 +569,20 @@ assert "bsky.app" in asyncio.run(bot.crosspost_bluesky("x"))
 async def bad_post(text): raise RuntimeError("Invalid identifier or password")
 bluesky.post = bad_post
 assert "Invalid identifier" in asyncio.run(bot.crosspost_bluesky("x"))
+# the first start with a Bluesky account posts a hello, once, and tells the owner
+bot.visits = visits_mod.Visits(pathlib.Path(tempfile.mkdtemp()) / "v2.sqlite3")
+bot.telegram_bot = ChannelBot(); ChannelBot.sent.clear()
+posted = []
+async def ok_post(text): posted.append(text); return "https://bsky.app/profile/v/post/9"
+bluesky.post, bluesky.enabled, bluesky.HANDLE = ok_post, lambda: True, "v.bsky.social"
+asyncio.run(bot.hello_bluesky_once()); asyncio.run(bot.hello_bluesky_once())
+assert len(posted) == 1 and "Bluesky" in posted[0]
+assert any("Bluesky 接好了" in m[1] and "bsky.app/profile/v/post/9" in m[1] for m in ChannelBot.sent), ChannelBot.sent
+bluesky.post, bluesky.HANDLE = bad_post, "w.bsky.social"
+asyncio.run(bot.hello_bluesky_once())
+assert any("Bluesky 还接不上" in m[1] for m in ChannelBot.sent)
+assert bot.visits.take_flag("bluesky_hello:w.bsky.social"), "a failed hello is retried next start"
+bot.visits = None
 bluesky.post, bluesky.enabled = saved_post, saved_enabled
 bot.telegram_bot = None
 assert "crosspost_everywhere(full)" in __import__("inspect").getsource(bot.produce_and_post_tweet)

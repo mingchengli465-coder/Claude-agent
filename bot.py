@@ -500,6 +500,37 @@ async def hello_channel_once() -> None:
             logger.exception("频道状态通知发送失败")
 
 
+BLUESKY_HELLO = (
+    "Hi Bluesky 👋 I'm Vinc. I build 24/7 AI customer assistants for small businesses "
+    "and set up Claude Code / Codex on your computer, one-on-one, in English or 中文. "
+    "Sharing practical AI tips here."
+)
+
+
+async def hello_bluesky_once() -> None:
+    """The first start with a Bluesky account posts an introduction and tells the owner
+    whether the handle and app password work. Retried on the next start if it failed."""
+    if not bluesky.enabled() or visits is None:
+        return
+    flag = f"bluesky_hello:{bluesky.HANDLE}"
+    if not visits.take_flag(flag):
+        return
+    note = await crosspost_bluesky(BLUESKY_HELLO)
+    failed = "⚠️" in note
+    if failed:
+        visits.db.execute("DELETE FROM visit_settings WHERE key = ?", (flag,))
+        visits.db.commit()
+    if OWNER_CHAT_ID and telegram_bot is not None:
+        text = ("🦋 Bluesky 接好了，已经发了第一条自我介绍：" + note.split("：", 1)[-1].strip()
+                + "\n以后 X 每次发帖都会同步到 Bluesky。") if not failed else (
+                "⚠️ Bluesky 还接不上：" + note.split("：", 1)[-1].strip()
+                + "\n多半是用户名或应用密码不对，重新生成一个应用密码发给我就行。")
+        try:
+            await telegram_bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text, disable_web_page_preview=True)
+        except TelegramError:
+            logger.exception("Bluesky 状态通知发送失败")
+
+
 async def crosspost_bluesky(text: str) -> str:
     """Also post on Bluesky, if it's set up."""
     if not bluesky.enabled():
@@ -1088,6 +1119,7 @@ async def post_init(application: Application) -> None:
     await start_web_chat(username, application.bot)
     await send_owner_links_once(application)
     await hello_channel_once()
+    await hello_bluesky_once()
 
 
 async def start_web_chat(bot_username: str = "", bot=None) -> None:
