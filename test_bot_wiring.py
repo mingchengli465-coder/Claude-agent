@@ -513,8 +513,21 @@ asyncio.run(bot.send_owner_links_once(types.SimpleNamespace(bot=me_bot)))
 assert len(me_bot.sent) == 1, "only once, not on every restart"
 assert "visits-daily" in __import__("inspect").getsource(bot.schedule_visits_report)
 assert "schedule_visits_report(application)" in __import__("inspect").getsource(bot.main)
+# X posts are copied to the Facebook Page when it's connected
+assert asyncio.run(bot.crosspost_facebook("hi")) == "", "no Facebook, no note"
+class FakeFb:
+    connected, posted = True, []
+    async def post(self, text): self.posted.append(text); return "https://www.facebook.com/P_1"
+bot.web_chat.messenger = FakeFb()
+note = asyncio.run(bot.crosspost_facebook("Hello"))
+assert "https://www.facebook.com/P_1" in note and FakeFb.posted[0].startswith("Hello") and "github.io" in FakeFb.posted[0]
+class BrokenFb(FakeFb):
+    async def post(self, text): raise RuntimeError("token expired")
+bot.web_chat.messenger = BrokenFb()
+assert "token expired" in asyncio.run(bot.crosspost_facebook("Hello")), "a failure is reported, not raised"
+bot.web_chat.messenger = None
 bot.web_chat = bot.visits = None
-print("PASS startup opens the website chat window on the same customer service")
+print("PASS startup opens the website chat window on the same customer service; X posts are copied to Facebook")
 
 # --- nothing waits behind a slow handler, and the chat model has a hard deadline ----------------------
 import inspect as _inspect
