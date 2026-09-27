@@ -171,10 +171,17 @@ def load_catalog(path: Path = CS_PRODUCTS_PATH) -> str:
 
 SYSTEM_TEMPLATE = """你是一位博主的客服助理，帮博主本人接待来咨询 AI 相关服务的客户。客户可能来自小红书、X、Telegram 或博主的个人网站。
 
+【最重要：回复一定要短】
+- 每条回复最多 2 句话，中文不超过 60 个字，英文不超过 40 个词。像朋友发微信一样短。
+- 只回答客户这一次问的那件事。不要介绍其他服务，不要把资料全部搬出来，不要主动讲细节。
+- 不要用列表、编号、标题、加粗、分段。就是一两句普通的话。
+- 最多问一个问题。客户想知道更多，他自己会接着问。
+- 例子：客户问"搭建 AI 客服多少钱"，回"国内 200 元搭建，之后每月 49 元～你是国内还是海外的店呀？"就够了。
+
 【说话方式】
 - 用客户最近一条消息的语言回复：客户写简体中文就用简体，写繁体中文就用繁体，写英文就用英文，写其他语言就用那种语言。
 - 业务资料是中文的，用客户的语言转述，意思不能变。价格照原数字说，并注明是人民币（CNY / RMB）。
-- 亲切、自然、像博主本人的助理在私信里聊天，不要像官方客服。句子短，可以偶尔用一个 emoji，不要每句都用。
+- 亲切、自然、像博主本人的助理在私信里聊天，不要像官方客服。可以偶尔用一个 emoji，不要每句都用。
 - 你是助理，不是博主本人。被问到是不是真人/机器人时如实说你是助理，并转给本人。
 
 【只能依据下面的业务资料回答】
@@ -185,12 +192,12 @@ SYSTEM_TEMPLATE = """你是一位博主的客服助理，帮博主本人接待�
 
 【问价格、时间：自己回答，不要转给本人】
 - 资料里写了的价格、交付周期、修改次数、能做什么，直接照资料回答。这是你最重要的工作，不许因为这些问题转给本人。
-- 价格分几种情况（比如国内商户 / 海外商户）而客户没说是哪种时，把几种都报出来，再顺便问一句他是哪种。
+- 价格分几种情况（比如国内商户 / 海外商户）而客户没说是哪种时，用一句话简单报出来，再问一句他是哪种。
 - 客户说得太短或看不懂（比如只发了"?"、"在吗"、"hi"），就简单打个招呼，问他想了解哪项服务，或者把上一条回答换个说法再讲一遍。不要转给本人。
-- 客户要本人的联系方式（微信、Telegram），直接把资料里「联系本人」的内容给他。
+- 客户要本人的联系方式，只给微信号和 Telegram 就行（客户点名要别的再给）。
 
 【主动问清需求】
-客户需求没说清楚时，一次问一两个问题，帮本人收集报价需要的信息：
+客户需求没说清楚时，一次只问一个问题，帮本人收集报价需要的信息：
 1. 要做什么（哪项服务、具体内容、页数/篇数/功能）
 2. 截止时间
 3. 预算
@@ -297,7 +304,7 @@ JSON_FORMAT_SUFFIX = """
 
 【输出格式】
 只输出一个 JSON 对象，不要任何其他文字，不要用 ``` 包起来。字段：
-- reply：发给客户的话（字符串）；handoff 为 true 时写空字符串 ""
+- reply：发给客户的话（字符串，最多 2 句、中文 60 字以内）；handoff 为 true 时写空字符串 ""
 - handoff：要不要转给本人（true / false）
 - reason：转给本人的原因，只能是 "order_or_payment"、"bargain"、"complex"、"out_of_scope"、"wants_human" 之一；不转就写 ""
 - summary：需求摘要，格式「做什么｜截止时间｜预算」，不知道的写"未说明"
@@ -305,6 +312,23 @@ JSON_FORMAT_SUFFIX = """
 
 示例（内容不要照抄）：
 {"reply": "可以的～想做几页、什么时候要呀？", "handoff": false, "reason": "", "summary": "课程汇报PPT｜未说明｜未说明", "intent": "interested"}"""
+
+
+# Customers were scared off by long replies. The prompt asks for two short
+# sentences; this is the safety net for when the model ignores it.
+MAX_REPLY_CHARS = int(os.environ.get("CS_MAX_REPLY_CHARS", "120"))
+_SENTENCE_END = re.compile(r"[。！？!?～~]|\.(?=\s|$)|\n")
+
+
+def tidy_reply(text: str, limit: int = MAX_REPLY_CHARS) -> str:
+    """Plain chat text, cut at a sentence end so it never runs past `limit` characters."""
+    text = re.sub(r"\*\*|__|^#+\s*|^\s*(?:[-*•]|\d+[.、)])\s+", "", text or "", flags=re.M)
+    text = re.sub(r"\s*\n\s*", "\n", text).strip()
+    if len(text) <= limit:
+        return text
+    ends = [m.end() for m in _SENTENCE_END.finditer(text, 0, limit + 1)]
+    cut = ends[-1] if ends and ends[-1] >= limit // 3 else 0
+    return text[:cut].strip() if cut else text[:limit].rstrip("，,、；; ") + "…"
 
 
 def parse_decision(text: str) -> Decision:
@@ -386,7 +410,7 @@ class OpenAICompatibleResponder:
                 raise
             reply = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", text).strip()
             logger.warning("模型没按 JSON 格式回答，直接用它的原话回复客户：%r", reply[:80])
-            return Decision(reply=reply[:1500])
+            return Decision(reply=reply)
 
 
 # --------------------------------------------------------------------------- #
@@ -653,7 +677,7 @@ class CustomerService:
                 await self._notify(key, reason)
                 return reply
 
-            reply = self._say(key, decision.reply)
+            reply = self._say(key, tidy_reply(decision.reply))
             if intent_rose and CS_NOTIFY_INTENT:
                 await self._notify_intent(key, intent, is_new)
             elif is_new and CS_NOTIFY_NEW:

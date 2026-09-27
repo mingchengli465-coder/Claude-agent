@@ -30,7 +30,7 @@ for s in data["服务"]:
 system = cs.build_system_prompt(catalog)
 assert catalog in system and "只能依据" in system and "待填" in system
 # Prices the catalog has are answered, never handed off; vague messages get a question back.
-for rule in ("不许因为这些问题转给本人", "把几种都报出来", "不要转给本人", "联系本人"):
+for rule in ("不许因为这些问题转给本人", "用一句话简单报出来", "不要转给本人", "联系本人"):
     assert rule in system, rule
 print(f"PASS products.yaml has the {len(names)} services with every field; examples stay out of the prompt ({catalog.count('待填')} blanks)")
 
@@ -458,3 +458,14 @@ assert store.messages_after("web", "v1", c) == []
 print("PASS messages can be read back after a given id, per customer")
 
 print("\nALL CUSTOMER SERVICE TESTS PASSED")
+
+# --- replies stay short: customers were scared off by walls of text ---------------------------
+long = ("国内商户：一次性搭建费 200 元，之后每月 49 元。海外商户：一次性搭建费 70–85 美元，之后每月 9.9 美元。"
+        "月费包含服务器、AI 用量、价目表和常见问题的更新，按月付，随时可以停。支持微信、Telegram、WhatsApp 等平台。")
+short = cs.tidy_reply(long)
+assert len(short) <= cs.MAX_REPLY_CHARS and short.endswith("。") and short.startswith("国内商户"), short
+assert cs.tidy_reply("**价格**\n- 国内 200 元\n- 海外 70–85 美元") == "价格\n国内 200 元\n海外 70–85 美元", "no markdown"
+assert cs.tidy_reply("好的～") == "好的～"
+assert cs.tidy_reply("x" * 300).endswith("…") and len(cs.tidy_reply("x" * 300)) <= cs.MAX_REPLY_CHARS + 1
+assert "最多 2 句话" in cs.SYSTEM_TEMPLATE and "不要用列表" in cs.SYSTEM_TEMPLATE
+print("PASS long or markdown replies are trimmed to a couple of short sentences")
