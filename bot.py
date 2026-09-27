@@ -79,6 +79,7 @@ FB_POST_SUFFIX = os.environ.get(
     "FB_POST_SUFFIX",
     "\n\nSee what I build and chat with my AI assistant:\nhttps://mingchengli465-coder.github.io/Claude-agent/?from=fb",
 ).replace("\\n", "\n")
+FB_MANUAL_COPY = os.environ.get("FB_MANUAL_COPY", "true").lower() != "false"
 # The website visitor report (visits.py) goes to the owner every morning.
 VISITS_REPORT_TIME = os.environ.get("VISITS_REPORT_TIME", "09:00")
 VISITS_TIMEZONE = os.environ.get("VISITS_TIMEZONE", "Asia/Shanghai")
@@ -416,10 +417,15 @@ TWEET_SKIPPED_TEXT = "⏸ 已暫停，這次排程跳過。"
 
 
 async def crosspost_facebook(text: str) -> str:
-    """Also publish on the Facebook Page, if it's connected. Returns a line for the owner's report."""
+    """Also publish on the Facebook Page, if it's connected. Returns a line for the owner's report.
+
+    Until it is, the report carries the Facebook version ready to copy, so the
+    owner can paste it onto the Page by hand (FB_MANUAL_COPY=false turns that off)."""
     fb = web_chat.messenger if web_chat is not None else None
     if fb is None or not fb.connected:
-        return ""
+        if not FB_MANUAL_COPY:
+            return ""
+        return "\n\n📘 Facebook 版（长按复制，发到你的专页）：\n\n" + text + FB_POST_SUFFIX
     try:
         url = await fb.post(text + FB_POST_SUFFIX)
     except Exception as exc:  # noqa: BLE001 - X is unaffected
