@@ -514,7 +514,11 @@ assert len(me_bot.sent) == 1, "only once, not on every restart"
 assert "visits-daily" in __import__("inspect").getsource(bot.schedule_visits_report)
 assert "schedule_visits_report(application)" in __import__("inspect").getsource(bot.main)
 # X posts are copied to the Facebook Page when it's connected
-assert asyncio.run(bot.crosspost_facebook("hi")) == "", "no Facebook, no note"
+manual = asyncio.run(bot.crosspost_facebook("hi"))
+assert "Facebook 版" in manual and "hi" in manual and "?from=fb" in manual, "no Facebook yet: the owner gets a copy to paste"
+bot.FB_MANUAL_COPY = False
+assert asyncio.run(bot.crosspost_facebook("hi")) == ""
+bot.FB_MANUAL_COPY = True
 class FakeFb:
     connected, posted = True, []
     async def post(self, text): self.posted.append(text); return "https://www.facebook.com/P_1"
