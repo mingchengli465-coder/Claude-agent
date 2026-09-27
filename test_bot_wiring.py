@@ -545,6 +545,19 @@ class ClosedBot:
     async def send_message(self, chat_id, text, **kw): raise bot.TelegramError("Chat not found")
 bot.telegram_bot = ClosedBot()
 assert "管理员" in asyncio.run(bot.crosspost_channel("x")), "a failure says the bot must be an admin"
+# the first start with a channel posts an introduction, once
+import visits as visits_mod
+bot.visits = visits_mod.Visits(pathlib.Path(tempfile.mkdtemp()) / "v.sqlite3")
+ChannelBot.sent.clear()
+bot.telegram_bot, bot.TG_CHANNEL = ChannelBot(), "vinc_ai"
+asyncio.run(bot.hello_channel_once()); asyncio.run(bot.hello_channel_once())
+hellos = [m for m in ChannelBot.sent if m[0] == "@vinc_ai"]
+assert len(hellos) == 1 and "欢迎" in hellos[0][1], ChannelBot.sent
+assert any("频道接好了" in m[1] for m in ChannelBot.sent if m[0] != "@vinc_ai"), "the owner is told"
+bot.telegram_bot = ClosedBot(); bot.TG_CHANNEL = "other_channel"
+asyncio.run(bot.hello_channel_once())
+assert bot.visits.take_flag("channel_hello:@other_channel"), "a failed hello is retried on the next start"
+bot.visits = None
 bot.TG_CHANNEL = ""
 assert asyncio.run(bot.crosspost_channel("x")) == ""
 import bluesky
