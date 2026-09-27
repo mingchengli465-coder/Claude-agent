@@ -580,6 +580,9 @@ assert len(posted) == 1 and "Bluesky" in posted[0]
 assert any("Bluesky 接好了" in m[1] and "bsky.app/profile/v/post/9" in m[1] for m in ChannelBot.sent), ChannelBot.sent
 bluesky.post, bluesky.HANDLE = bad_post, "w.bsky.social"
 asyncio.run(bot.hello_bluesky_once())
+assert not any("Bluesky 还接不上" in m[1] for m in ChannelBot.sent), "a renamed handle isn't introduced again"
+bot.visits = visits_mod.Visits(pathlib.Path(tempfile.mkdtemp()) / "v3.sqlite3")
+asyncio.run(bot.hello_bluesky_once())
 assert any("Bluesky 还接不上" in m[1] for m in ChannelBot.sent)
 assert bot.visits.take_flag("bluesky_hello:w.bsky.social"), "a failed hello is retried next start"
 bot.visits = None
