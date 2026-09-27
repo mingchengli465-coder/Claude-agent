@@ -530,6 +530,35 @@ class BrokenFb(FakeFb):
 bot.web_chat.messenger = BrokenFb()
 assert "token expired" in asyncio.run(bot.crosspost_facebook("Hello")), "a failure is reported, not raised"
 bot.web_chat.messenger = None
+
+# the Telegram channel and Bluesky get each post too, when set up
+assert bot.channel_chat_id("https://t.me/vinc_ai") == "@vinc_ai" and bot.channel_chat_id("@vinc_ai") == "@vinc_ai"
+assert bot.channel_chat_id("-1001234") == -1001234 and bot.channel_chat_id("") == ""
+class ChannelBot:
+    sent = []
+    async def send_message(self, chat_id, text, **kw): self.sent.append((chat_id, text))
+bot.telegram_bot, bot.TG_CHANNEL = ChannelBot(), "vinc_ai"
+note = asyncio.run(bot.crosspost_channel("Hello channel"))
+assert "@vinc_ai" in note and ChannelBot.sent[0][0] == "@vinc_ai"
+assert ChannelBot.sent[0][1].startswith("Hello channel") and "?from=tgch" in ChannelBot.sent[0][1]
+class ClosedBot:
+    async def send_message(self, chat_id, text, **kw): raise bot.TelegramError("Chat not found")
+bot.telegram_bot = ClosedBot()
+assert "管理员" in asyncio.run(bot.crosspost_channel("x")), "a failure says the bot must be an admin"
+bot.TG_CHANNEL = ""
+assert asyncio.run(bot.crosspost_channel("x")) == ""
+import bluesky
+assert asyncio.run(bot.crosspost_bluesky("x")) == "" if not bluesky.enabled() else True
+saved_post, saved_enabled = bluesky.post, bluesky.enabled
+async def fake_post(text): return "https://bsky.app/profile/v/post/1"
+bluesky.post, bluesky.enabled = fake_post, lambda: True
+assert "bsky.app" in asyncio.run(bot.crosspost_bluesky("x"))
+async def bad_post(text): raise RuntimeError("Invalid identifier or password")
+bluesky.post = bad_post
+assert "Invalid identifier" in asyncio.run(bot.crosspost_bluesky("x"))
+bluesky.post, bluesky.enabled = saved_post, saved_enabled
+bot.telegram_bot = None
+assert "crosspost_everywhere(full)" in __import__("inspect").getsource(bot.produce_and_post_tweet)
 bot.web_chat = bot.visits = None
 print("PASS startup opens the website chat window on the same customer service; X posts are copied to Facebook")
 

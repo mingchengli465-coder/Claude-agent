@@ -34,6 +34,7 @@ from telegram.ext import (
 import customer_service as cs
 import llm
 import tweet as tweet_mod
+import bluesky
 import messenger as messenger_mod
 import visits as visits_mod
 import web
@@ -80,6 +81,10 @@ FB_POST_SUFFIX = os.environ.get(
     "\n\nSee what I build and chat with my AI assistant:\nhttps://mingchengli465-coder.github.io/Claude-agent/?from=fb",
 ).replace("\\n", "\n")
 FB_MANUAL_COPY = os.environ.get("FB_MANUAL_COPY", "true").lower() != "false"
+# A public Telegram channel (@name, t.me/name or -100… id) that gets each post too.
+# The bot must be an admin of the channel.
+TG_CHANNEL = os.environ.get("TG_CHANNEL", "").strip()
+TG_CHANNEL_LINK = os.environ.get("TG_CHANNEL_LINK", "https://mingchengli465-coder.github.io/Claude-agent/?from=tgch").strip()
 # The website visitor report (visits.py) goes to the owner every morning.
 VISITS_REPORT_TIME = os.environ.get("VISITS_REPORT_TIME", "09:00")
 VISITS_TIMEZONE = os.environ.get("VISITS_TIMEZONE", "Asia/Shanghai")
@@ -435,6 +440,53 @@ async def crosspost_facebook(text: str) -> str:
     return f"\n\n📘 Facebook 专页也发了：{url}"
 
 
+def channel_chat_id(raw: str = "") -> str | int:
+    """TG_CHANNEL as Telegram wants it: @name, or the numeric id of a private channel."""
+    value = (raw or TG_CHANNEL).strip()
+    value = re.sub(r"^(https?://)?(www\.)?(t\.me|telegram\.me)/", "", value, flags=re.I).strip("/ ")
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    return "@" + value.lstrip("@") if value else ""
+
+
+async def crosspost_channel(text: str) -> str:
+    """Also post in the owner's Telegram channel, if one is set."""
+    channel = channel_chat_id()
+    if not channel or telegram_bot is None:
+        return ""
+    body = text.strip()
+    if TG_CHANNEL_LINK:
+        body += f"\n\n👉 {TG_CHANNEL_LINK}"
+    bot_link = tweet_mod.telegram_link()
+    if bot_link:
+        body += f"\n💬 {bot_link}"
+    try:
+        await telegram_bot.send_message(chat_id=channel, text=body)
+    except TelegramError as exc:
+        logger.exception("Telegram 频道发帖失败")
+        return f"\n\n⚠️ Telegram 频道没发成功：{exc}（机器人要是频道管理员才能发）"
+    logger.info("Telegram 频道已发帖：%s", channel)
+    return f"\n\n📣 Telegram 频道也发了：{channel}"
+
+
+async def crosspost_bluesky(text: str) -> str:
+    """Also post on Bluesky, if it's set up."""
+    if not bluesky.enabled():
+        return ""
+    try:
+        url = await bluesky.post(text)
+    except Exception as exc:  # noqa: BLE001 - the other platforms are unaffected
+        logger.exception("Bluesky 发帖失败")
+        return f"\n\n⚠️ Bluesky 没发成功：{exc}"
+    logger.info("Bluesky 已发帖：%s", url)
+    return f"\n\n🦋 Bluesky 也发了：{url}"
+
+
+async def crosspost_everywhere(text: str) -> str:
+    """Every platform besides X. Returns the lines for the owner's report."""
+    return "".join([await crosspost_facebook(text), await crosspost_bluesky(text), await crosspost_channel(text)])
+
+
 async def produce_and_post_tweet(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
     """Generate a tweet, publish it, and report the result. No approval step."""
     try:
@@ -446,7 +498,7 @@ async def produce_and_post_tweet(context: ContextTypes.DEFAULT_TYPE, chat_id: in
 
     logger.info("生成了推文：[%s] %s", item.domain, item.topic)
     full = item.full_text()
-    fb_note = await crosspost_facebook(full)
+    fb_note = await crosspost_everywhere(full)
 
     try:
         url = await tweet_mod.publish(item)
@@ -523,7 +575,7 @@ async def publish_manual(body: str) -> str:
                 "（中文一个字算 2，链接一条算 23）。删短一点再发。"
             )
 
-    fb_note = await crosspost_facebook(main)
+    fb_note = await crosspost_everywhere(main)
     try:
         url = await tweet_mod.publish(tweet_mod.Tweet(domain="手動", topic=main[:60], text=main))
     except Exception as exc:  # noqa: BLE001 - tell the owner exactly why
@@ -982,11 +1034,15 @@ def check_env(name: str, value: str) -> str:
 # Set in post_init when customer service is on. None means no website chat.
 web_chat: web.WebChat | None = None
 fb_setup_tasks: set[asyncio.Task] = set()
+# The bot itself, for posting in the owner's Telegram channel. Set in post_init.
+telegram_bot = None
 
 
 async def post_init(application: Application) -> None:
     """Learn the bot's own @username, so X_TELEGRAM_LINK=bot can point tweets at it,
     then open the website chat window."""
+    global telegram_bot
+    telegram_bot = application.bot
     username = ""
     try:
         me = await application.bot.get_me()
