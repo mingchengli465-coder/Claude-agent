@@ -512,6 +512,9 @@ async def hello_bluesky_once() -> None:
     whether the handle and app password work. Retried on the next start if it failed."""
     if not bluesky.enabled() or visits is None:
         return
+    # Once per account: a changed handle (same account) must not introduce it again.
+    if visits.db.execute("SELECT 1 FROM visit_settings WHERE key LIKE 'bluesky_hello:%'").fetchone():
+        return
     flag = f"bluesky_hello:{bluesky.HANDLE}"
     if not visits.take_flag(flag):
         return
