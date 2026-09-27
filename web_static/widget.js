@@ -27,7 +27,7 @@
     hans: {
       title: "AI 客服",
       status: "在线 · 一般几秒内回复",
-      welcome: "你好呀 👋 我是 AI 助理，想了解什么直接问我～价格、怎么下单、要多久都可以问。",
+      welcome: "你好 👋 想了解什么直接问我～",
       placeholder: "输入消息…",
       send: "发送",
       error: "网络有点问题，请稍后再试 🙏",
@@ -40,7 +40,7 @@
     hant: {
       title: "AI 客服",
       status: "在線 · 一般幾秒內回覆",
-      welcome: "你好 👋 我是 AI 助理，想了解什麼直接問我～價格、怎麼下單、要多久都可以問。",
+      welcome: "你好 👋 想了解什麼直接問我～",
       placeholder: "輸入訊息…",
       send: "傳送",
       error: "網路有點問題，請稍後再試 🙏",
@@ -53,7 +53,7 @@
     en: {
       title: "AI Assistant",
       status: "Online · usually replies in seconds",
-      welcome: "Hi there 👋 I'm the AI assistant. Ask me anything: prices, how to order, how long it takes.",
+      welcome: "Hi 👋 What can I help you with?",
       placeholder: "Type a message…",
       send: "Send",
       error: "Connection problem, please try again in a moment 🙏",
