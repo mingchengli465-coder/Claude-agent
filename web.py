@@ -6,6 +6,8 @@
     POST /api/chat    a visitor's message -> the AI's reply (customer_service.handle)
     GET  /api/messages  new messages for a visitor, so the owner's replies show up
     POST /api/hit     one page view on the owner's own pages (visits.py)
+    GET  /privacy     privacy policy (Meta asks for one before Messenger goes live)
+    GET/POST /fb/webhook  Facebook Messenger, when it is configured (messenger.py)
 
 Visitors are customers on the "web" channel, keyed by a random id the widget
 keeps in the browser. The owner is told and replies in Telegram exactly as for
@@ -134,9 +136,10 @@ def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
 
 class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
-                 clock=time.time, visits: visits_mod.Visits | None = None):
+                 clock=time.time, visits: visits_mod.Visits | None = None, messenger=None):
         self.service = service
         self.visits = visits
+        self.messenger = messenger
         self.title = title or "AI 客服"
         self.contact_link = contact_link
         self.clock = clock
@@ -163,6 +166,9 @@ class WebChat:
         app.router.add_post("/api/chat", self.chat)
         app.router.add_get("/api/messages", self.messages)
         app.router.add_post("/api/hit", self.hit)
+        app.router.add_get("/privacy", self.privacy)
+        if self.messenger is not None:
+            self.messenger.routes(app)
         app.router.add_route("OPTIONS", "/api/{tail:.*}", self.preflight)
         return app
 
@@ -184,6 +190,9 @@ class WebChat:
 
     async def page(self, request: web.Request) -> web.Response:
         return self._render("demo.html")
+
+    async def privacy(self, request: web.Request) -> web.Response:
+        return self._render("privacy.html")
 
     def _render(self, name: str) -> web.Response:
         body = (_STATIC / name).read_text(encoding="utf-8")
@@ -208,7 +217,8 @@ class WebChat:
                     .replace("{{WECHAT_TEXT}}", html.escape(" / ".join(wechat)))
                     .replace("{{WECHAT_DISPLAY}}", "" if wechat else "none")
                     .replace("{{SOCIAL_LINKS}}", links_html)
-                    .replace("{{SOCIAL_DISPLAY}}", "" if links else "none"))
+                    .replace("{{SOCIAL_DISPLAY}}", "" if links else "none")
+                    .replace("{{EMAIL}}", html.escape(next((t for l, h, t in links if h.startswith("mailto:")), ""))))
         return web.Response(text=body, content_type="text/html", headers={"Cache-Control": "no-cache"})
 
     async def widget(self, request: web.Request) -> web.Response:

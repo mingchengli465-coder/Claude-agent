@@ -34,6 +34,7 @@ from telegram.ext import (
 import customer_service as cs
 import llm
 import tweet as tweet_mod
+import messenger as messenger_mod
 import visits as visits_mod
 import web
 import xhs
@@ -984,7 +985,8 @@ async def start_web_chat(bot_username: str = "") -> None:
     except Exception:  # noqa: BLE001 - the chat window matters more than the numbers
         logger.exception("访客统计打不开，网站照常运行")
         counter = None
-    chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter)
+    fb = messenger_mod.Messenger.from_env(service)
+    chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb)
     try:
         await chat.start()
     except OSError:
@@ -992,10 +994,14 @@ async def start_web_chat(bot_username: str = "") -> None:
         return
     web_chat = chat
     visits = counter
+    if fb is not None:
+        logger.info("Facebook Messenger 已接上：webhook 地址是 /fb/webhook")
 
 
 async def post_shutdown(application: Application) -> None:
     if web_chat is not None:
+        if web_chat.messenger is not None:
+            await web_chat.messenger.close()
         await web_chat.stop()
 
 

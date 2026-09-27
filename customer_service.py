@@ -104,7 +104,7 @@ HANDOFF_REASONS = {
 INTENT_LEVELS = {"": 0, "interested": 1, "ready": 2}
 INTENT_LABELS = {1: "有购买意向", 2: "准备购买"}
 
-CHANNEL_LABELS = {"telegram": "Telegram", "web": "网站聊天窗口"}
+CHANNEL_LABELS = {"telegram": "Telegram", "web": "网站聊天窗口", "facebook": "Facebook Messenger"}
 
 # A safety net under the model's own judgement: these always go to the owner.
 _HANDOFF_KEYWORDS = [
