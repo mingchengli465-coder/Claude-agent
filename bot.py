@@ -1154,7 +1154,8 @@ async def connect_mailer(update: Update) -> bool:
             f"⚠️ 这个链接还用不了：{exc}\n\n检查一下代码是不是我发的最新那份、「谁可以访问」是不是「任何人」。发 /mail 可以重新看步骤。")
         return True
     leads_db.set_setting("url", found.group(0))
-    await update.effective_message.reply_text(f"✅ Gmail 接好了（{email}）！以后每天 {outreach_mod.SEND_TIME} 我把要发的邮件给你看，你点 ✅ 我就发。")
+    after = ("我自动发，发完告诉你" if outreach_mod.AUTO else "我把要发的邮件给你看，你点 ✅ 我就发")
+    await update.effective_message.reply_text(f"✅ Gmail 接好了（{email}）！以后每天 {outreach_mod.SEND_TIME} {after}。")
     await offer_emails(update.get_bot(), manual=True)
     return True
 
@@ -1179,6 +1180,13 @@ async def offer_emails(bot, manual: bool = False) -> None:
             text = (f"今天的 {outreach_mod.DAILY_LIMIT} 封已经发完了，剩下 {left} 家明天再发。" if left
                     else "名单里的商家都发过了。要新名单就跟 Claude 说一声。")
             await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text)
+        return
+    if outreach_mod.AUTO:
+        lines = "\n".join(f"{i}. {lead['name']} · {lead['email']}" for i, lead in enumerate(batch, 1))
+        note = await bot.send_message(
+            chat_id=int(OWNER_CHAT_ID), disable_web_page_preview=True,
+            text=f"📧 自动发今天的 {len(batch)} 封邮件（每封隔一会儿）：\n\n{lines}\n\n想停就发 /outreach_stop。")
+        start_sending(note, [lead["email"] for lead in batch])
         return
     offer = secrets.token_hex(4)
     leads_db.set_setting(f"offer:{offer}", json.dumps([lead["email"] for lead in batch]))
@@ -1207,32 +1215,47 @@ async def mail_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     emails = json.loads(raw)
     await query.edit_message_text(f"🚀 开始发了，一共 {len(emails)} 封，每封隔一会儿，发完告诉你。")
-    task = asyncio.get_running_loop().create_task(send_emails(query.message, emails))
+    start_sending(query.message, emails)
+
+
+def start_sending(message, emails: list[str]) -> None:
+    task = asyncio.get_running_loop().create_task(send_emails(message, emails))
     fb_setup_tasks.add(task)
     task.add_done_callback(fb_setup_tasks.discard)
 
 
 async def send_emails(message, emails: list[str]) -> None:
-    box, done, problem = mailer(), [], ""
-    for i, email in enumerate(emails):
+    box, done, problem, failed_in_a_row = mailer(), [], "", 0
+    for email in emails:
+        if leads_db.setting("stopped"):
+            problem = "你让我停了，剩下的没发。发 /outreach 可以重新开始。"
+            break
         lead = leads_db.get(email)
         if lead is None or lead["status"] != "new":
             continue
         if leads_db.room_today() <= 0:
             problem = f"今天已经发满 {outreach_mod.DAILY_LIMIT} 封，剩下的明天发。"
             break
-        if done:
+        if done or failed_in_a_row:
             await asyncio.sleep(outreach_mod.GAP_SECONDS)
         subject, body = outreach_mod.compose(lead)
         try:
             await box.send(email, subject, body)
         except outreach_mod.MailError as exc:
             logger.warning("邮件没发出去（%s）：%s", email, exc)
-            problem = f"发到 {lead['name']} 时出错，后面的先停了：{exc}"
-            break
+            failed_in_a_row += 1
+            if failed_in_a_row >= 2:
+                # twice in a row is Gmail or the script, not one bad address: keep the rest for later
+                problem = f"发到 {lead['name']} 时又出错了，后面的先停了：{exc}"
+                break
+            leads_db.mark(email, "failed", str(exc)[:200])
+            done.append(f"⚠️ {lead['name']} 发不出去（{exc}）")
+            continue
+        failed_in_a_row = 0
         leads_db.mark(email, "sent")
         done.append(f"✅ {lead['name']}")
-    text = f"📧 发好了 {len(done)} 封：\n" + "\n".join(done) if done else "📧 这次一封都没发出去。"
+    ok = sum(line.startswith("✅") for line in done)
+    text = f"📧 发好了 {ok} 封：\n" + "\n".join(done) if done else "📧 这次一封都没发出去。"
     if problem:
         text += f"\n\n⚠️ {problem}"
     text += "\n\n有人回复我会马上告诉你。"
@@ -1250,10 +1273,12 @@ async def outreach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if leads_db is None:
         await update.effective_message.reply_text("邮件功能没有启用。")
         return
+    leads_db.set_setting("stopped", "")
     counts = leads_db.counts()
     await update.effective_message.reply_text(
-        f"📧 名单一共 {sum(counts.values())} 家：已发 {sum(counts.values()) - counts.get('new', 0)}，"
+        f"📧 名单一共 {sum(counts.values())} 家：已发 {sum(counts.values()) - counts.get('new', 0) - counts.get('failed', 0)}，"
         f"有回复 {counts.get('replied', 0)}，不要了 {counts.get('optout', 0)}，退信 {counts.get('bounced', 0)}，"
+        f"发不出去 {counts.get('failed', 0)}，"
         f"还没发 {counts.get('new', 0)}。")
     if mailer() is None:
         await update.effective_message.reply_text("还没接 Gmail。发 /mail，照着弄一次就能自动发。")
@@ -1261,7 +1286,32 @@ async def outreach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await offer_emails(context.bot, manual=True)
 
 
+async def outreach_stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/outreach_stop — no more cold emails until /outreach."""
+    if not is_owner(update.effective_chat.id) or leads_db is None:
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+    leads_db.set_setting("stopped", "1")
+    await update.effective_message.reply_text("⏸ 好，邮件停了。想重新开始就发 /outreach。")
+
+
+async def send_mail_setup_once(bot) -> None:
+    """Gmail isn't connected yet: send the owner the steps once, so they needn't ask."""
+    if leads_db is None or not OWNER_CHAT_ID or mailer() is not None or not leads_db.counts().get("new"):
+        return
+    if leads_db.setting("setup_sent"):
+        return
+    leads_db.set_setting("setup_sent", "1")
+    try:
+        await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=MAIL_SETUP_TEXT, disable_web_page_preview=True)
+        await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=outreach_mod.script_for(leads_db.secret()))
+    except TelegramError:
+        logger.exception("Gmail 设置步骤发送失败")
+
+
 async def outreach_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    if leads_db is not None and leads_db.setting("stopped"):
+        return
     try:
         await offer_emails(context.bot)
     except Exception:  # noqa: BLE001 - tomorrow is another try
@@ -1506,6 +1556,7 @@ async def post_init(application: Application) -> None:
     await send_owner_links_once(application)
     await hello_channel_once()
     await hello_bluesky_once()
+    await send_mail_setup_once(application.bot)
 
 
 async def start_web_chat(bot_username: str = "", bot=None) -> None:
@@ -1616,6 +1667,7 @@ def main() -> None:
     application.add_handler(CommandHandler("post", post_command))
     application.add_handler(CommandHandler("mail", mail_command))
     application.add_handler(CommandHandler("outreach", outreach_command))
+    application.add_handler(CommandHandler("outreach_stop", outreach_stop_command))
     application.add_handler(CallbackQueryHandler(mail_button, pattern=r"^mail:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, route_text))
     application.add_handler(MessageHandler(filters.ATTACHMENT & ~filters.COMMAND, route_media))

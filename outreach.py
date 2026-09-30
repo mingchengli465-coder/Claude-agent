@@ -6,7 +6,8 @@ It sends with GmailApp, so every email sits in the owner's Sent folder and repli
 their inbox, and it lets the bot look for replies to tell the owner about them.
 
 Every morning the bot offers the day's batch (at most OUTREACH_DAILY_LIMIT) and sends
-nothing until the owner taps ✅. Each business is emailed once, never followed up.
+nothing until the owner taps ✅, or with OUTREACH_AUTO=true sends it straight away and
+reports. Each business is emailed once, never followed up.
 
     OUTREACH_LEADS          JSON list: [{"email", "name", "region": "sg"|"hk", "lang": "en"|"zh", "first"}]
     OUTREACH_DAILY_LIMIT    default 10
@@ -31,6 +32,8 @@ DAILY_LIMIT = int(os.environ.get("OUTREACH_DAILY_LIMIT", "10"))
 SEND_TIME = os.environ.get("OUTREACH_TIME", "10:00")
 TIMEZONE = os.environ.get("OUTREACH_TIMEZONE", "Asia/Singapore")
 GAP_SECONDS = float(os.environ.get("OUTREACH_GAP_SECONDS", "45"))
+# true: the day's batch goes out on its own, and the owner is told afterwards
+AUTO = os.environ.get("OUTREACH_AUTO", "false").lower() == "true"
 SENDER_NAME = os.environ.get("OUTREACH_SENDER_NAME", "Vincent")
 SITE_LINK = os.environ.get("OUTREACH_LINK", "https://mingchengli465-coder.github.io/Claude-agent/?from=email")
 TELEGRAM_LINK = os.environ.get("OUTREACH_TELEGRAM", "https://t.me/Vinceeeeentttt")

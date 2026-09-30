@@ -68,8 +68,8 @@ async def mailer_tests():
         elif req["action"] == "ping":
             out = {"ok": True, "email": "me@gmail.com"}
         elif req["action"] == "send":
-            if req["to"] == "broken@ex.com":
-                out = {"ok": False, "error": "Invalid email: broken@ex.com"}
+            if req["to"].startswith("broken"):
+                out = {"ok": False, "error": "Invalid email: " + req["to"]}
             else:
                 sent.append(req); out = {"ok": True}
         elif req["action"] == "replies":
@@ -115,7 +115,7 @@ async def mailer_tests():
         told, edits = [], []
 
         class Bot:
-            async def send_message(self, **k): told.append(k)
+            async def send_message(self, **k): told.append(k); return Msg()
 
         class Msg:
             def __init__(self, text=""): self.text, self.chat_id = text, 424242
@@ -137,7 +137,7 @@ async def mailer_tests():
         bot.OWNER_CHAT_ID = "424242"
         bot.leads_db = om.Leads(os.path.join(tempfile.mkdtemp(), "cs.sqlite3"))
         bot.leads_db.set_setting("secret", "s3cret")
-        bot.leads_db.add(leads + [{"email": "broken@ex.com", "name": "Broken"}] + many[:2])
+        bot.leads_db.add(leads + [{"email": "broken@ex.com", "name": "Broken"}, {"email": "broken2@ex.com", "name": "Broken2"}] + many[:2])
         ctx = types.SimpleNamespace(bot=Bot())
 
         # not connected yet: /mail shows the steps and the script
@@ -154,7 +154,7 @@ async def mailer_tests():
         assert await bot.connect_mailer(Update(f"好了 {link}"))
         assert bot.leads_db.setting("url") == link and "Gmail 接好了（me@gmail.com）" in told[0]["text"]
         offer = told[1]
-        assert "今天要发这 6 封" in offer["text"] and "Whyzee Bakery · info@whyzee.com.sg" in offer["text"]
+        assert "今天要发这 7 封" in offer["text"] and "Whyzee Bakery · info@whyzee.com.sg" in offer["text"]
         assert "Hi Whyzee Bakery team" in offer["text"]
         go, no = [b.callback_data for b in offer["reply_markup"].inline_keyboard[0]]
         assert not await bot.connect_mailer(Update("hello"))
@@ -180,8 +180,9 @@ async def mailer_tests():
         to = [s["to"] for s in sent[1:]]
         assert to == ["info@whyzee.com.sg", "bakers@bakingmaniachk.com", "order@incake.com.hk"], to
         assert sent[3]["subject"].startswith("InCake 3D的客人查詢")
-        assert "发好了 3 封" in told[0]["text"] and "Broken" in told[0]["text"] and "后面的先停了" in told[0]["text"]
-        assert bot.leads_db.get("broken@ex.com")["status"] == "new"
+        assert "发好了 3 封" in told[0]["text"] and "Broken2" in told[0]["text"] and "后面的先停了" in told[0]["text"]
+        assert "Broken 发不出去" in told[0]["text"], told[0]["text"]
+        assert bot.leads_db.get("broken@ex.com")["status"] == "failed" and bot.leads_db.get("shop0@ex.com")["status"] == "new"
         q = Query(go)
         await bot.mail_button(types.SimpleNamespace(callback_query=q), ctx)
         assert q.alerts == ["这批已经处理过了"] and len(sent) == 4, "the same batch can't be sent twice"
@@ -212,7 +213,33 @@ async def mailer_tests():
         # /outreach shows the numbers
         told.clear()
         await bot.outreach_command(Update("/outreach"), ctx)
-        assert "已发 5" in told[0]["text"] and "有回复 1" in told[0]["text"], told[0]["text"]
+        assert "已发 5" in told[0]["text"] and "发不出去 1" in told[0]["text"] and "有回复 1" in told[0]["text"], told[0]["text"]
+
+        # auto mode: the batch goes out without a tap, and /outreach_stop stops it
+        bot.leads_db.add([{"email": f"auto{i}@ex.com", "name": f"Auto {i}"} for i in range(3)])
+        om.DAILY_LIMIT, om.AUTO = 20, True
+        told.clear(); before = len(sent)
+        await bot.outreach_daily_job(ctx)
+        for _ in range(100):
+            if any("发好了" in t["text"] for t in told):
+                break
+            await asyncio.sleep(0.02)
+        assert "自动发今天的 4 封" in told[0]["text"] and "reply_markup" not in told[0]
+        assert [s_["to"] for s_ in sent[before:]] == ["auto0@ex.com", "auto1@ex.com", "auto2@ex.com"]
+        bot.leads_db.add([{"email": "later@ex.com", "name": "Later"}])
+        await bot.outreach_stop_command(Update("/outreach_stop"), ctx)
+        told.clear()
+        await bot.outreach_daily_job(ctx)
+        assert not told and bot.leads_db.get("later@ex.com")["status"] == "new", "stopped means nothing goes out"
+        om.AUTO = False
+        print("PASS OUTREACH_AUTO sends the day's batch by itself and reports; /outreach_stop stops it")
+
+        # the setup steps are sent once, unasked, while Gmail isn't connected
+        bot.leads_db.set_setting("url", "")
+        told.clear()
+        await bot.send_mail_setup_once(Bot()); await bot.send_mail_setup_once(Bot())
+        assert len(told) == 2 and "script.google.com" in told[0]["text"] and "const SECRET" in told[1]["text"]
+        print("PASS the owner gets the Gmail steps once without asking")
         om.Mailer = real
 
 asyncio.run(mailer_tests())
