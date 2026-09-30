@@ -711,12 +711,13 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # Customer-service mode — the Telegram entry. The logic lives in customer_service.py
 # --------------------------------------------------------------------------- #
 
-CS_WELCOME_TEXT = (
+# A client's bot sets its own greeting in CS_WELCOME / CS_WELCOME_EN (\n for new lines).
+CS_WELCOME_TEXT = os.environ.get("CS_WELCOME", "").replace("\\n", "\n").strip() or (
     "你好呀～我是博主的助理 👋\n\n"
     "想做 PPT、写代码、写文案还是做个简单网站？跟我说说要做什么、什么时候要、预算大概多少，"
     "我帮你问清楚，再请本人给你报价～"
 )
-CS_WELCOME_TEXT_EN = (
+CS_WELCOME_TEXT_EN = os.environ.get("CS_WELCOME_EN", "").replace("\\n", "\n").strip() or (
     "Hi there! I'm the assistant here 👋\n\n"
     "Need slides, some code, copywriting or a simple website? Tell me what you need, "
     "your deadline and your budget, and I'll get the owner to quote you. "
