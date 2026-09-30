@@ -6,6 +6,7 @@ each chat, and relays messages between Telegram and OpenRouter.
 
 import asyncio
 import datetime as dt
+import json
 import logging
 import os
 import re
@@ -38,6 +39,7 @@ import tweet as tweet_mod
 import agent as agent_mod
 import bluesky
 import messenger as messenger_mod
+import outreach as outreach_mod
 import visits as visits_mod
 import web
 import xhs
@@ -356,6 +358,8 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
     if is_owner(update.effective_chat.id):
         if await forward_owner_reply(update, context):
+            return
+        if await connect_mailer(update):
             return
         await chat(update, context)
         return
@@ -1093,6 +1097,235 @@ def schedule_visits_report(application: Application) -> None:
     logger.info("每日访客报告：%s %s", VISITS_REPORT_TIME, VISITS_TIMEZONE)
 
 
+# --- cold emails, sent from the owner's Gmail ---------------------------------------------
+leads_db: outreach_mod.Leads | None = None
+MAIL_WEBHOOK_URL = os.environ.get("MAIL_WEBHOOK_URL", "").strip()
+MAIL_SETUP_TEXT = (
+    "📧 让我用你的 Gmail 自动发邮件，只要设置一次（5 分钟，要开 VPN）：\n\n"
+    "1. Safari 打开 https://script.google.com ，登录你的 Gmail，点左上角「新项目 / New project」\n"
+    "2. 把编辑框里原来的字全删掉，粘贴我下一条发的代码，点上面的💾保存\n"
+    "3. 点右上角蓝色「部署 / Deploy」→「新部署 / New deployment」→ 左边齿轮⚙️ 选「网页应用 / Web app」\n"
+    "4. 「执行身份」选「我」，「谁可以访问」选「任何人 / Anyone」→ 点「部署」\n"
+    "5. 点「授权访问」→ 选你的账号 → 出现「Google 未验证此应用」就点「高级 / Advanced」→「转至…（不安全）」→「允许」\n"
+    "   （这是你自己的脚本，只有你的机器人知道密码，放心）\n"
+    "6. 复制最后出现的「网页应用网址」（结尾是 /exec），直接发给我\n\n"
+    "邮件从你自己的 Gmail 发出，已发送里看得到，对方回复也会进你的收件箱，我会在这里提醒你。"
+)
+
+
+def mailer() -> outreach_mod.Mailer | None:
+    if leads_db is None:
+        return None
+    url = MAIL_WEBHOOK_URL or leads_db.setting("url")
+    return outreach_mod.Mailer(url, leads_db.secret()) if url else None
+
+
+async def mail_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/mail — connect the owner's Gmail (or check it is still connected)."""
+    if not is_owner(update.effective_chat.id):
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+    if leads_db is None:
+        await update.effective_message.reply_text("邮件功能没有启用。")
+        return
+    box = mailer()
+    if box is not None:
+        try:
+            email = await box.ping()
+        except outreach_mod.MailError as exc:
+            await update.effective_message.reply_text(f"⚠️ 之前接的 Gmail 现在用不了：{exc}\n\n照下面重新弄一次：")
+        else:
+            await update.effective_message.reply_text(f"✅ Gmail 已经接好了（{email}）。发 /outreach 看今天要发的邮件。")
+            return
+    await update.effective_message.reply_text(MAIL_SETUP_TEXT, disable_web_page_preview=True)
+    await update.effective_message.reply_text(outreach_mod.script_for(leads_db.secret()))
+
+
+async def connect_mailer(update: Update) -> bool:
+    """The owner pasted their Apps Script /exec link: check it works and keep it."""
+    found = outreach_mod.SCRIPT_URL.search(update.effective_message.text or "")
+    if not found or leads_db is None:
+        return False
+    box = outreach_mod.Mailer(found.group(0), leads_db.secret())
+    try:
+        email = await box.ping()
+    except outreach_mod.MailError as exc:
+        await update.effective_message.reply_text(
+            f"⚠️ 这个链接还用不了：{exc}\n\n检查一下代码是不是我发的最新那份、「谁可以访问」是不是「任何人」。发 /mail 可以重新看步骤。")
+        return True
+    leads_db.set_setting("url", found.group(0))
+    await update.effective_message.reply_text(f"✅ Gmail 接好了（{email}）！以后每天 {outreach_mod.SEND_TIME} 我把要发的邮件给你看，你点 ✅ 我就发。")
+    await offer_emails(update.get_bot(), manual=True)
+    return True
+
+
+def _offer_text(batch: list[dict]) -> str:
+    subject, body = outreach_mod.compose(batch[0])
+    lines = [f"{i}. {lead['name']} · {lead['email']}" for i, lead in enumerate(batch, 1)]
+    return (f"📧 今天要发这 {len(batch)} 封（每天最多 {outreach_mod.DAILY_LIMIT} 封，每封隔一会儿发）：\n\n"
+            + "\n".join(lines)
+            + f"\n\n———— 第一封长这样 ————\n标题：{subject}\n\n{body}"
+            + "\n\n每封开头那句都按店家改好了。点 ✅ 就开始发。")
+
+
+async def offer_emails(bot, manual: bool = False) -> None:
+    """Show the owner today's batch with ✅ / ❌. Nothing is sent without the tap."""
+    if leads_db is None or not OWNER_CHAT_ID or mailer() is None:
+        return
+    batch = leads_db.due()
+    if not batch:
+        if manual:
+            left = leads_db.counts().get("new", 0)
+            text = (f"今天的 {outreach_mod.DAILY_LIMIT} 封已经发完了，剩下 {left} 家明天再发。" if left
+                    else "名单里的商家都发过了。要新名单就跟 Claude 说一声。")
+            await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text)
+        return
+    offer = secrets.token_hex(4)
+    leads_db.set_setting(f"offer:{offer}", json.dumps([lead["email"] for lead in batch]))
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(f"✅ 发这 {len(batch)} 封", callback_data=f"mail:{offer}:go"),
+        InlineKeyboardButton("❌ 今天不发", callback_data=f"mail:{offer}:no"),
+    ]])
+    text = _offer_text(batch)
+    if len(text) > TELEGRAM_MESSAGE_LIMIT:
+        text = text[:TELEGRAM_MESSAGE_LIMIT - 20] + "\n…"
+    await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text, reply_markup=keyboard,
+                           disable_web_page_preview=True)
+
+
+async def mail_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    _, offer, action = (query.data or "::").split(":", 2)
+    raw = leads_db.setting(f"offer:{offer}") if leads_db is not None else ""
+    if not is_owner(query.message.chat_id) or not raw:
+        await query.answer("这批已经处理过了", show_alert=True)
+        return
+    await query.answer()
+    leads_db.set_setting(f"offer:{offer}", "")
+    if action != "go":
+        await query.edit_message_text("好，今天不发。明天同一时间再问你，想现在发就发 /outreach。")
+        return
+    emails = json.loads(raw)
+    await query.edit_message_text(f"🚀 开始发了，一共 {len(emails)} 封，每封隔一会儿，发完告诉你。")
+    task = asyncio.get_running_loop().create_task(send_emails(query.message, emails))
+    fb_setup_tasks.add(task)
+    task.add_done_callback(fb_setup_tasks.discard)
+
+
+async def send_emails(message, emails: list[str]) -> None:
+    box, done, problem = mailer(), [], ""
+    for i, email in enumerate(emails):
+        lead = leads_db.get(email)
+        if lead is None or lead["status"] != "new":
+            continue
+        if leads_db.room_today() <= 0:
+            problem = f"今天已经发满 {outreach_mod.DAILY_LIMIT} 封，剩下的明天发。"
+            break
+        if done:
+            await asyncio.sleep(outreach_mod.GAP_SECONDS)
+        subject, body = outreach_mod.compose(lead)
+        try:
+            await box.send(email, subject, body)
+        except outreach_mod.MailError as exc:
+            logger.warning("邮件没发出去（%s）：%s", email, exc)
+            problem = f"发到 {lead['name']} 时出错，后面的先停了：{exc}"
+            break
+        leads_db.mark(email, "sent")
+        done.append(f"✅ {lead['name']}")
+    text = f"📧 发好了 {len(done)} 封：\n" + "\n".join(done) if done else "📧 这次一封都没发出去。"
+    if problem:
+        text += f"\n\n⚠️ {problem}"
+    text += "\n\n有人回复我会马上告诉你。"
+    try:
+        await message.reply_text(text)
+    except TelegramError:
+        logger.exception("邮件发送结果没能告诉本人")
+
+
+async def outreach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/outreach — the cold email numbers, and today's batch if there is one."""
+    if not is_owner(update.effective_chat.id):
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+    if leads_db is None:
+        await update.effective_message.reply_text("邮件功能没有启用。")
+        return
+    counts = leads_db.counts()
+    await update.effective_message.reply_text(
+        f"📧 名单一共 {sum(counts.values())} 家：已发 {sum(counts.values()) - counts.get('new', 0)}，"
+        f"有回复 {counts.get('replied', 0)}，不要了 {counts.get('optout', 0)}，退信 {counts.get('bounced', 0)}，"
+        f"还没发 {counts.get('new', 0)}。")
+    if mailer() is None:
+        await update.effective_message.reply_text("还没接 Gmail。发 /mail，照着弄一次就能自动发。")
+        return
+    await offer_emails(context.bot, manual=True)
+
+
+async def outreach_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        await offer_emails(context.bot)
+    except Exception:  # noqa: BLE001 - tomorrow is another try
+        logger.exception("今天的邮件没能给本人看")
+
+
+async def email_replies_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tell the owner when a business answers (or the address bounced)."""
+    box = mailer()
+    if box is None or not OWNER_CHAT_ID:
+        return
+    try:
+        found = await box.replies(leads_db.emailed())
+    except outreach_mod.MailError as exc:
+        logger.warning("查邮件回复失败：%s", exc)
+        return
+    for reply in found:
+        email = str(reply.get("lead", "")).lower()
+        lead = leads_db.get(email)
+        if lead is None or not leads_db.first_sight(str(reply.get("id")), email):
+            continue
+        if reply.get("bounce"):
+            leads_db.mark(email, "bounced")
+            text = f"⚠️ 发给 {lead['name']}（{email}）的邮件被退回来了，这个邮箱可能不用了。不用管它。"
+        else:
+            no = bool(outreach_mod.OPT_OUT.search(reply.get("text", "")[:400]))
+            leads_db.mark(email, "optout" if no else "replied")
+            head = (f"🙅 {lead['name']} 回复说不需要，不会再发给他们了。" if no
+                    else f"📬 {lead['name']} 回你邮件了！去 Gmail 回复他们（要我帮你写就截图给 Claude）：")
+            text = f"{head}\n\n标题：{reply.get('subject', '')}\n\n{str(reply.get('text', ''))[:1500]}"
+        try:
+            await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text, disable_web_page_preview=True)
+        except TelegramError:
+            logger.exception("邮件回复提醒发送失败")
+
+
+def start_outreach() -> None:
+    global leads_db
+    if not OWNER_CHAT_ID or web.WEB_SITES_ONLY:
+        return
+    try:
+        leads_db = outreach_mod.Leads(cs.CS_DB_PATH)
+        added = leads_db.add(outreach_mod.parse_leads(os.environ.get("OUTREACH_LEADS", "")))
+    except Exception:  # noqa: BLE001 - the bot runs without emails
+        logger.exception("邮件名单打不开，自动发邮件关闭")
+        leads_db = None
+        return
+    if added:
+        logger.info("邮件名单新加了 %d 家", added)
+
+
+def schedule_outreach(application: Application) -> None:
+    if not OWNER_CHAT_ID or application.job_queue is None:
+        return
+    try:
+        hour, minute = (int(part) for part in outreach_mod.SEND_TIME.split(":"))
+        when = dt.time(hour=hour, minute=minute, tzinfo=ZoneInfo(outreach_mod.TIMEZONE))
+    except (ValueError, KeyError):
+        logger.error("OUTREACH_TIME=%r 无法解析，每天的邮件不会自动问你", outreach_mod.SEND_TIME)
+    else:
+        application.job_queue.run_daily(outreach_daily_job, time=when, name="outreach-daily")
+    application.job_queue.run_repeating(email_replies_job, interval=1800, first=120, name="email-replies")
+
+
 def _fit_notice(text: str) -> str:
     """Owner notices carry a transcript; keep the head (who/why) and the newest lines."""
     if len(text) <= OWNER_NOTICE_LIMIT:
@@ -1381,6 +1614,9 @@ def main() -> None:
     application.add_handler(CommandHandler("customers", customers_command))
     application.add_handler(CommandHandler("visits", visits_command))
     application.add_handler(CommandHandler("post", post_command))
+    application.add_handler(CommandHandler("mail", mail_command))
+    application.add_handler(CommandHandler("outreach", outreach_command))
+    application.add_handler(CallbackQueryHandler(mail_button, pattern=r"^mail:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, route_text))
     application.add_handler(MessageHandler(filters.ATTACHMENT & ~filters.COMMAND, route_media))
     application.add_error_handler(on_error)
@@ -1391,6 +1627,8 @@ def main() -> None:
     schedule_daily_note(application)
     schedule_daily_tweets(application)
     schedule_visits_report(application)
+    start_outreach()
+    schedule_outreach(application)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
