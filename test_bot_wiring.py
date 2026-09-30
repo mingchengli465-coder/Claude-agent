@@ -749,3 +749,18 @@ tweet_mod.publish, tweet_mod.post_reply = saved
 bot.telegram_bot = None
 assert bot.agent_for(1) is None, "no agent without the bot, DeepSeek and a site store"
 print("PASS post drafts publish only on 发布, once, from the right chat; X gets links in the reply")
+
+
+# --- a personal-assistant bot starts a sites-only web server without customer service -----------
+started2 = []
+async def fake_start2(self, port=0): started2.append(self)
+saved_start2, web_mod.WebChat.start = web_mod.WebChat.start, fake_start2
+saved_service, bot.service = bot.service, None
+web_mod.WEB_SITES_ONLY = True
+bot.web_chat = bot.site_store = None
+asyncio.run(bot.start_web_chat("client_bot"))
+assert started2 and bot.web_chat is started2[0] and bot.web_chat.service is None and bot.site_store is not None
+web_mod.WEB_SITES_ONLY = False
+web_mod.WebChat.start = saved_start2
+bot.service, bot.web_chat, bot.site_store = saved_service, None, None
+print("PASS a personal bot serves its agent's websites without the owner's customer service")

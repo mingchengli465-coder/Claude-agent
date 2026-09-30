@@ -37,6 +37,9 @@ CHANNEL = "web"
 # Railway (and most hosts) hand the port over in PORT.
 WEB_PORT = int(os.environ.get("WEB_PORT") or os.environ.get("PORT") or "8080")
 WEB_CHAT = os.environ.get("WEB_CHAT", "true").lower() != "false"
+# A client's personal-assistant bot serves only the websites its agent builds:
+# no owner's homepage, demo page or customer-service chat on that address.
+WEB_SITES_ONLY = os.environ.get("WEB_SITES_ONLY", "false").lower() == "true"
 MAX_TEXT = 1000
 _VISITOR = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 _FAVICON = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='#000'/>"
@@ -150,7 +153,8 @@ class WebChat:
         self.ip_hits = Window(IP_HITS_PER_MINUTE, 60)
         self.runner: web.AppRunner | None = None
         # Owner replies are stored by deliver_owner_reply; the widget polls them out.
-        service.register_channel(CHANNEL, self._send)
+        if service is not None:
+            service.register_channel(CHANNEL, self._send)
 
     async def _send(self, chat_id: str, text: str) -> None:
         return None
@@ -159,6 +163,12 @@ class WebChat:
 
     def app(self) -> web.Application:
         app = web.Application(client_max_size=64 * 1024)
+        if WEB_SITES_ONLY or self.service is None:
+            app.router.add_get("/", self.sites_home)
+            app.router.add_get("/healthz", self.health)
+            app.router.add_get("/favicon.ico", self.favicon)
+            app.router.add_get("/s/{slug}", self.built_site)
+            return app
         app.router.add_get("/", self.site)
         app.router.add_get("/demo", self.page)
         app.router.add_get("/widget.js", self.widget)
@@ -193,6 +203,9 @@ class WebChat:
 
     async def page(self, request: web.Request) -> web.Response:
         return self._render("demo.html")
+
+    async def sites_home(self, request: web.Request) -> web.Response:
+        return web.Response(text="🌐", content_type="text/plain")
 
     async def built_site(self, request: web.Request) -> web.Response:
         site = self.sites.get(request.match_info["slug"]) if self.sites is not None else None

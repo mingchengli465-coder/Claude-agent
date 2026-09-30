@@ -1278,7 +1278,20 @@ async def post_init(application: Application) -> None:
 async def start_web_chat(bot_username: str = "", bot=None) -> None:
     """The website chat window shares the customer service (and its owner notices)."""
     global web_chat, visits, site_store
-    if service is None or not web.WEB_CHAT:
+    if not web.WEB_CHAT:
+        return
+    if service is None or web.WEB_SITES_ONLY:
+        # A personal-assistant bot: only the websites its agent builds are served.
+        if not web.WEB_SITES_ONLY:
+            return
+        try:
+            site_store = agent_mod.SiteStore(cs.CS_DB_PATH)
+            chat = web.WebChat(None, sites=site_store)
+            await chat.start()
+        except Exception:  # noqa: BLE001 - the chat works without websites
+            logger.exception("网站服务启动失败，助理不能建网站")
+            return
+        web_chat = chat
         return
     contact = f"https://t.me/{bot_username}" if bot_username else ""
     try:
