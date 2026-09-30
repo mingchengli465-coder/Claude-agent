@@ -99,5 +99,16 @@ async def main():
         assert (await client.get("/s/nope")).status == 404
     print("PASS /s/<slug> serves the site in a sandbox")
 
+    # a personal-assistant bot's address serves its websites and nothing of the owner's
+    chat = web.WebChat(None, sites=store)
+    async with TestClient(TestServer(chat.app())) as client:
+        assert (await client.get("/s/mia-cake")).status == 200
+        home = await client.get("/")
+        assert home.status == 200 and "vinc" not in (await home.text()).lower()
+        for path in ("/demo", "/widget.js", "/privacy"):
+            assert (await client.get(path)).status == 404, path
+        assert (await client.post("/api/chat", json={"v": "abcdefgh1", "text": "hi"})).status in (404, 405)
+    print("PASS a personal bot's address serves only its own websites")
+
 asyncio.run(main())
 print("\nALL AGENT TESTS PASSED")
