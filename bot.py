@@ -252,11 +252,11 @@ async def send_progress(chat_id: int, text: str) -> None:
 async def send_post_draft(chat_id: int, text: str, platforms: list[str]) -> None:
     draft_id = secrets.token_hex(4)
     pending_posts[draft_id] = (chat_id, text, platforms)
-    where = "、".join(agent_mod.PLATFORM_NAMES[p] for p in platforms)
-    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("✅ 发布", callback_data=f"agpost:{draft_id}:ok"),
-                                     InlineKeyboardButton("❌ 取消", callback_data=f"agpost:{draft_id}:no")]])
+    where = ", ".join(agent_mod.platform_name(p) for p in platforms)
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton(agent_mod.ui("publish"), callback_data=f"agpost:{draft_id}:ok"),
+                                     InlineKeyboardButton(agent_mod.ui("cancel"), callback_data=f"agpost:{draft_id}:no")]])
     await telegram_bot.send_message(chat_id=chat_id, reply_markup=buttons, disable_web_page_preview=True,
-                                    text=f"📝 帖子草稿（发到：{where}）\n\n{text}\n\n点「发布」才会发出去；想改就直接跟我说。")
+                                    text=agent_mod.ui("draft").format(where=where) + f"\n\n{text}\n\n" + agent_mod.ui("draft_tip"))
 
 
 async def publish_to(platform: str, text: str) -> str:
@@ -284,15 +284,15 @@ async def agent_post_button(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     _, draft_id, action = (query.data or "::").split(":", 2)
     draft = pending_posts.get(draft_id)
     if draft is None or draft[0] != query.message.chat_id:
-        await query.answer("这条草稿已经处理过了", show_alert=True)
+        await query.answer(agent_mod.ui("done_already"), show_alert=True)
         return
     await query.answer()
     pending_posts.pop(draft_id, None)
     _, text, platforms = draft
     if action != "ok":
-        await query.edit_message_text(f"❌ 已取消，没有发出去。\n\n{text}")
+        await query.edit_message_text(agent_mod.ui("cancelled") + f"\n\n{text}")
         return
-    await query.edit_message_text(f"⏳ 正在发布…\n\n{text}")
+    await query.edit_message_text(agent_mod.ui("publishing") + f"\n\n{text}")
     results = []
     for platform in platforms:
         try:
@@ -300,7 +300,7 @@ async def agent_post_button(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         except Exception as exc:  # noqa: BLE001 - report each platform on its own
             logger.exception("助理发帖失败（%s）", platform)
             results.append(f"⚠️ {agent_mod.PLATFORM_NAMES.get(platform, platform)} 没发成功：{exc}")
-    await query.edit_message_text("✅ 发布结果\n" + "\n".join(results) + f"\n\n{text}",
+    await query.edit_message_text(agent_mod.ui("results") + "\n" + "\n".join(results) + f"\n\n{text}",
                                   disable_web_page_preview=True)
 
 
@@ -310,14 +310,14 @@ async def sites_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     chat_id = update.effective_chat.id
     if site_store is None or not (is_owner(chat_id) or str(chat_id) in ALLOWED_CHAT_IDS):
-        await update.effective_message.reply_text("这个功能没有对你开放。")
+        await update.effective_message.reply_text(agent_mod.ui("denied"))
         return
     rows = site_store.list(chat_id)
     if not rows:
-        await update.effective_message.reply_text("还没有建过网站。直接跟我说「帮我做一个 XX 的网站」就行～")
+        await update.effective_message.reply_text(agent_mod.ui("no_sites"))
         return
     lines = [f"• {r['title'] or r['slug']}\n  {public_base_url()}/s/{r['slug']}" for r in rows]
-    await update.effective_message.reply_text("🌐 你的网站：\n\n" + "\n".join(lines), disable_web_page_preview=True)
+    await update.effective_message.reply_text(agent_mod.ui("sites") + "\n\n" + "\n".join(lines), disable_web_page_preview=True)
 
 
 async def refused(update: Update) -> bool:

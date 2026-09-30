@@ -111,4 +111,15 @@ async def main():
     print("PASS a personal bot's address serves only its own websites")
 
 asyncio.run(main())
+# --- the fixed lines follow AGENT_LANG ---------------------------------------------------------
+ag.AGENT_LANG = "fr"
+assert ag.ui("publish") == "✅ Publier" and "site" in ag.ui("building") and ag.platform_name("channel") == "chaîne Telegram"
+assert "français" in ag.AGENT_SYSTEM.format(platforms="X", lang=ag.ui("name"))
+for lang in ag.UI:
+    assert set(ag.UI[lang]) == set(ag.UI["zh"]), lang
+ag.AGENT_LANG = "xx"
+assert ag.ui("publish") == "✅ 发布", "an unknown language falls back to Chinese"
+ag.AGENT_LANG = "zh"
+print("PASS the agent's buttons and notices come in the bot's language (zh / en / fr)")
+
 print("\nALL AGENT TESTS PASSED")
