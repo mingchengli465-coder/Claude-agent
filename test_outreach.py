@@ -56,6 +56,25 @@ assert db.get("info@whyzee.com.sg")["status"] == "sent", "a business already ema
 assert db.first_sight("m1", "a") and not db.first_sight("m1", "a")
 print("PASS at most 10 a day, each business once, the list survives re-seeding")
 
+# --- each region's share of the day ---------------------------------------------------------
+assert om.parse_mix("hk:6, sg:4,bad,x:") == {"hk": 6, "sg": 4}
+mixed = om.Leads(os.path.join(tmp, "mix.sqlite3"))
+mixed.add([{"email": f"sg{i}@ex.com", "name": f"SG {i}", "region": "sg"} for i in range(9)]
+          + [{"email": f"hk{i}@ex.com", "name": f"HK {i}", "region": "hk"} for i in range(9)])
+om.MIX = {"hk": 6, "sg": 4}
+day1 = mixed.due()
+assert [l["email"] for l in day1] == [f"hk{i}@ex.com" for i in range(6)] + [f"sg{i}@ex.com" for i in range(4)]
+for l in day1[:3]:
+    mixed.mark(l["email"], "sent")
+later = mixed.due()
+assert len(later) == 7 and sum(l["region"] == "hk" for l in later) == 3, "today's share counts what already went out"
+for l in day1:
+    mixed.mark(l["email"], "sent")
+day2 = mixed.due(tomorrow)
+assert [l["region"] for l in day2] == ["hk"] * 3 + ["sg"] * 5, "when a region runs out the others fill the day"
+om.MIX = {}
+print("PASS OUTREACH_MIX takes 6 from Hong Kong and 4 from Singapore, and fills the day when one runs out")
+
 
 # --- the Apps Script mailer, against a fake that redirects like the real one ------------------
 async def mailer_tests():
