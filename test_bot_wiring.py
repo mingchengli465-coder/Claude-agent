@@ -705,3 +705,47 @@ bot.ALLOWED_CHAT_IDS = set()
 u, m = upd(222)
 assert asyncio.run(bot.refused(u)) is False, "no list = open to everyone, as before"
 print("PASS a personal bot answers only the chats in ALLOWED_CHAT_IDS")
+
+
+# --- the agent's post drafts: nothing goes out until 发布 ------------------------------------------
+class DraftBot:
+    sent = []
+    async def send_message(self, chat_id, text, **kw): self.sent.append((chat_id, text, kw))
+bot.telegram_bot = DraftBot()
+asyncio.run(bot.send_post_draft(7, "Hello world", ["channel"]))
+draft_id = next(iter(bot.pending_posts))
+assert "帖子草稿" in DraftBot.sent[0][1] and DraftBot.sent[0][2]["reply_markup"] is not None
+published = []
+async def fake_publish(platform, text): published.append((platform, text)); return f"ok {platform}"
+saved_publish, bot.publish_to = bot.publish_to, fake_publish
+class Query:
+    def __init__(self, data, chat_id): self.data, self.message, self.edits, self.answers = data, types.SimpleNamespace(chat_id=chat_id), [], []
+    async def answer(self, text=None, **kw): self.answers.append(text)
+    async def edit_message_text(self, text, **kw): self.edits.append(text)
+q = Query(f"agpost:{draft_id}:ok", 8)
+asyncio.run(bot.agent_post_button(types.SimpleNamespace(callback_query=q), None))
+assert not published and "处理过" in q.answers[0], "another chat can't publish someone's draft"
+q = Query(f"agpost:{draft_id}:ok", 7)
+asyncio.run(bot.agent_post_button(types.SimpleNamespace(callback_query=q), None))
+assert published == [("channel", "Hello world")] and "发布结果" in q.edits[-1] and not bot.pending_posts
+q = Query(f"agpost:{draft_id}:ok", 7)
+asyncio.run(bot.agent_post_button(types.SimpleNamespace(callback_query=q), None))
+assert len(published) == 1, "a draft is published once"
+asyncio.run(bot.send_post_draft(7, "Nope", ["channel"]))
+q = Query(f"agpost:{next(iter(bot.pending_posts))}:no", 7)
+asyncio.run(bot.agent_post_button(types.SimpleNamespace(callback_query=q), None))
+assert len(published) == 1 and "已取消" in q.edits[-1]
+bot.publish_to = saved_publish
+# X: links move to the reply, over-long posts are refused
+calls = []
+async def fake_tweet(t): calls.append(("post", t.text)); return "https://x.com/v/status/1"
+async def fake_reply(url, text): calls.append(("reply", text))
+saved = (tweet_mod.publish, tweet_mod.post_reply)
+tweet_mod.publish, tweet_mod.post_reply = fake_tweet, fake_reply
+line = asyncio.run(bot.publish_to("x", "New site is live https://a.example/s/cake"))
+assert calls == [("post", "New site is live"), ("reply", "https://a.example/s/cake")] and "x.com" in line
+assert "太长" in asyncio.run(bot.publish_to("x", "字" * 200))
+tweet_mod.publish, tweet_mod.post_reply = saved
+bot.telegram_bot = None
+assert bot.agent_for(1) is None, "no agent without the bot, DeepSeek and a site store"
+print("PASS post drafts publish only on 发布, once, from the right chat; X gets links in the reply")

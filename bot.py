@@ -9,6 +9,7 @@ import datetime as dt
 import logging
 import os
 import re
+import secrets
 from collections import defaultdict, deque
 from zoneinfo import ZoneInfo
 
@@ -34,6 +35,7 @@ from telegram.ext import (
 import customer_service as cs
 import llm
 import tweet as tweet_mod
+import agent as agent_mod
 import bluesky
 import messenger as messenger_mod
 import visits as visits_mod
@@ -204,6 +206,120 @@ async def ask_model(chat_id: int, user_text: str) -> str:
     return reply
 
 
+# --------------------------------------------------------------------------- #
+# The owner's agent (agent.py): websites and post drafts from their own chat
+# --------------------------------------------------------------------------- #
+
+AGENT_ENABLED = os.environ.get("AGENT_ENABLED", "true").lower() != "false"
+site_store: agent_mod.SiteStore | None = None
+# draft id -> (chat_id, text, platforms), waiting for 发布 / 取消
+pending_posts: dict[str, tuple[int, str, list[str]]] = {}
+
+
+def public_base_url() -> str:
+    url = os.environ.get("PUBLIC_BASE_URL", "").strip()
+    if url:
+        return url.rstrip("/")
+    domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    return f"https://{domain}" if domain else f"http://localhost:{web.WEB_PORT}"
+
+
+def available_platforms() -> list[str]:
+    found = []
+    if not tweet_mod.missing_credentials():
+        found.append("x")
+    if bluesky.enabled():
+        found.append("bluesky")
+    if channel_chat_id():
+        found.append("channel")
+    return found
+
+
+def agent_for(chat_id: int) -> agent_mod.Agent | None:
+    """The agent for the owner (or a personal bot's allowed chats); None = plain chat."""
+    if not AGENT_ENABLED or ds_client is None or site_store is None or telegram_bot is None:
+        return None
+    if not (is_owner(chat_id) or str(chat_id) in ALLOWED_CHAT_IDS):
+        return None
+    return agent_mod.Agent(ds_client, llm.DEEPSEEK_MODEL, site_store, public_base_url(), available_platforms(),
+                           on_draft=send_post_draft, on_progress=send_progress)
+
+
+async def send_progress(chat_id: int, text: str) -> None:
+    await telegram_bot.send_message(chat_id=chat_id, text=text)
+
+
+async def send_post_draft(chat_id: int, text: str, platforms: list[str]) -> None:
+    draft_id = secrets.token_hex(4)
+    pending_posts[draft_id] = (chat_id, text, platforms)
+    where = "、".join(agent_mod.PLATFORM_NAMES[p] for p in platforms)
+    buttons = InlineKeyboardMarkup([[InlineKeyboardButton("✅ 发布", callback_data=f"agpost:{draft_id}:ok"),
+                                     InlineKeyboardButton("❌ 取消", callback_data=f"agpost:{draft_id}:no")]])
+    await telegram_bot.send_message(chat_id=chat_id, reply_markup=buttons, disable_web_page_preview=True,
+                                    text=f"📝 帖子草稿（发到：{where}）\n\n{text}\n\n点「发布」才会发出去；想改就直接跟我说。")
+
+
+async def publish_to(platform: str, text: str) -> str:
+    """Post on one platform; returns a line for the owner."""
+    if platform == "x":
+        links = re.findall(r"https?://\S+", text)
+        main = re.sub(r"\s*https?://\S+", "", text).strip()  # X refuses links in the post itself
+        if tweet_mod.x_length(main) > tweet_mod.X_WEIGHTED_LIMIT:
+            return f"⚠️ X 没发：太长了（{tweet_mod.x_length(main)}/{tweet_mod.X_WEIGHTED_LIMIT}，中文一个字算 2）"
+        url = await tweet_mod.publish(tweet_mod.Tweet(domain="助理", topic=main[:60], text=main))
+        if links:
+            await tweet_mod.post_reply(url, "\n".join(links))
+        return f"🐦 X：{url}"
+    if platform == "bluesky":
+        return f"🦋 Bluesky：{await bluesky.post(text)}"
+    if platform == "channel":
+        note = await crosspost_channel(text)
+        return note.strip() or "⚠️ Telegram 频道没接上"
+    return f"⚠️ 不认识的平台 {platform}"
+
+
+async def agent_post_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """发布 / 取消 under a post draft."""
+    query = update.callback_query
+    _, draft_id, action = (query.data or "::").split(":", 2)
+    draft = pending_posts.get(draft_id)
+    if draft is None or draft[0] != query.message.chat_id:
+        await query.answer("这条草稿已经处理过了", show_alert=True)
+        return
+    await query.answer()
+    pending_posts.pop(draft_id, None)
+    _, text, platforms = draft
+    if action != "ok":
+        await query.edit_message_text(f"❌ 已取消，没有发出去。\n\n{text}")
+        return
+    await query.edit_message_text(f"⏳ 正在发布…\n\n{text}")
+    results = []
+    for platform in platforms:
+        try:
+            results.append(await publish_to(platform, text))
+        except Exception as exc:  # noqa: BLE001 - report each platform on its own
+            logger.exception("助理发帖失败（%s）", platform)
+            results.append(f"⚠️ {agent_mod.PLATFORM_NAMES.get(platform, platform)} 没发成功：{exc}")
+    await query.edit_message_text("✅ 发布结果\n" + "\n".join(results) + f"\n\n{text}",
+                                  disable_web_page_preview=True)
+
+
+async def sites_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/sites — the websites the agent has built in this chat."""
+    if await refused(update):
+        return
+    chat_id = update.effective_chat.id
+    if site_store is None or not (is_owner(chat_id) or str(chat_id) in ALLOWED_CHAT_IDS):
+        await update.effective_message.reply_text("这个功能没有对你开放。")
+        return
+    rows = site_store.list(chat_id)
+    if not rows:
+        await update.effective_message.reply_text("还没有建过网站。直接跟我说「帮我做一个 XX 的网站」就行～")
+        return
+    lines = [f"• {r['title'] or r['slug']}\n  {public_base_url()}/s/{r['slug']}" for r in rows]
+    await update.effective_message.reply_text("🌐 你的网站：\n\n" + "\n".join(lines), disable_web_page_preview=True)
+
+
 async def refused(update: Update) -> bool:
     """True (after telling them once per message) when this chat may not use a private bot."""
     if not ALLOWED_CHAT_IDS or str(update.effective_chat.id) in ALLOWED_CHAT_IDS:
@@ -268,7 +384,17 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.debug("Could not send typing action to chat %s", chat_id, exc_info=True)
 
         try:
-            reply = await ask_model(chat_id, user_text)
+            agent = agent_for(chat_id)
+            if agent is not None:
+                try:
+                    reply = await agent.run(chat_id, list(histories[chat_id]), user_text)
+                    histories[chat_id].append({"role": "user", "content": user_text})
+                    histories[chat_id].append({"role": "assistant", "content": reply})
+                except Exception:  # noqa: BLE001 - fall back to plain chat rather than fail
+                    logger.exception("助理模式出错，改用普通聊天")
+                    reply = await ask_model(chat_id, user_text)
+            else:
+                reply = await ask_model(chat_id, user_text)
         except RateLimitError:
             logger.warning("Rate limited by OpenRouter for chat %s", chat_id, exc_info=True)
             await message.reply_text(RATE_LIMIT_TEXT)
@@ -1151,7 +1277,7 @@ async def post_init(application: Application) -> None:
 
 async def start_web_chat(bot_username: str = "", bot=None) -> None:
     """The website chat window shares the customer service (and its owner notices)."""
-    global web_chat, visits
+    global web_chat, visits, site_store
     if service is None or not web.WEB_CHAT:
         return
     contact = f"https://t.me/{bot_username}" if bot_username else ""
@@ -1165,7 +1291,13 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
             await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text, disable_web_page_preview=True)
 
     fb = messenger_mod.Messenger.from_env(service, notify=tell_owner)
-    chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb)
+    try:
+        site_store = agent_mod.SiteStore(cs.CS_DB_PATH)
+    except Exception:  # noqa: BLE001 - chat still works without the agent's websites
+        logger.exception("网站仓库打不开，助理不能建网站")
+        site_store = None
+    chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb,
+                       sites=site_store)
     try:
         await chat.start()
     except OSError:
@@ -1227,6 +1359,8 @@ def main() -> None:
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(CommandHandler("xhs", xhs_command))
     application.add_handler(CallbackQueryHandler(xhs_button, pattern=r"^xhs:"))
+    application.add_handler(CallbackQueryHandler(agent_post_button, pattern=r"^agpost:"))
+    application.add_handler(CommandHandler("sites", sites_command))
     application.add_handler(CommandHandler("tweet", tweet_command))
     application.add_handler(CommandHandler("pause", pause_command))
     application.add_handler(CommandHandler("resume", resume_command))
