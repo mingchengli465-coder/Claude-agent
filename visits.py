@@ -31,7 +31,8 @@ _SOURCE_PARAM = re.compile(r"^[a-z0-9_-]{1,20}$")
 # ?from= values the owner can put on a link, and what the report calls them.
 FROM_NAMES = {"x": "X", "twitter": "X", "tg": "Telegram", "telegram": "Telegram", "wx": "微信",
               "wechat": "微信", "weixin": "微信", "xhs": "小红书", "xiaohongshu": "小红书",
-              "fb": "Facebook", "facebook": "Facebook"}
+              "fb": "Facebook", "facebook": "Facebook",
+              "email": "邮件", "tgch": "Telegram 频道", "bsky": "Bluesky"}
 
 
 def is_bot(ua: str) -> bool:
