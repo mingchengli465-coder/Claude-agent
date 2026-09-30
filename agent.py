@@ -27,6 +27,43 @@ MAX_ROUNDS = 5
 PLATFORM_NAMES = {"x": "X", "bluesky": "Bluesky", "channel": "Telegram 频道"}
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")
 
+# The fixed lines the owner sees around the agent, in the bot's language
+# (AGENT_LANG: zh / en / fr). The model itself answers in whatever language
+# the owner writes, and defaults to this one.
+AGENT_LANG = os.environ.get("AGENT_LANG", "zh").strip().lower()
+UI = {
+    "zh": {"name": "中文", "building": "🛠 正在做网站，大概 1～2 分钟…", "editing": "🛠 正在修改网站…",
+           "ok": "好的～", "too_long": "这件事步骤有点多，我先做到这里了，你看看结果，还需要什么再跟我说～",
+           "draft": "📝 帖子草稿（发到：{where}）", "draft_tip": "点「发布」才会发出去；想改就直接跟我说。",
+           "publish": "✅ 发布", "cancel": "❌ 取消", "done_already": "这条草稿已经处理过了",
+           "cancelled": "❌ 已取消，没有发出去。", "publishing": "⏳ 正在发布…", "results": "✅ 发布结果",
+           "sites": "🌐 你的网站：", "no_sites": "还没有建过网站。直接跟我说「帮我做一个 XX 的网站」就行～",
+           "denied": "这个功能没有对你开放。", "channel": "Telegram 频道"},
+    "en": {"name": "English", "building": "🛠 Building your website, about 1–2 minutes…", "editing": "🛠 Updating your website…",
+           "ok": "Done!", "too_long": "That took quite a few steps, so I've stopped here. Have a look and tell me what's next.",
+           "draft": "📝 Draft post (for: {where})", "draft_tip": "Nothing goes out until you tap Publish. To change it, just tell me.",
+           "publish": "✅ Publish", "cancel": "❌ Cancel", "done_already": "This draft has already been handled",
+           "cancelled": "❌ Cancelled, nothing was posted.", "publishing": "⏳ Publishing…", "results": "✅ Posted",
+           "sites": "🌐 Your websites:", "no_sites": "No websites yet. Just say \"make me a website for …\"",
+           "denied": "This feature isn't available to you.", "channel": "Telegram channel"},
+    "fr": {"name": "français", "building": "🛠 Je crée votre site, environ 1 à 2 minutes…", "editing": "🛠 Je modifie votre site…",
+           "ok": "C'est fait !", "too_long": "Il y avait beaucoup d'étapes, je m'arrête ici. Regardez le résultat et dites-moi la suite.",
+           "draft": "📝 Brouillon de publication (pour : {where})",
+           "draft_tip": "Rien n'est publié tant que vous n'appuyez pas sur Publier. Pour le modifier, dites-le-moi simplement.",
+           "publish": "✅ Publier", "cancel": "❌ Annuler", "done_already": "Ce brouillon a déjà été traité",
+           "cancelled": "❌ Annulé, rien n'a été publié.", "publishing": "⏳ Publication…", "results": "✅ Publié",
+           "sites": "🌐 Vos sites :", "no_sites": "Aucun site pour l'instant. Dites-moi par exemple « crée-moi un site pour … »",
+           "denied": "Cette fonction ne vous est pas ouverte.", "channel": "chaîne Telegram"},
+}
+
+
+def ui(key: str) -> str:
+    return UI.get(AGENT_LANG, UI["zh"]).get(key) or UI["zh"][key]
+
+
+def platform_name(p: str) -> str:
+    return ui("channel") if p == "channel" else PLATFORM_NAMES.get(p, p)
+
 
 class SiteStore:
     def __init__(self, path: Path | str):
@@ -92,7 +129,8 @@ AGENT_SYSTEM = """你是主人的私人助理，住在 Telegram 里。你可以�
 - 主人要发帖时，一定用 draft_post 写好草稿，不要说已经发了。草稿会给主人看，主人点「发布」才会真的发出去。
   现在能发的平台：{platforms}。X 的正文最多 280 字符（中文一个字算 2），正文里不要放链接。
 - 工具做完后，用一两句话告诉主人结果，网站要把网址给他。
-- 回复简洁，用主人的语言。"""
+- 回复简洁，用主人发消息用的语言；主人没说话语言不明确时默认用{lang}。
+- 做网站时，除非主人另外要求，网站用主人的语言（默认{lang}）。"""
 
 TOOLS = [
     {"type": "function", "function": {
@@ -174,7 +212,7 @@ class Agent:
     # ---- tools ---------------------------------------------------------------------
 
     async def make_website(self, chat_id, request: str, slug: str = "") -> dict:
-        await self._progress(chat_id, "🛠 正在做网站，大概 1～2 分钟…")
+        await self._progress(chat_id, ui("building"))
         html = await self._html(SITE_SYSTEM, request)
         slug = self.store.free_slug(slug or page_title(html))
         self.store.save(slug, chat_id, page_title(html), html)
@@ -184,7 +222,7 @@ class Agent:
         site = self.store.get(slug)
         if site is None or site["chat_id"] != str(chat_id):
             return {"ok": False, "error": f"没有叫 {slug} 的网站", "sites": [r["slug"] for r in self.store.list(chat_id)]}
-        await self._progress(chat_id, "🛠 正在修改网站…")
+        await self._progress(chat_id, ui("editing"))
         html = await self._html(EDIT_SYSTEM, f"【修改要求】\n{change}\n\n【现在的 HTML】\n{site['html']}")
         self.store.save(slug, chat_id, page_title(html) or site["title"], html)
         return {"ok": True, "slug": slug, "url": self.url(slug)}
@@ -205,7 +243,7 @@ class Agent:
 
     async def run(self, chat_id, history: list[dict], user_text: str) -> str:
         platforms = "、".join(PLATFORM_NAMES[p] for p in self.platforms) or "（还没有接上任何平台）"
-        messages = [{"role": "system", "content": AGENT_SYSTEM.format(platforms=platforms)}, *history,
+        messages = [{"role": "system", "content": AGENT_SYSTEM.format(platforms=platforms, lang=ui("name"))}, *history,
                     {"role": "user", "content": user_text}]
         tools = {"make_website": self.make_website, "edit_website": self.edit_website,
                  "list_websites": self.list_websites, "draft_post": self.draft_post}
@@ -214,7 +252,7 @@ class Agent:
             msg = response.choices[0].message
             calls = list(getattr(msg, "tool_calls", None) or [])
             if not calls:
-                return (msg.content or "").strip() or "好的～"
+                return (msg.content or "").strip() or ui("ok")
             messages.append({"role": "assistant", "content": msg.content or "", "tool_calls": [
                 {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
                 for c in calls]})
@@ -226,4 +264,4 @@ class Agent:
                     logger.exception("工具 %s 出错", c.function.name)
                     result = {"ok": False, "error": str(exc)[:300]}
                 messages.append({"role": "tool", "tool_call_id": c.id, "content": json.dumps(result, ensure_ascii=False)})
-        return "这件事步骤有点多，我先做到这里了，你看看结果，还需要什么再跟我说～"
+        return ui("too_long")
