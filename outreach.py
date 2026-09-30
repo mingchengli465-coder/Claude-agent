@@ -11,6 +11,7 @@ reports. Each business is emailed once, never followed up.
 
     OUTREACH_LEADS          JSON list: [{"email", "name", "region": "sg"|"hk", "lang": "en"|"zh", "first"}]
     OUTREACH_DAILY_LIMIT    default 10
+    OUTREACH_MIX            e.g. hk:6,sg:4 — each region's share of the day; any room left goes to the rest
     OUTREACH_TIME           default 10:00, in OUTREACH_TIMEZONE (default Asia/Singapore)
     MAIL_WEBHOOK_URL        optional; normally the owner just sends the /exec link to the bot
 """
@@ -29,6 +30,19 @@ from zoneinfo import ZoneInfo
 from aiohttp import ClientSession, ClientTimeout
 
 DAILY_LIMIT = int(os.environ.get("OUTREACH_DAILY_LIMIT", "10"))
+
+
+def parse_mix(raw: str) -> dict[str, int]:
+    """OUTREACH_MIX like "hk:6,sg:4": how many a day from each region, in that order."""
+    mix = {}
+    for part in raw.split(","):
+        region, _, n = part.partition(":")
+        if region.strip() and n.strip().isdigit():
+            mix[region.strip().lower()] = int(n)
+    return mix
+
+
+MIX = parse_mix(os.environ.get("OUTREACH_MIX", ""))
 SEND_TIME = os.environ.get("OUTREACH_TIME", "10:00")
 TIMEZONE = os.environ.get("OUTREACH_TIMEZONE", "Asia/Singapore")
 GAP_SECONDS = float(os.environ.get("OUTREACH_GAP_SECONDS", "45"))
@@ -206,21 +220,32 @@ class Leads:
             db.execute("UPDATE leads SET status=?, note=?, sent_at=COALESCE(?, sent_at) WHERE email=?",
                        (status, note, sent_at, email.lower()))
 
-    def sent_today(self, now: dt.datetime | None = None) -> int:
+    def _day_start(self, now: dt.datetime | None = None) -> dt.datetime:
         now = now or dt.datetime.now(dt.timezone.utc)
-        start = dt.datetime.combine(now.astimezone(self.tz).date(), dt.time(), self.tz).astimezone(dt.timezone.utc)
+        return dt.datetime.combine(now.astimezone(self.tz).date(), dt.time(), self.tz).astimezone(dt.timezone.utc)
+
+    def sent_today(self, now: dt.datetime | None = None) -> int:
         with self._db() as db:
-            return db.execute("SELECT COUNT(*) FROM leads WHERE sent_at >= ?", (start.isoformat(),)).fetchone()[0]
+            return db.execute("SELECT COUNT(*) FROM leads WHERE sent_at >= ?",
+                              (self._day_start(now).isoformat(),)).fetchone()[0]
 
     def room_today(self, now: dt.datetime | None = None) -> int:
         return max(0, DAILY_LIMIT - self.sent_today(now))
 
     def due(self, now: dt.datetime | None = None) -> list[dict]:
-        """Today's batch: the next businesses not yet emailed, up to what's left of the daily limit."""
+        """Today's batch: the next businesses not yet emailed, up to what's left of the daily limit,
+        taking each region's share from OUTREACH_MIX first."""
+        room = self.room_today(now)
         with self._db() as db:
-            rows = db.execute("SELECT * FROM leads WHERE status='new' ORDER BY rowid LIMIT ?",
-                              (self.room_today(now),)).fetchall()
-        return [dict(r) for r in rows]
+            waiting = [dict(r) for r in db.execute("SELECT * FROM leads WHERE status='new' ORDER BY rowid")]
+            sent = dict(db.execute("SELECT region, COUNT(*) FROM leads WHERE sent_at >= ? GROUP BY region",
+                                   (self._day_start(now).isoformat(),)).fetchall())
+        batch = []
+        for region, share in MIX.items():
+            left = max(0, share - sent.get(region, 0))
+            batch += [l for l in waiting if l["region"] == region][:min(left, room - len(batch))]
+        batch += [l for l in waiting if l not in batch][:room - len(batch)]
+        return batch
 
     def emailed(self) -> list[str]:
         with self._db() as db:
