@@ -684,3 +684,24 @@ bot.X_POST_ON_START = ""
 print("PASS X_POST_ON_START posts once after startup and reports to the owner")
 
 print("\nALL BOT WIRING TESTS PASSED")
+
+
+# --- a personal assistant bot answers its owner only ---------------------------------------------
+class Msg:
+    def __init__(self): self.replies = []
+    async def reply_text(self, text, **kw): self.replies.append(text)
+def upd(chat_id):
+    m = Msg()
+    return types.SimpleNamespace(effective_chat=types.SimpleNamespace(id=chat_id), effective_message=m), m
+bot.ALLOWED_CHAT_IDS = {"111"}
+u, m = upd(222)
+assert asyncio.run(bot.refused(u)) is True and "私人助理" in m.replies[0]
+u, m = upd(111)
+assert asyncio.run(bot.refused(u)) is False and not m.replies
+u, m = upd(222)
+asyncio.run(bot.route_text(u, None)); asyncio.run(bot.start(u, None))
+assert len(m.replies) == 2 and all("私人助理" in r for r in m.replies), "strangers get nothing else"
+bot.ALLOWED_CHAT_IDS = set()
+u, m = upd(222)
+assert asyncio.run(bot.refused(u)) is False, "no list = open to everyone, as before"
+print("PASS a personal bot answers only the chats in ALLOWED_CHAT_IDS")

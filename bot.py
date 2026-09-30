@@ -101,7 +101,14 @@ MAX_HISTORY_MESSAGES = MAX_HISTORY_ROUNDS * 2
 # Telegram rejects text messages longer than 4096 characters.
 TELEGRAM_MESSAGE_LIMIT = 4096
 
-WELCOME_TEXT = (
+# A personal assistant bot built for one client: only these chats get answers
+# (comma-separated Telegram IDs). Empty = everyone, as before.
+ALLOWED_CHAT_IDS = {c.strip() for c in os.environ.get("ALLOWED_CHAT_IDS", "").split(",") if c.strip()}
+PRIVATE_BOT_TEXT = os.environ.get("PRIVATE_BOT_TEXT", "").replace("\\n", "\n").strip() or (
+    "🔒 这是私人助理，只为主人服务。\nThis is a private assistant."
+)
+# The /start greeting of the general chat (a client's personal bot sets its own).
+WELCOME_TEXT = os.environ.get("WELCOME_TEXT", "").replace("\\n", "\n").strip() or (
     "👋 Hi! I'm an AI chatbot.\n\n"
     "Just send me a message and I'll reply. I remember the last "
     f"{MAX_HISTORY_ROUNDS} rounds of our conversation.\n\n"
@@ -197,7 +204,19 @@ async def ask_model(chat_id: int, user_text: str) -> str:
     return reply
 
 
+async def refused(update: Update) -> bool:
+    """True (after telling them once per message) when this chat may not use a private bot."""
+    if not ALLOWED_CHAT_IDS or str(update.effective_chat.id) in ALLOWED_CHAT_IDS:
+        return False
+    logger.info("私人机器人拒绝了 chat %s", update.effective_chat.id)
+    if update.effective_message is not None:
+        await update.effective_message.reply_text(PRIVATE_BOT_TEXT)
+    return True
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await refused(update):
+        return
     chat_id = update.effective_chat.id
     logger.info("/start from chat %s", chat_id)
     if customer_mode_for(update):
@@ -207,6 +226,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await refused(update):
+        return
     chat_id = update.effective_chat.id
     histories.pop(chat_id, None)
     logger.info("/reset cleared history for chat %s", chat_id)
@@ -215,6 +236,8 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Every plain text message lands here first."""
+    if await refused(update):
+        return
     if is_owner(update.effective_chat.id):
         if await forward_owner_reply(update, context):
             return
@@ -796,7 +819,7 @@ def _attachment_kind(message) -> str:
 async def route_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Photos, files, voice: the owner's go to a customer, a customer's go to the owner."""
     message = update.effective_message
-    if message is None:
+    if message is None or await refused(update):
         return
     if is_owner(update.effective_chat.id):
         await forward_owner_reply(update, context)
