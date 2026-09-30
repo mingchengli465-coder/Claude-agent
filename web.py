@@ -6,6 +6,7 @@
     POST /api/chat    a visitor's message -> the AI's reply (customer_service.handle)
     GET  /api/messages  new messages for a visitor, so the owner's replies show up
     POST /api/hit     one page view on the owner's own pages (visits.py)
+    GET  /s/<slug>    a website the owner's agent built (agent.py)
     GET  /privacy     privacy policy (Meta asks for one before Messenger goes live)
     GET/POST /fb/webhook  Facebook Messenger, when it is configured (messenger.py)
 
@@ -136,8 +137,9 @@ def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
 
 class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
-                 clock=time.time, visits: visits_mod.Visits | None = None, messenger=None):
+                 clock=time.time, visits: visits_mod.Visits | None = None, messenger=None, sites=None):
         self.service = service
+        self.sites = sites
         self.visits = visits
         self.messenger = messenger
         self.title = title or "AI 客服"
@@ -167,6 +169,7 @@ class WebChat:
         app.router.add_get("/api/messages", self.messages)
         app.router.add_post("/api/hit", self.hit)
         app.router.add_get("/privacy", self.privacy)
+        app.router.add_get("/s/{slug}", self.built_site)
         if self.messenger is not None:
             self.messenger.routes(app)
         app.router.add_route("OPTIONS", "/api/{tail:.*}", self.preflight)
@@ -190,6 +193,16 @@ class WebChat:
 
     async def page(self, request: web.Request) -> web.Response:
         return self._render("demo.html")
+
+    async def built_site(self, request: web.Request) -> web.Response:
+        site = self.sites.get(request.match_info["slug"]) if self.sites is not None else None
+        if site is None:
+            raise web.HTTPNotFound(text="这个网站不存在 / Not found")
+        # Model-written pages run sandboxed, in their own origin: their scripts
+        # can't touch this site's storage or call its API as the owner's pages.
+        return web.Response(text=site["html"], content_type="text/html", headers={
+            "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups allow-modals",
+            "Cache-Control": "no-cache"})
 
     async def privacy(self, request: web.Request) -> web.Response:
         return self._render("privacy.html")
