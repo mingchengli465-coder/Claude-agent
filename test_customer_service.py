@@ -253,8 +253,8 @@ assert cs.detect_lang("你好，想做PPT") == "zh"
 assert cs.detect_lang("Hi, I need a pitch deck") == "en"
 assert cs.detect_lang("Bonjour, je voudrais un site") == "en", "non-Chinese falls back to the English lines"
 assert cs.detect_lang("👍👍 123") == ""
-assert "写繁体中文就用繁体，写英文就用英文" in system and "CNY" in system
-print("PASS the model is told to answer in the customer's language, prices in CNY")
+assert "写繁体中文就用繁体，写英文就用英文" in system and "USD" in system
+print("PASS the model is told to answer in the customer's language, prices in USD")
 
 svc, model, owner, clock, sent = fresh()
 model.next = cs.Decision(reply="Sure! How many slides, and when do you need it?", summary="PPT｜未说明｜未说明")
