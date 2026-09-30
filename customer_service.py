@@ -39,6 +39,14 @@ CS_DEEPSEEK_MODEL = os.environ.get("CS_DEEPSEEK_MODEL", "deepseek-flash")
 CS_DEEPSEEK_BASE_URL = os.environ.get("CS_DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 CS_EFFORT = os.environ.get("CS_EFFORT", "low")
 CS_PRODUCTS_PATH = Path(os.environ.get("CS_PRODUCTS_PATH", Path(__file__).parent / "products.yaml"))
+# A client's bot runs from this same repo with its own catalog kept in the
+# Railway variable, so a client's prices and contacts never land in the public repo.
+CS_PRODUCTS_YAML = os.environ.get("CS_PRODUCTS_YAML", "")
+# Who the assistant works for, the first line of its instructions.
+CS_PERSONA = os.environ.get(
+    "CS_PERSONA",
+    "你是一位博主的客服助理，帮本人接待来咨询 AI 相关服务的客户。客户可能来自小红书、X、Telegram 或本人的个人网站。",
+).strip()
 CS_DB_PATH = Path(os.environ.get("CS_DB_PATH", "cs.sqlite3"))
 CS_HISTORY = int(os.environ.get("CS_HISTORY", "10"))
 # A customer waiting longer than this gets handed to the owner instead.
@@ -161,7 +169,8 @@ ChannelSend = Callable[[str, str], Awaitable[None]]
 def load_catalog(path: Path = CS_PRODUCTS_PATH) -> str:
     """products.yaml as the text the model reads. Comments are dropped on purpose,
     so examples written as comments never reach the model as if they were real."""
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw = CS_PRODUCTS_YAML if CS_PRODUCTS_YAML and path == CS_PRODUCTS_PATH else path.read_text(encoding="utf-8")
+    data = yaml.safe_load(raw) or {}
     text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=1000)
     blanks = text.count(PLACEHOLDER)
     if blanks:
@@ -169,25 +178,25 @@ def load_catalog(path: Path = CS_PRODUCTS_PATH) -> str:
     return text
 
 
-SYSTEM_TEMPLATE = """你是一位博主的客服助理，帮博主本人接待来咨询 AI 相关服务的客户。客户可能来自小红书、X、Telegram 或博主的个人网站。
+SYSTEM_TEMPLATE = """{persona}
 
 【最重要：回复一定要短】
 - 每条回复最多 2 句话，中文不超过 60 个字，英文不超过 40 个词。像朋友发微信一样短。
 - 只回答客户这一次问的那件事。不要介绍其他服务，不要把资料全部搬出来，不要主动讲细节。
 - 不要用列表、编号、标题、加粗、分段。就是一两句普通的话。
 - 最多问一个问题。客户想知道更多，他自己会接着问。
-- 例子：客户问"搭建 AI 客服多少钱"，回"国内 200 元搭建，之后每月 49 元～你是国内还是海外的店呀？"就够了。
+- 例子：客户问"6 寸蛋糕多少钱"，回"6 寸 168 元～想要什么口味呀？"就够了。
 
 【说话方式】
 - 用客户最近一条消息的语言回复：客户写简体中文就用简体，写繁体中文就用繁体，写英文就用英文，写其他语言就用那种语言。
-- 业务资料是中文的，用客户的语言转述，意思不能变。价格照原数字说，并注明是人民币（CNY / RMB）。
-- 亲切、自然、像博主本人的助理在私信里聊天，不要像官方客服。可以偶尔用一个 emoji，不要每句都用。
-- 你是助理，不是博主本人。被问到是不是真人/机器人时如实说你是助理，并转给本人。
+- 业务资料是中文的，用客户的语言转述，意思不能变。价格照资料里的原数字和币种说（资料没写币种的就是人民币 CNY / RMB）。
+- 亲切、自然、像本人的助理在私信里聊天，不要像官方客服。可以偶尔用一个 emoji，不要每句都用。
+- 你是助理，不是本人。被问到是不是真人/机器人时如实说你是助理，并转给本人。
 
 【只能依据下面的业务资料回答】
 - 价格、交付周期、付款方式、修改次数、能做什么、不接什么，全部只看业务资料，不许编造、不许估算、不许给资料以外的数字或承诺。
 - 资料里写着「{placeholder}」的字段表示还没定。客户问到这些，不要猜，直接转给本人。
-- 对话里以「【本人回复】」开头的内容是博主本人亲自说的，可以作为依据。
+- 对话里以「【本人回复】」开头的内容是本人亲自说的，可以作为依据。
 - 不承诺资料以外的内容或时间（比如"今晚就能好""保证满意""肯定能过"）。
 
 【问价格、时间：自己回答，不要转给本人】
@@ -241,7 +250,7 @@ DECISION_SCHEMA = {
 
 
 def build_system_prompt(catalog: str) -> str:
-    return SYSTEM_TEMPLATE.format(placeholder=PLACEHOLDER, catalog=catalog)
+    return SYSTEM_TEMPLATE.format(placeholder=PLACEHOLDER, catalog=catalog, persona=CS_PERSONA)
 
 
 class ClaudeResponder:

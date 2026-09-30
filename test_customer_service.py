@@ -469,3 +469,22 @@ assert cs.tidy_reply("好的～") == "好的～"
 assert cs.tidy_reply("x" * 300).endswith("…") and len(cs.tidy_reply("x" * 300)) <= cs.MAX_REPLY_CHARS + 1
 assert "最多 2 句话" in cs.SYSTEM_TEMPLATE and "不要用列表" in cs.SYSTEM_TEMPLATE
 print("PASS long or markdown replies are trimmed to a couple of short sentences")
+
+# --- a client's bot: its own catalog, persona and greeting come from Railway variables ----------
+import subprocess, textwrap
+probe = textwrap.dedent("""
+    import customer_service as cs, bot
+    system = cs.build_system_prompt(cs.load_catalog())
+    assert system.startswith("你是「阿明烘焙」的客服助理"), system[:60]
+    assert "6 寸 168 元" in system and "vinc" not in system.lower() and "博主" not in system
+    assert bot.CS_WELCOME_TEXT == "你好～我是阿明烘焙的 AI 客服\\n想订蛋糕直接问我～", repr(bot.CS_WELCOME_TEXT)
+    print("ok")
+""")
+env = dict(os.environ, CS_PRODUCTS_YAML="店铺:\n  名称: 阿明烘焙\n服务:\n  - 名称: 6 寸蛋糕\n    价格区间: 168 元\n",
+           CS_PERSONA="你是「阿明烘焙」的客服助理，帮老板接待来订蛋糕的客人。",
+           CS_WELCOME="你好～我是阿明烘焙的 AI 客服\\n想订蛋糕直接问我～",
+           TELEGRAM_BOT_TOKEN="1:x", OPENROUTER_API_KEY="x")
+out = subprocess.run([sys.executable, "-c", probe], env=env, capture_output=True, text=True,
+                     cwd=os.path.dirname(os.path.abspath(__file__)))
+assert out.returncode == 0 and "ok" in out.stdout, out.stderr[-800:]
+print("PASS a client's bot takes its catalog, persona and greeting from its own settings")
