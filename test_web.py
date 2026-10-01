@@ -99,6 +99,14 @@ async def main():
         for bad in ("nope.html", "..%2Fsite.html", "index.txt"):
             assert (await client.get(f"/guides/{bad}")).status == 404, bad
         assert 'href="guides/"' in site, "the homepage links to the guides"
+        # the intro video page, and the video itself with range requests (phones need them)
+        r = await client.get("/video")
+        page = await r.text()
+        assert r.status == 200 and 'src="media/vinc-intro.mp4"' in page and "{{" not in page and "t.me/" in page
+        r = await client.get("/media/vinc-intro.mp4", headers={"Range": "bytes=0-99"})
+        assert r.status == 206 and r.headers["Content-Type"] == "video/mp4" and len(await r.read()) == 100
+        for bad in ("vinc-intro-fiverr.mp4", "..%2Fbot.py", "nope.mp4"):
+            assert (await client.get(f"/media/{bad}")).status == 404, bad
         r = await client.options("/api/chat")
         assert r.status == 204 and r.headers["Access-Control-Allow-Origin"] == "*"
     print("PASS the personal site, the demo page, the widget script and CORS are served; the shop name is escaped")
@@ -206,6 +214,9 @@ assert f'src="{build_pages.API}/widget.js"' in guide and 'href="../demo.html"' i
 sitemap = (out / "sitemap.xml").read_text(encoding="utf-8")
 assert "/guides/install-claude-code.html</loc>" in sitemap and "/guides/</loc>" in sitemap
 assert "Sitemap:" in (out / "robots.txt").read_text(encoding="utf-8")
+video = (out / "video.html").read_text(encoding="utf-8")
+assert 'href="demo.html"' in video and 'href="./"' in video and (out / "media" / "vinc-intro.mp4").stat().st_size > 1_000_000
+assert not (out / "media" / "vinc-intro-fiverr.mp4").exists() and "/video.html</loc>" in sitemap
 print("PASS the GitHub Pages copy is self-contained apart from the chat server")
 
 print("\nALL WEB CHAT TESTS PASSED")

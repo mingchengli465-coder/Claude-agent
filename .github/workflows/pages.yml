@@ -8,6 +8,8 @@ on:
     branches: [main]
     paths:
       - "web_static/**"
+      - "media/vinc-intro.mp4"
+      - "media/vinc-intro-poster.jpg"
       - "products.yaml"
       - "web.py"
       - "tools/build_pages.py"

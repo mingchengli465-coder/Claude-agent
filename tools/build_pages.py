@@ -25,7 +25,7 @@ import web  # noqa: E402
 
 API = os.environ.get("PAGES_API_ORIGIN", "https://worker-production-42fb.up.railway.app").rstrip("/")
 BOT = os.environ.get("PAGES_BOT_LINK", "https://t.me/emilyhanbot")
-PAGES = {"site.html": "index.html", "demo.html": "demo.html"}
+PAGES = {"site.html": "index.html", "demo.html": "demo.html", "video.html": "video.html"}
 
 
 class _NoService:
@@ -49,7 +49,7 @@ SITE = os.environ.get("PAGES_SITE_URL", "https://mingchengli465-coder.github.io/
 
 def write_sitemap(out: Path) -> None:
     """sitemap.xml and robots.txt, so search engines find the guides."""
-    pages = ["", "demo.html", "guides/"] + [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html"))
+    pages = ["", "demo.html", "video.html", "guides/"] + [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html"))
                                              if p.name != "index.html"]
     urls = "".join(f"  <url><loc>{SITE}/{p}</loc></url>\n" for p in pages)
     (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -71,6 +71,9 @@ def build(out: Path) -> None:
         html = chat._render(f"guides/{guide.name}").text
         (out / "guides" / guide.name).write_text(static_copy(html).replace('href="../demo"', 'href="../demo.html"'), encoding="utf-8")
     write_sitemap(out)
+    (out / "media").mkdir()
+    for name in web._MEDIA:
+        shutil.copy(ROOT / "media" / name, out / "media" / name)
     for font in (ROOT / "web_static" / "fonts").iterdir():
         shutil.copy(font, out / "fonts" / font.name)
     (out / ".nojekyll").write_text("", encoding="utf-8")
