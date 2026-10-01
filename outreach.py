@@ -87,13 +87,17 @@ ZH_BODY = """{name}你好，
 
 可以先到我的網站試試看：{link}
 
-如果你願意把價目表或常見問題發給我，我可以免費幫你做一個示範版，你先試用，滿意再決定。正式搭建一次性 US$70（約 HK$550）起，之後每月 US$9.9（約 HK$78）。
+如果你願意把價目表或常見問題發給我，我可以免費幫你做一個示範版，你先試用，滿意再決定。{price}
 
 Vincent
 Telegram：{telegram}
 {email}
 
 P.S. 如果暫時不需要，回覆「不用了」就可以，我不會再打擾你。"""
+ZH_PRICE = {"sg": "正式搭建一次性 US$70 起，之後每月 US$9.9。",
+            "hk": "正式搭建一次性 US$70（約 HK$550）起，之後每月 US$9.9（約 HK$78）。"}
+# Every email carries both languages: 繁體中文 first, English underneath.
+BILINGUAL_RULE = "\n\n———— English below ————\n\n"
 ZH_FIRST = "很多客人會在晚上發訊息問價錢、款式和預約時間，第二天才回覆的話，有些客人可能已經找了別家。"
 
 # The owner pastes this into script.google.com once. {secret} is filled in per bot.
@@ -139,13 +143,17 @@ def script_for(secret: str) -> str:
 
 
 def compose(lead: dict) -> tuple[str, str]:
-    """Subject and body for one business, in its language."""
-    name = lead["name"]
-    fill = {"name": name, "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL}
-    if lead.get("lang") == "zh":
-        return ZH_SUBJECT.format(**fill), ZH_BODY.format(first=lead.get("first") or ZH_FIRST, **fill)
-    price = EN_PRICE.get(lead.get("region", "sg"), EN_PRICE["sg"])
-    return EN_SUBJECT.format(**fill), EN_BODY.format(first=lead.get("first") or EN_FIRST, price=price, **fill)
+    """Subject and body for one business: 繁體中文 first, then the same email in English."""
+    fill = {"name": lead["name"], "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL}
+    region = lead.get("region") or "sg"
+    # "Monice Bakes 你好" but "思思蛋糕你好": a space only after a Latin name
+    zh_name = lead["name"] + (" " if lead["name"][-1:].isascii() else "")
+    zh = ZH_BODY.replace("{name}", zh_name, 1).format(first=lead.get("first_zh") or ZH_FIRST, price=ZH_PRICE.get(region, ZH_PRICE["sg"]), **fill)
+    # leads written in Chinese only carry a Chinese first line; English gets the general one
+    first_en = lead.get("first") if lead.get("lang") != "zh" else ""
+    en = EN_BODY.format(first=first_en or EN_FIRST, price=EN_PRICE.get(region, EN_PRICE["sg"]), **fill)
+    subject = ZH_SUBJECT.replace("{name}", zh_name).format(**fill) + " | " + EN_SUBJECT.format(**fill)
+    return subject, zh + BILINGUAL_RULE + en
 
 
 def parse_leads(raw: str) -> list[dict]:
@@ -175,6 +183,8 @@ class Leads:
                 CREATE TABLE IF NOT EXISTS lead_replies (id TEXT PRIMARY KEY, email TEXT, seen TEXT);
                 CREATE TABLE IF NOT EXISTS outreach_settings (key TEXT PRIMARY KEY, value TEXT);
             """)
+            if "first_zh" not in [r[1] for r in db.execute("PRAGMA table_info(leads)")]:
+                db.execute("ALTER TABLE leads ADD COLUMN first_zh TEXT")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path)
@@ -200,14 +210,18 @@ class Leads:
 
     # --- leads -----------------------------------------------------------------------------
     def add(self, leads: list[dict]) -> int:
-        """New businesses are added; ones already known keep their status."""
+        """New businesses are added; ones already known keep their status. Businesses not yet
+        emailed take the latest wording (name, first lines), so a fixed list applies before sending."""
+        rows = [(l["email"].strip().lower(), l["name"], l.get("region", "sg"), l.get("lang", "en"),
+                 l.get("first", ""), l.get("first_zh", "")) for l in leads]
         with self._db() as db:
-            before = db.total_changes
-            db.executemany(
-                "INSERT OR IGNORE INTO leads (email, name, region, lang, first) VALUES (?, ?, ?, ?, ?)",
-                [(l["email"].strip().lower(), l["name"], l.get("region", "sg"), l.get("lang", "en"), l.get("first", ""))
-                 for l in leads])
-            return db.total_changes - before
+            count = lambda: db.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
+            before = count()
+            db.executemany("INSERT OR IGNORE INTO leads (email, name, region, lang, first, first_zh) "
+                           "VALUES (?, ?, ?, ?, ?, ?)", rows)
+            db.executemany("UPDATE leads SET name=?, region=?, lang=?, first=?, first_zh=? WHERE email=? AND status='new'",
+                           [(n, r, la, f, fz, e) for e, n, r, la, f, fz in rows])
+            return count() - before
 
     def get(self, email: str) -> dict | None:
         with self._db() as db:

@@ -14,7 +14,7 @@ import bot
 
 LEADS = [
     {"email": "Info@Whyzee.com.sg", "name": "Whyzee Bakery", "region": "sg", "lang": "en",
-     "first": "I noticed your WhatsApp orders are answered 10am–6pm."},
+     "first": "I noticed your WhatsApp orders are answered 10am–6pm.", "first_zh": "你們的 WhatsApp 只在早上 10 點到傍晚 6 點回覆。"},
     {"email": "bakers@bakingmaniachk.com", "name": "Baking Maniac", "region": "hk", "lang": "en"},
     {"email": "order@incake.com.hk", "name": "InCake 3D", "region": "hk", "lang": "zh"},
     {"email": "", "name": "no email"}, {"email": "x@y.z"},
@@ -25,16 +25,19 @@ leads = om.parse_leads(json.dumps(LEADS))
 assert [l["name"] for l in leads] == ["Whyzee Bakery", "Baking Maniac", "InCake 3D"]
 assert om.parse_leads("not json") == []
 subject, body = om.compose(leads[0])
-assert subject == "Quick idea for Whyzee Bakery's customer enquiries"
-assert body.startswith("Hi Whyzee Bakery team,\n\nI noticed your WhatsApp") and "from US$70, then US$9.9/month" in body
-assert "?from=email" in body and 'reply "no thanks"' in body and "{" not in body
+assert subject == "Whyzee Bakery 的客人查詢，可以交給 AI 24 小時回覆 | Quick idea for Whyzee Bakery's customer enquiries"
+zh, en = body.split("———— English below ————")
+assert zh.startswith("Whyzee Bakery 你好，\n\n你們的 WhatsApp 只在早上") and "US$70 起，之後每月 US$9.9。" in zh and "HK$" not in zh
+assert en.strip().startswith("Hi Whyzee Bakery team,\n\nI noticed your WhatsApp") and "from US$70, then US$9.9/month" in en
+assert body.count("?from=email") == 2 and 'reply "no thanks"' in en and "不用了" in zh and "{" not in body
 subject, body = om.compose(leads[1])
-assert "after hours" in body and "HK$550" in body
+zh, en = body.split("———— English below ————")
+assert "很多客人會在晚上" in zh and "HK$550" in zh and "after hours" in en and "HK$550" in en
 subject, body = om.compose(leads[2])
-assert subject.startswith("InCake 3D的客人查詢") and "HK$550" in body and "不用了" in body and "{" not in body
+assert subject.startswith("InCake 3D 的客人查詢") and body.index("你好") < body.index("Hi InCake")
 script = om.script_for("s3cret")
 assert "const SECRET = 's3cret';" in script and "GmailApp.sendEmail" in script and "{secret}" not in script
-print("PASS each business gets its own first line, the right price line and an opt-out line")
+print("PASS every email is 繁體中文 first, then English, each with its own first line, price line and opt-out")
 
 # --- the list and the daily limit ------------------------------------------------------------
 tmp = tempfile.mkdtemp()
@@ -53,6 +56,9 @@ tomorrow = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)
 assert db.room_today(tomorrow) == 10, "the limit starts again the next day"
 db.add([{"email": "info@whyzee.com.sg", "name": "again"}])
 assert db.get("info@whyzee.com.sg")["status"] == "sent", "a business already emailed is never emailed again"
+assert db.get("info@whyzee.com.sg")["name"] == "Whyzee Bakery", "an emailed business keeps its record"
+db.add([{"email": "shop11@ex.com", "name": "Shop Eleven", "first_zh": "新的開頭"}])
+assert db.get("shop11@ex.com")["first_zh"] == "新的開頭", "a business not yet emailed takes the new wording"
 assert db.first_sight("m1", "a") and not db.first_sight("m1", "a")
 print("PASS at most 10 a day, each business once, the list survives re-seeding")
 
@@ -174,7 +180,7 @@ async def mailer_tests():
         assert bot.leads_db.setting("url") == link and "Gmail 接好了（me@gmail.com）" in told[0]["text"]
         offer = told[1]
         assert "今天要发这 7 封" in offer["text"] and "Whyzee Bakery · info@whyzee.com.sg" in offer["text"]
-        assert "Hi Whyzee Bakery team" in offer["text"]
+        assert "Whyzee Bakery 你好" in offer["text"]
         go, no = [b.callback_data for b in offer["reply_markup"].inline_keyboard[0]]
         assert not await bot.connect_mailer(Update("hello"))
         print("PASS /mail gives the steps and a script with this bot's secret; pasting the link connects "
@@ -198,7 +204,7 @@ async def mailer_tests():
             await asyncio.sleep(0.02)
         to = [s["to"] for s in sent[1:]]
         assert to == ["info@whyzee.com.sg", "bakers@bakingmaniachk.com", "order@incake.com.hk"], to
-        assert sent[3]["subject"].startswith("InCake 3D的客人查詢")
+        assert sent[3]["subject"].startswith("InCake 3D 的客人查詢")
         assert "发好了 3 封" in told[0]["text"] and "Broken2" in told[0]["text"] and "后面的先停了" in told[0]["text"]
         assert "Broken 发不出去" in told[0]["text"], told[0]["text"]
         assert bot.leads_db.get("broken@ex.com")["status"] == "failed" and bot.leads_db.get("shop0@ex.com")["status"] == "new"
