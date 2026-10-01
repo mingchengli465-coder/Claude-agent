@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>教學 Guides · Claude Code、Codex 安裝與小店 AI 客服 | vinc</title>
+<meta name="description" content="Claude Code、Codex CLI 安裝教學，以及小店 AI 客服指南。Guides to installing Claude Code and Codex CLI, and AI customer service for small businesses.">
+<link rel="canonical" href="https://mingchengli465-coder.github.io/Claude-agent/guides/">
+<meta name="theme-color" content="#ffffff">
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("siteTheme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<style>
+  :root { color-scheme: light; --bg:#fff; --bg2:#f5f5f7; --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --line:rgba(0,0,0,.12); --accent:#0071e3; --accent-h:#0077ed; --link:#0066cc; --code:#f5f5f7;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace; }
+  html[data-theme="dark"] { color-scheme: dark; --bg:#000; --bg2:#161617; --ink:#f5f5f7; --ink2:#d2d2d7; --muted:#a1a1a6; --line:rgba(255,255,255,.16); --link:#2997ff; --code:#1d1d1f; }
+  *,*::before,*::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:400 18px/1.7 var(--sans); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid var(--line); }
+  .bar .in { max-width: 760px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 18px; }
+  .logo { font: 700 21px/1 var(--sans); letter-spacing: -.04em; color: var(--ink); }
+  .logo:hover { text-decoration: none; }
+  .logo i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .bar .sp { flex: 1; }
+  .bar .lang { font-size: 14px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 400 15px/1 var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--accent-h); text-decoration: none; }
+  .btn.line { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px var(--link); }
+  .btn.line:hover { background: var(--accent); color: #fff; box-shadow: none; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 40px; }
+  .crumb { font-size: 14px; color: var(--muted); }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.12; letter-spacing: -.035em; margin: 12px 0 0; font-weight: 700; text-wrap: balance; }
+  html[lang="zh-TW"] h1 { letter-spacing: -.015em; line-height: 1.22; }
+  .lead { font-size: 21px; color: var(--ink2); margin: 20px 0 0; }
+  .meta { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.03em; margin: 56px 0 0; font-weight: 700; }
+  html[lang="zh-TW"] h2 { letter-spacing: -.01em; }
+  h3 { font-size: 21px; margin: 32px 0 0; letter-spacing: -.02em; }
+  p, li { color: var(--ink2); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 8px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 400 .88em var(--mono); background: var(--code); padding: 2px 6px; border-radius: 6px; }
+  .cmd { position: relative; margin: 14px 0; border-radius: 14px; background: var(--code); }
+  .cmd small { display: block; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
+  .cmd pre { margin: 0; padding: 10px 92px 14px 16px; overflow-x: auto; font: 400 15px/1.6 var(--mono); color: var(--ink); }
+  .cmd button { position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg); color: var(--link); font: 500 13px var(--sans); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+  .cmd button.ok { background: #1fa84a; color: #fff; box-shadow: none; }
+  .note { margin: 20px 0; padding: 16px 18px; border-radius: 14px; background: var(--bg2); font-size: 16px; }
+  .note p { margin: 0; }
+  .cta { margin: 48px 0; padding: 28px; border-radius: 24px; background: var(--bg2); }
+  .cta h2 { margin: 0; font-size: 26px; }
+  .cta p { margin: 10px 0 20px; }
+  .cta .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .faq dt { font-weight: 600; color: var(--ink); margin-top: 22px; }
+  .faq dd { margin: 6px 0 0; color: var(--ink2); }
+  .more { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .more ul { list-style: none; padding: 0; }
+  footer { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink2); }
+
+  .list { list-style: none; padding: 0; margin: 24px 0 0; }
+  .list li { margin: 0; border-top: 1px solid var(--line); }
+  .list a { display: block; padding: 18px 0; font-size: 20px; font-weight: 600; color: var(--ink); letter-spacing: -.02em; }
+  .list a span { display: block; font-size: 15px; font-weight: 400; color: var(--muted); margin-top: 4px; letter-spacing: -.01em; }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in"><a class="logo" href="../">vinc<i></i></a><span class="sp"></span><button class="btn" type="button" data-chat>問 AI 助理</button></div></header>
+<main>
+  <h1>教學 · Guides</h1>
+  <p class="lead">自己動手的步驟都寫在這裡；嫌麻煩的話，我可以幫你裝好、架好。</p>
+  <h2>繁體中文</h2>
+  <ul class="list">
+    <li><a href="claude-code-install.html">Claude Code 安裝教學<span>Windows、Mac 一步一步裝好，附常見錯誤</span></a></li>
+    <li><a href="codex-install.html">Codex CLI 安裝教學<span>用 ChatGPT 帳號在電腦上跑 Codex</span></a></li>
+    <li><a href="ai-customer-service.html">小店怎麼加 AI 客服？<span>能做什麼、要準備什麼、大概多少錢</span></a></li>
+  </ul>
+  <h2>English</h2>
+  <ul class="list">
+    <li><a href="install-claude-code.html">How to install Claude Code<span>Windows and Mac, step by step, with common errors</span></a></li>
+    <li><a href="install-codex-cli.html">How to install OpenAI Codex CLI<span>Sign in with your ChatGPT plan</span></a></li>
+    <li><a href="ai-chatbot-small-business.html">AI customer service for small businesses<span>What it does, what to prepare, what it costs</span></a></li>
+  </ul>
+</main>
+<footer>© 2026 vinc的ai鋪子 · vinc · AI studio</footer>
+<script src="/widget.js" data-color="#0071e3" data-track defer></script>
+<script>
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector("button"), text = box.querySelector("pre").textContent, label = b.textContent;
+    b.addEventListener("click", function () {
+      function done() { b.classList.add("ok"); b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.classList.remove("ok"); b.textContent = label; }, 1600); }
+      function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) { b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); }); });
+</script>
+</body>
+</html>

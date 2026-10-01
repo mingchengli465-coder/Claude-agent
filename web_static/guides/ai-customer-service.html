@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>小店怎麼加 AI 客服？24 小時自動回覆客人的做法和費用 | vinc</title>
+<meta name="description" content="給蛋糕店、美甲、補習班等小店的 AI 客服指南：能做什麼、要準備什麼資料、放在哪個平台、怎麼避免亂回答，以及大概要多少錢。">
+<link rel="canonical" href="https://mingchengli465-coder.github.io/Claude-agent/guides/ai-customer-service.html">
+<link rel="alternate" hreflang="zh-Hant" href="https://mingchengli465-coder.github.io/Claude-agent/guides/ai-customer-service.html">
+<link rel="alternate" hreflang="en" href="https://mingchengli465-coder.github.io/Claude-agent/guides/ai-chatbot-small-business.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="小店怎麼加 AI 客服？24 小時自動回覆客人的做法和費用 | vinc">
+<meta property="og:description" content="給蛋糕店、美甲、補習班等小店的 AI 客服指南：能做什麼、要準備什麼資料、放在哪個平台、怎麼避免亂回答，以及大概要多少錢。">
+<meta property="og:url" content="https://mingchengli465-coder.github.io/Claude-agent/guides/ai-customer-service.html">
+<meta name="theme-color" content="#ffffff">
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("siteTheme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d1d1f'/%3E%3Ctext x='29' y='45' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='38' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3Ccircle cx='47' cy='42' r='4.5' fill='%230071e3'/%3E%3C/svg%3E">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "小店怎麼加 AI 客服？24 小時自動回覆客人", "description": "給蛋糕店、美甲、補習班等小店的 AI 客服指南：能做什麼、要準備什麼資料、放在哪個平台、怎麼避免亂回答，以及大概要多少錢。", "inLanguage": "zh-TW", "datePublished": "2026-10-01", "dateModified": "2026-10-01", "author": {"@type": "Person", "name": "vinc"}, "mainEntityOfPage": "https://mingchengli465-coder.github.io/Claude-agent/guides/ai-customer-service.html"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "客人會知道是 AI 嗎？", "acceptedAnswer": {"@type": "Answer", "text": "會。建議一開始就說明是 AI 助理，要下單或細節確認時由老闆本人回覆，客人反而更放心。"}}, {"@type": "Question", "name": "我不會用電腦也可以嗎？", "acceptedAnswer": {"@type": "Answer", "text": "可以。你只要把價目表和常見問題給我，架設和更新都由我來做；有客人要成交時，通知會直接傳到你手機。"}}, {"@type": "Question", "name": "價目表改了怎麼辦？", "acceptedAnswer": {"@type": "Answer", "text": "傳給我新的就好，月費裡包含更新。"}}, {"@type": "Question", "name": "可以先試試看嗎？", "acceptedAnswer": {"@type": "Answer", "text": "可以，先到示範頁跟 AI 聊聊，或在網站右下角問 AI 助理。"}}]}</script>
+<style>
+  :root { color-scheme: light; --bg:#fff; --bg2:#f5f5f7; --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --line:rgba(0,0,0,.12); --accent:#0071e3; --accent-h:#0077ed; --link:#0066cc; --code:#f5f5f7;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace; }
+  html[data-theme="dark"] { color-scheme: dark; --bg:#000; --bg2:#161617; --ink:#f5f5f7; --ink2:#d2d2d7; --muted:#a1a1a6; --line:rgba(255,255,255,.16); --link:#2997ff; --code:#1d1d1f; }
+  *,*::before,*::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:400 18px/1.7 var(--sans); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid var(--line); }
+  .bar .in { max-width: 760px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 18px; }
+  .logo { font: 700 21px/1 var(--sans); letter-spacing: -.04em; color: var(--ink); }
+  .logo:hover { text-decoration: none; }
+  .logo i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .bar .sp { flex: 1; }
+  .bar .lang { font-size: 14px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 400 15px/1 var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--accent-h); text-decoration: none; }
+  .btn.line { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px var(--link); }
+  .btn.line:hover { background: var(--accent); color: #fff; box-shadow: none; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 40px; }
+  .crumb { font-size: 14px; color: var(--muted); }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.12; letter-spacing: -.035em; margin: 12px 0 0; font-weight: 700; text-wrap: balance; }
+  html[lang="zh-TW"] h1 { letter-spacing: -.015em; line-height: 1.22; }
+  .lead { font-size: 21px; color: var(--ink2); margin: 20px 0 0; }
+  .meta { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.03em; margin: 56px 0 0; font-weight: 700; }
+  html[lang="zh-TW"] h2 { letter-spacing: -.01em; }
+  h3 { font-size: 21px; margin: 32px 0 0; letter-spacing: -.02em; }
+  p, li { color: var(--ink2); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 8px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 400 .88em var(--mono); background: var(--code); padding: 2px 6px; border-radius: 6px; }
+  .cmd { position: relative; margin: 14px 0; border-radius: 14px; background: var(--code); }
+  .cmd small { display: block; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
+  .cmd pre { margin: 0; padding: 10px 92px 14px 16px; overflow-x: auto; font: 400 15px/1.6 var(--mono); color: var(--ink); }
+  .cmd button { position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg); color: var(--link); font: 500 13px var(--sans); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+  .cmd button.ok { background: #1fa84a; color: #fff; box-shadow: none; }
+  .note { margin: 20px 0; padding: 16px 18px; border-radius: 14px; background: var(--bg2); font-size: 16px; }
+  .note p { margin: 0; }
+  .cta { margin: 48px 0; padding: 28px; border-radius: 24px; background: var(--bg2); }
+  .cta h2 { margin: 0; font-size: 26px; }
+  .cta p { margin: 10px 0 20px; }
+  .cta .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .faq dt { font-weight: 600; color: var(--ink); margin-top: 22px; }
+  .faq dd { margin: 6px 0 0; color: var(--ink2); }
+  .more { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .more ul { list-style: none; padding: 0; }
+  footer { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink2); }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <a class="logo" href="../">vinc<i></i></a>
+  <a class="lang" href="index.html">教學</a>
+  <span class="sp"></span>
+  <a class="lang" href="ai-chatbot-small-business.html" hreflang="en">English</a>
+  <button class="btn" type="button" data-chat>問 AI 助理</button>
+</div></header>
+<main>
+  <div class="crumb"><a href="../">vinc · AI 工作室</a> / <a href="index.html">教學</a></div>
+  <h1>小店怎麼加 AI 客服？24 小時自動回覆客人</h1>
+  <p class="lead">客人常在晚上問價錢、問時間，第二天才回，有些人已經去別家了。AI 客服就是幫你在打烊後接住這些客人，要成交的那一刻再叫你。</p>
+  <div class="meta">約 5 分鐘讀完 · 2026 年 10 月更新</div>
+
+  <h2>AI 客服能幫你做什麼</h2>
+  <ul>
+    <li>24 小時回答重複的問題：價錢、款式、營業時間、送貨、預約。</li>
+    <li>主動問清楚客人要什麼，例如尺寸、日期、人數。</li>
+    <li>客人想下單、要付款、要砍價，或問到它答不了的，<strong>馬上通知你本人</strong>，附上聊天紀錄。</li>
+    <li>客人用中文、英文問，它就用同一種語言回。</li>
+  </ul>
+  <p><strong>它不該做的：</strong>自己亂報價、亂答應優惠、替你收錢。好的 AI 客服只按你給的資料回答，不確定就交給你。</p>
+
+  <h2>要準備哪些資料</h2>
+  <ol>
+    <li>價目表：賣什麼、多少錢、有什麼選項。</li>
+    <li>常見問題：營業時間、地址、送貨範圍和運費、取貨方式。</li>
+    <li>付款和訂金規則。</li>
+    <li>你希望它說話的風格：親切、簡短，還是正式。</li>
+  </ol>
+  <p>沒有整理好的價目表也沒關係，把店裡的菜單照片或聊天紀錄整理一下就能用。</p>
+
+  <h2>放在哪個平台</h2>
+  <table>
+    <tr><th>平台</th><th>適合誰</th></tr>
+    <tr><td>你的網站右下角</td><td>有官網或 IG 連結頁的店，客人點開就能聊</td></tr>
+    <tr><td>Telegram</td><td>新加坡、香港、海外客人多的店</td></tr>
+    <tr><td>WhatsApp</td><td>東南亞客人為主的店</td></tr>
+    <tr><td>微信公眾號 / 企業微信</td><td>中國大陸客人；個人微信號因為規定容易被封，不建議接</td></tr>
+  </table>
+
+  <h2>怎麼避免 AI 亂回答</h2>
+  <ul>
+    <li>只讓它根據你的資料回答，資料沒寫的就說「我請老闆確認」。</li>
+    <li>回覆要短，一兩句話，像真人店員一樣，不要一大段。</li>
+    <li>價格、優惠、付款一律轉給你本人。</li>
+  </ul>
+
+  <div class="cta"><h2>想直接用現成的？</h2><p>我幫小店架設 AI 客服：按你的價目表回答客人，要下單或答不了的馬上轉給你。<strong>US$70–85 一次性架設</strong>，之後每月 US$9.9，隨時可停。</p><div class="row"><a class="btn" href="../demo">看示範頁</a><button class="btn line" type="button" data-chat>問 AI 助理</button></div></div>
+
+  <h2>大概要多少錢</h2>
+  <p>自己做：要會寫程式、架伺服器、串接平台，還要付 AI 的用量費。找人做：我這邊是 <strong>US$70–85 一次性架設</strong>，之後每月 US$9.9，包含伺服器、AI 用量和價目表更新；資料給齊後 2–3 天上線，按月付，隨時可停。</p>
+
+  <h2>常見問題</h2>
+  <dl class="faq"><dt>客人會知道是 AI 嗎？</dt><dd>會。建議一開始就說明是 AI 助理，要下單或細節確認時由老闆本人回覆，客人反而更放心。</dd><dt>我不會用電腦也可以嗎？</dt><dd>可以。你只要把價目表和常見問題給我，架設和更新都由我來做；有客人要成交時，通知會直接傳到你手機。</dd><dt>價目表改了怎麼辦？</dt><dd>傳給我新的就好，月費裡包含更新。</dd><dt>可以先試試看嗎？</dt><dd>可以，先到示範頁跟 AI 聊聊，或在網站右下角問 AI 助理。</dd></dl>
+  <div class="more"><strong>其他教學</strong><ul><li><a href="claude-code-install.html">Claude Code 安裝教學</a></li><li><a href="codex-install.html">Codex CLI 安裝教學</a></li><li><a href="ai-chatbot-small-business.html">AI customer service guide (English)</a></li></ul></div>
+</main>
+<footer>© 2026 vinc的ai鋪子 · 由本人撰寫，最後更新 2026 年 10 月。</footer>
+<script src="/widget.js" data-color="#0071e3" data-track defer></script>
+<script>
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector("button"), text = box.querySelector("pre").textContent, label = b.textContent;
+    b.addEventListener("click", function () {
+      function done() { b.classList.add("ok"); b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.classList.remove("ok"); b.textContent = label; }, 1600); }
+      function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) { b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); }); });
+</script>
+</body>
+</html>

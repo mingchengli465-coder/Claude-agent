@@ -84,6 +84,21 @@ async def main():
         assert "data-track" in site and 'data-i="askPrice"' in site and "askPrice:" in site
         assert 'html[data-theme="dark"]' in site and 'id="mode"' in site, "dark and light mode"
         assert 'querySelectorAll(".langs button[data-lang]")' in site, "the mode switch is not a language button"
+        # the how-to guides
+        r = await client.get("/guides", allow_redirects=False)
+        assert r.status == 301 and r.headers["Location"] == "/guides/"
+        index = await (await client.get("/guides/")).text()
+        assert "claude-code-install.html" in index and "install-claude-code.html" in index
+        for name, must in (("claude-code-install.html", "irm https://claude.ai/install.ps1 | iex"),
+                           ("install-claude-code.html", "curl -fsSL https://claude.ai/install.sh | bash"),
+                           ("codex-install.html", "npm install -g @openai/codex"),
+                           ("ai-chatbot-small-business.html", "US$70–85")):
+            r = await client.get(f"/guides/{name}")
+            page = await r.text()
+            assert r.status == 200 and must in page and '<link rel="canonical"' in page and 'src="/widget.js"' in page, name
+        for bad in ("nope.html", "..%2Fsite.html", "index.txt"):
+            assert (await client.get(f"/guides/{bad}")).status == 404, bad
+        assert 'href="guides/"' in site, "the homepage links to the guides"
         r = await client.options("/api/chat")
         assert r.status == 204 and r.headers["Access-Control-Allow-Origin"] == "*"
     print("PASS the personal site, the demo page, the widget script and CORS are served; the shop name is escaped")
@@ -186,6 +201,11 @@ for html in (index, demo):
     assert "url(/fonts/" not in html and 'href="/"' not in html, "no server-absolute paths left"
 assert 'href="demo.html"' in index and "Vinc100327" in demo
 assert (out / "fonts" / "serif-sc.woff2").exists() and (out / ".nojekyll").exists()
+guide = (out / "guides" / "ai-customer-service.html").read_text(encoding="utf-8")
+assert f'src="{build_pages.API}/widget.js"' in guide and 'href="../demo.html"' in guide and 'href="../demo"' not in guide
+sitemap = (out / "sitemap.xml").read_text(encoding="utf-8")
+assert "/guides/install-claude-code.html</loc>" in sitemap and "/guides/</loc>" in sitemap
+assert "Sitemap:" in (out / "robots.txt").read_text(encoding="utf-8")
 print("PASS the GitHub Pages copy is self-contained apart from the chat server")
 
 print("\nALL WEB CHAT TESTS PASSED")

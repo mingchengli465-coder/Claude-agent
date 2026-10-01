@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Codex CLI 安裝教學：用 ChatGPT 帳號在電腦上跑 OpenAI Codex | vinc</title>
+<meta name="description" content="OpenAI Codex CLI 安裝教學：Mac、Windows、Linux 的官方安裝指令，怎麼用 ChatGPT 帳號登入，以及和 Claude Code 怎麼選。">
+<link rel="canonical" href="https://mingchengli465-coder.github.io/Claude-agent/guides/codex-install.html">
+<link rel="alternate" hreflang="zh-Hant" href="https://mingchengli465-coder.github.io/Claude-agent/guides/codex-install.html">
+<link rel="alternate" hreflang="en" href="https://mingchengli465-coder.github.io/Claude-agent/guides/install-codex-cli.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Codex CLI 安裝教學：用 ChatGPT 帳號在電腦上跑 OpenAI Codex | vinc">
+<meta property="og:description" content="OpenAI Codex CLI 安裝教學：Mac、Windows、Linux 的官方安裝指令，怎麼用 ChatGPT 帳號登入，以及和 Claude Code 怎麼選。">
+<meta property="og:url" content="https://mingchengli465-coder.github.io/Claude-agent/guides/codex-install.html">
+<meta name="theme-color" content="#ffffff">
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("siteTheme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d1d1f'/%3E%3Ctext x='29' y='45' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='38' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3Ccircle cx='47' cy='42' r='4.5' fill='%230071e3'/%3E%3C/svg%3E">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "HowTo", "name": "Codex CLI 安裝教學：用 ChatGPT 帳號在電腦上跑 Codex", "description": "OpenAI Codex CLI 安裝教學：Mac、Windows、Linux 的官方安裝指令，怎麼用 ChatGPT 帳號登入，以及和 Claude Code 怎麼選。", "inLanguage": "zh-TW", "datePublished": "2026-10-01", "dateModified": "2026-10-01", "author": {"@type": "Person", "name": "vinc"}, "mainEntityOfPage": "https://mingchengli465-coder.github.io/Claude-agent/guides/codex-install.html", "step": [{"@type": "HowToStep", "name": "安裝", "text": "Mac/Linux：curl -fsSL https://chatgpt.com/codex/install.sh | sh；Windows：在 PowerShell 執行官方安裝指令。"}, {"@type": "HowToStep", "name": "登入", "text": "輸入 codex，選 Sign in with ChatGPT。"}, {"@type": "HowToStep", "name": "開始用", "text": "在專案資料夾輸入 codex，用自然語言下指令。"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Codex CLI 要錢嗎？", "acceptedAnswer": {"@type": "Answer", "text": "軟體免費，但要有 ChatGPT Plus、Pro、Business、Edu 或 Enterprise 方案，或者用 OpenAI API key（按用量付費）。"}}, {"@type": "Question", "name": "輸入 codex 說找不到指令？", "acceptedAnswer": {"@type": "Answer", "text": "關掉終端機重開一個新的再試；用 npm 裝的話，確認 npm 的全域安裝資料夾有在 PATH 裡。"}}, {"@type": "Question", "name": "可以和 Claude Code 一起裝嗎？", "acceptedAnswer": {"@type": "Answer", "text": "可以，兩個互不影響。找我一起裝是 US$21。"}}]}</script>
+<style>
+  :root { color-scheme: light; --bg:#fff; --bg2:#f5f5f7; --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --line:rgba(0,0,0,.12); --accent:#0071e3; --accent-h:#0077ed; --link:#0066cc; --code:#f5f5f7;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace; }
+  html[data-theme="dark"] { color-scheme: dark; --bg:#000; --bg2:#161617; --ink:#f5f5f7; --ink2:#d2d2d7; --muted:#a1a1a6; --line:rgba(255,255,255,.16); --link:#2997ff; --code:#1d1d1f; }
+  *,*::before,*::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:400 18px/1.7 var(--sans); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid var(--line); }
+  .bar .in { max-width: 760px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 18px; }
+  .logo { font: 700 21px/1 var(--sans); letter-spacing: -.04em; color: var(--ink); }
+  .logo:hover { text-decoration: none; }
+  .logo i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .bar .sp { flex: 1; }
+  .bar .lang { font-size: 14px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 400 15px/1 var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--accent-h); text-decoration: none; }
+  .btn.line { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px var(--link); }
+  .btn.line:hover { background: var(--accent); color: #fff; box-shadow: none; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 40px; }
+  .crumb { font-size: 14px; color: var(--muted); }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.12; letter-spacing: -.035em; margin: 12px 0 0; font-weight: 700; text-wrap: balance; }
+  html[lang="zh-TW"] h1 { letter-spacing: -.015em; line-height: 1.22; }
+  .lead { font-size: 21px; color: var(--ink2); margin: 20px 0 0; }
+  .meta { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.03em; margin: 56px 0 0; font-weight: 700; }
+  html[lang="zh-TW"] h2 { letter-spacing: -.01em; }
+  h3 { font-size: 21px; margin: 32px 0 0; letter-spacing: -.02em; }
+  p, li { color: var(--ink2); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 8px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 400 .88em var(--mono); background: var(--code); padding: 2px 6px; border-radius: 6px; }
+  .cmd { position: relative; margin: 14px 0; border-radius: 14px; background: var(--code); }
+  .cmd small { display: block; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
+  .cmd pre { margin: 0; padding: 10px 92px 14px 16px; overflow-x: auto; font: 400 15px/1.6 var(--mono); color: var(--ink); }
+  .cmd button { position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg); color: var(--link); font: 500 13px var(--sans); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+  .cmd button.ok { background: #1fa84a; color: #fff; box-shadow: none; }
+  .note { margin: 20px 0; padding: 16px 18px; border-radius: 14px; background: var(--bg2); font-size: 16px; }
+  .note p { margin: 0; }
+  .cta { margin: 48px 0; padding: 28px; border-radius: 24px; background: var(--bg2); }
+  .cta h2 { margin: 0; font-size: 26px; }
+  .cta p { margin: 10px 0 20px; }
+  .cta .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .faq dt { font-weight: 600; color: var(--ink); margin-top: 22px; }
+  .faq dd { margin: 6px 0 0; color: var(--ink2); }
+  .more { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .more ul { list-style: none; padding: 0; }
+  footer { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink2); }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <a class="logo" href="../">vinc<i></i></a>
+  <a class="lang" href="index.html">教學</a>
+  <span class="sp"></span>
+  <a class="lang" href="install-codex-cli.html" hreflang="en">English</a>
+  <button class="btn" type="button" data-chat>問 AI 助理</button>
+</div></header>
+<main>
+  <div class="crumb"><a href="../">vinc · AI 工作室</a> / <a href="index.html">教學</a></div>
+  <h1>Codex CLI 安裝教學：用 ChatGPT 帳號在電腦上跑 Codex</h1>
+  <p class="lead">Codex CLI 是 OpenAI 的 AI 編程助手，在終端機裡讀你的專案、寫程式、跑指令。如果你已經有 ChatGPT 付費方案，就可以直接用。</p>
+  <div class="meta">約 4 分鐘讀完 · 依官方說明整理，2026 年 10 月更新</div>
+
+  <h2>開始前先確認</h2>
+  <ul>
+    <li><strong>帳號：</strong>ChatGPT Plus、Pro、Business、Edu 或 Enterprise 方案；也可以改用 OpenAI API key。</li>
+    <li><strong>電腦：</strong>macOS、Linux 或 Windows。</li>
+  </ul>
+
+  <h2>第 1 步：安裝</h2>
+  <p>打開終端機（Mac 是「終端機」，Windows 是 PowerShell），依你的電腦貼上一行：</p>
+  <div class="cmd"><small>Mac / Linux</small><pre>curl -fsSL https://chatgpt.com/codex/install.sh | sh</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <div class="cmd"><small>Windows（PowerShell）</small><pre>powershell -ExecutionPolicy ByPass -c &quot;irm https://chatgpt.com/codex/install.ps1 | iex&quot;</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <p>習慣用套件管理工具的也可以：</p>
+  <div class="cmd"><small>npm</small><pre>npm install -g @openai/codex</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <div class="cmd"><small>Mac（Homebrew）</small><pre>brew install --cask codex</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+
+  <h2>第 2 步：登入</h2>
+  <p>關掉終端機再開一個新的，輸入：</p>
+  <div class="cmd"><small>啟動</small><pre>codex</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <p>選 <strong>Sign in with ChatGPT</strong>，在瀏覽器登入你的 ChatGPT 帳號就好。</p>
+
+  <h2>第 3 步：開始用</h2>
+  <p>先 <code>cd</code> 到你的專案資料夾再輸入 <code>codex</code>，然後直接用中文說你要做什麼，例如「幫我把這個網頁改成手機也好看」。它改檔案或跑指令之前會先問你。</p>
+
+  <div class="cta"><h2>嫌麻煩？我遠端幫你裝好</h2><p>透過螢幕分享，在你自己的電腦上裝好、登入、跑通，再帶你完成第一個小任務。<strong>US$14 起</strong>，Claude Code 和 Codex 一起裝 US$21。帳號需要你本人按官方條款註冊和付費。</p><div class="row"><button class="btn" type="button" data-chat>問 AI 助理怎麼約</button><a class="btn line" href="../#pricing">看服務和價格</a></div></div>
+
+  <h2>Codex 和 Claude Code 怎麼選？</h2>
+  <table>
+    <tr><th></th><th>Codex CLI</th><th>Claude Code</th></tr>
+    <tr><td>公司</td><td>OpenAI</td><td>Anthropic</td></tr>
+    <tr><td>需要的帳號</td><td>ChatGPT 付費方案或 API key</td><td>Claude Pro / Max 等或 Console 帳號</td></tr>
+    <tr><td>用法</td><td>在終端機用自然語言下指令</td><td>在終端機用自然語言下指令</td></tr>
+  </table>
+  <p>兩個做的事情很像。<strong>已經付費的是哪一家，就先用哪一個</strong>；兩個都裝也可以，看哪個順手。</p>
+
+  <h2>常見問題</h2>
+  <dl class="faq"><dt>Codex CLI 要錢嗎？</dt><dd>軟體免費，但要有 ChatGPT Plus、Pro、Business、Edu 或 Enterprise 方案，或者用 OpenAI API key（按用量付費）。</dd><dt>輸入 codex 說找不到指令？</dt><dd>關掉終端機重開一個新的再試；用 npm 裝的話，確認 npm 的全域安裝資料夾有在 PATH 裡。</dd><dt>可以和 Claude Code 一起裝嗎？</dt><dd>可以，兩個互不影響。找我一起裝是 US$21。</dd></dl>
+  <div class="more"><strong>其他教學</strong><ul><li><a href="claude-code-install.html">Claude Code 安裝教學</a></li><li><a href="ai-customer-service.html">小店怎麼加 AI 客服？</a></li><li><a href="install-codex-cli.html">Install Codex CLI (English)</a></li></ul></div>
+</main>
+<footer>© 2026 vinc的ai鋪子 · 由本人撰寫，最後更新 2026 年 10 月。</footer>
+<script src="/widget.js" data-color="#0071e3" data-track defer></script>
+<script>
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector("button"), text = box.querySelector("pre").textContent, label = b.textContent;
+    b.addEventListener("click", function () {
+      function done() { b.classList.add("ok"); b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.classList.remove("ok"); b.textContent = label; }, 1600); }
+      function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) { b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); }); });
+</script>
+</body>
+</html>
