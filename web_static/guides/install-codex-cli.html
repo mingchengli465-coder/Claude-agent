@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How to Install OpenAI Codex CLI and Sign In with ChatGPT (2026) | vinc</title>
+<meta name="description" content="Install OpenAI&#x27;s Codex CLI on Mac, Windows or Linux with the official commands, sign in with your ChatGPT plan, and decide between Codex and Claude Code.">
+<link rel="canonical" href="https://mingchengli465-coder.github.io/Claude-agent/guides/install-codex-cli.html">
+<link rel="alternate" hreflang="en" href="https://mingchengli465-coder.github.io/Claude-agent/guides/install-codex-cli.html">
+<link rel="alternate" hreflang="zh-Hant" href="https://mingchengli465-coder.github.io/Claude-agent/guides/codex-install.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How to Install OpenAI Codex CLI and Sign In with ChatGPT (2026) | vinc">
+<meta property="og:description" content="Install OpenAI&#x27;s Codex CLI on Mac, Windows or Linux with the official commands, sign in with your ChatGPT plan, and decide between Codex and Claude Code.">
+<meta property="og:url" content="https://mingchengli465-coder.github.io/Claude-agent/guides/install-codex-cli.html">
+<meta name="theme-color" content="#ffffff">
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("siteTheme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d1d1f'/%3E%3Ctext x='29' y='45' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='38' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3Ccircle cx='47' cy='42' r='4.5' fill='%230071e3'/%3E%3C/svg%3E">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "HowTo", "name": "How to install OpenAI Codex CLI", "description": "Install OpenAI's Codex CLI on Mac, Windows or Linux with the official commands, sign in with your ChatGPT plan, and decide between Codex and Claude Code.", "inLanguage": "en", "datePublished": "2026-10-01", "dateModified": "2026-10-01", "author": {"@type": "Person", "name": "vinc"}, "mainEntityOfPage": "https://mingchengli465-coder.github.io/Claude-agent/guides/install-codex-cli.html", "step": [{"@type": "HowToStep", "name": "Install", "text": "Mac/Linux: curl -fsSL https://chatgpt.com/codex/install.sh | sh. Windows: run the official PowerShell installer."}, {"@type": "HowToStep", "name": "Sign in", "text": "Run codex and choose Sign in with ChatGPT."}, {"@type": "HowToStep", "name": "Use it", "text": "Run codex in your project folder and ask in plain language."}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Is Codex CLI free?", "acceptedAnswer": {"@type": "Answer", "text": "The tool is free; you need a ChatGPT Plus, Pro, Business, Edu or Enterprise plan, or an OpenAI API key billed by usage."}}, {"@type": "Question", "name": "It says codex: command not found", "acceptedAnswer": {"@type": "Answer", "text": "Open a new terminal. If you used npm, make sure npm's global folder is on your PATH."}}, {"@type": "Question", "name": "Can I install it next to Claude Code?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, they don't interfere. I install both together for US$21."}}]}</script>
+<style>
+  :root { color-scheme: light; --bg:#fff; --bg2:#f5f5f7; --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --line:rgba(0,0,0,.12); --accent:#0071e3; --accent-h:#0077ed; --link:#0066cc; --code:#f5f5f7;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace; }
+  html[data-theme="dark"] { color-scheme: dark; --bg:#000; --bg2:#161617; --ink:#f5f5f7; --ink2:#d2d2d7; --muted:#a1a1a6; --line:rgba(255,255,255,.16); --link:#2997ff; --code:#1d1d1f; }
+  *,*::before,*::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:400 18px/1.7 var(--sans); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid var(--line); }
+  .bar .in { max-width: 760px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 18px; }
+  .logo { font: 700 21px/1 var(--sans); letter-spacing: -.04em; color: var(--ink); }
+  .logo:hover { text-decoration: none; }
+  .logo i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .bar .sp { flex: 1; }
+  .bar .lang { font-size: 14px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 400 15px/1 var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--accent-h); text-decoration: none; }
+  .btn.line { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px var(--link); }
+  .btn.line:hover { background: var(--accent); color: #fff; box-shadow: none; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 40px; }
+  .crumb { font-size: 14px; color: var(--muted); }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.12; letter-spacing: -.035em; margin: 12px 0 0; font-weight: 700; text-wrap: balance; }
+  html[lang="zh-TW"] h1 { letter-spacing: -.015em; line-height: 1.22; }
+  .lead { font-size: 21px; color: var(--ink2); margin: 20px 0 0; }
+  .meta { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.03em; margin: 56px 0 0; font-weight: 700; }
+  html[lang="zh-TW"] h2 { letter-spacing: -.01em; }
+  h3 { font-size: 21px; margin: 32px 0 0; letter-spacing: -.02em; }
+  p, li { color: var(--ink2); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 8px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 400 .88em var(--mono); background: var(--code); padding: 2px 6px; border-radius: 6px; }
+  .cmd { position: relative; margin: 14px 0; border-radius: 14px; background: var(--code); }
+  .cmd small { display: block; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
+  .cmd pre { margin: 0; padding: 10px 92px 14px 16px; overflow-x: auto; font: 400 15px/1.6 var(--mono); color: var(--ink); }
+  .cmd button { position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg); color: var(--link); font: 500 13px var(--sans); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+  .cmd button.ok { background: #1fa84a; color: #fff; box-shadow: none; }
+  .note { margin: 20px 0; padding: 16px 18px; border-radius: 14px; background: var(--bg2); font-size: 16px; }
+  .note p { margin: 0; }
+  .cta { margin: 48px 0; padding: 28px; border-radius: 24px; background: var(--bg2); }
+  .cta h2 { margin: 0; font-size: 26px; }
+  .cta p { margin: 10px 0 20px; }
+  .cta .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .faq dt { font-weight: 600; color: var(--ink); margin-top: 22px; }
+  .faq dd { margin: 6px 0 0; color: var(--ink2); }
+  .more { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .more ul { list-style: none; padding: 0; }
+  footer { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink2); }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <a class="logo" href="../">vinc<i></i></a>
+  <a class="lang" href="index.html">Guides</a>
+  <span class="sp"></span>
+  <a class="lang" href="codex-install.html" hreflang="zh-Hant">繁體中文</a>
+  <button class="btn" type="button" data-chat>Ask my AI</button>
+</div></header>
+<main>
+  <div class="crumb"><a href="../">vinc · AI studio</a> / <a href="index.html">Guides</a></div>
+  <h1>How to install OpenAI Codex CLI</h1>
+  <p class="lead">Codex CLI is OpenAI's coding assistant for the terminal. It reads your project, writes code and runs commands. If you already pay for ChatGPT, you can use it today.</p>
+  <div class="meta">4-minute read · Based on the official README, updated October 2026</div>
+
+  <h2>Before you start</h2>
+  <ul>
+    <li><strong>Account:</strong> a ChatGPT Plus, Pro, Business, Edu or Enterprise plan, or an OpenAI API key.</li>
+    <li><strong>Computer:</strong> macOS, Linux or Windows.</li>
+  </ul>
+
+  <h2>Step 1: Install</h2>
+  <p>Open a terminal (Terminal on Mac, PowerShell on Windows) and paste the line for your computer:</p>
+  <div class="cmd"><small>Mac / Linux</small><pre>curl -fsSL https://chatgpt.com/codex/install.sh | sh</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <div class="cmd"><small>Windows (PowerShell)</small><pre>powershell -ExecutionPolicy ByPass -c &quot;irm https://chatgpt.com/codex/install.ps1 | iex&quot;</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <p>Or with a package manager:</p>
+  <div class="cmd"><small>npm</small><pre>npm install -g @openai/codex</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <div class="cmd"><small>Mac (Homebrew)</small><pre>brew install --cask codex</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+
+  <h2>Step 2: Sign in</h2>
+  <p>Open a new terminal and run:</p>
+  <div class="cmd"><small>Start</small><pre>codex</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <p>Choose <strong>Sign in with ChatGPT</strong> and log in in your browser.</p>
+
+  <h2>Step 3: Start using it</h2>
+  <p><code>cd</code> into your project folder, run <code>codex</code>, and say what you want, like "make this page look good on phones". It asks before editing files or running commands.</p>
+
+  <div class="cta"><h2>Rather not do it yourself?</h2><p>Over screen share, I install it on your own computer, sign you in, make sure it runs and walk you through your first task. <strong>From US$14</strong>, or US$21 for Claude Code and Codex together. You sign up and pay for your own account under the official terms.</p><div class="row"><button class="btn" type="button" data-chat>Ask my AI to book</button><a class="btn line" href="../#pricing">Services and pricing</a></div></div>
+
+  <h2>Codex or Claude Code?</h2>
+  <table>
+    <tr><th></th><th>Codex CLI</th><th>Claude Code</th></tr>
+    <tr><td>Made by</td><td>OpenAI</td><td>Anthropic</td></tr>
+    <tr><td>Account</td><td>Paid ChatGPT plan or API key</td><td>Claude Pro / Max etc. or a Console account</td></tr>
+    <tr><td>How you use it</td><td>Plain-language requests in the terminal</td><td>Plain-language requests in the terminal</td></tr>
+  </table>
+  <p>They do very similar jobs. <strong>Start with the one you already pay for.</strong> You can install both and keep whichever feels better.</p>
+
+  <h2>FAQ</h2>
+  <dl class="faq"><dt>Is Codex CLI free?</dt><dd>The tool is free; you need a ChatGPT Plus, Pro, Business, Edu or Enterprise plan, or an OpenAI API key billed by usage.</dd><dt>It says codex: command not found</dt><dd>Open a new terminal. If you used npm, make sure npm's global folder is on your PATH.</dd><dt>Can I install it next to Claude Code?</dt><dd>Yes, they don't interfere. I install both together for US$21.</dd></dl>
+  <div class="more"><strong>More guides</strong><ul><li><a href="install-claude-code.html">How to install Claude Code</a></li><li><a href="ai-chatbot-small-business.html">AI customer service for small businesses</a></li><li><a href="codex-install.html">Codex CLI 安裝教學（繁體中文）</a></li></ul></div>
+</main>
+<footer>© 2026 vinc · AI studio · Written by me, last updated October 2026.</footer>
+<script src="/widget.js" data-color="#0071e3" data-track defer></script>
+<script>
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector("button"), text = box.querySelector("pre").textContent, label = b.textContent;
+    b.addEventListener("click", function () {
+      function done() { b.classList.add("ok"); b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.classList.remove("ok"); b.textContent = label; }, 1600); }
+      function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) { b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); }); });
+</script>
+</body>
+</html>

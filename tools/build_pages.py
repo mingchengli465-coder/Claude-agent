@@ -44,6 +44,20 @@ def static_copy(html: str) -> str:
                 .replace('href="/"', 'href="./"'))
 
 
+SITE = os.environ.get("PAGES_SITE_URL", "https://mingchengli465-coder.github.io/Claude-agent").rstrip("/")
+
+
+def write_sitemap(out: Path) -> None:
+    """sitemap.xml and robots.txt, so search engines find the guides."""
+    pages = ["", "demo.html", "guides/"] + [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html"))
+                                             if p.name != "index.html"]
+    urls = "".join(f"  <url><loc>{SITE}/{p}</loc></url>\n" for p in pages)
+    (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
+                                     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                                     f"{urls}</urlset>\n", encoding="utf-8")
+    (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n", encoding="utf-8")
+
+
 def build(out: Path) -> None:
     chat = web.WebChat(_NoService(), title=web.shop_name(), contact_link=BOT)
     if out.exists():
@@ -52,6 +66,11 @@ def build(out: Path) -> None:
     for source, target in PAGES.items():
         html = chat._render(source).text
         (out / target).write_text(static_copy(html), encoding="utf-8")
+    (out / "guides").mkdir()
+    for guide in sorted((ROOT / "web_static" / "guides").glob("*.html")):
+        html = chat._render(f"guides/{guide.name}").text
+        (out / "guides" / guide.name).write_text(static_copy(html).replace('href="../demo"', 'href="../demo.html"'), encoding="utf-8")
+    write_sitemap(out)
     for font in (ROOT / "web_static" / "fonts").iterdir():
         shutil.copy(font, out / "fonts" / font.name)
     (out / ".nojekyll").write_text("", encoding="utf-8")

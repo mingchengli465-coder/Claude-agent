@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How to Install Claude Code on Windows and Mac (2026 Guide) | vinc</title>
+<meta name="description" content="Install Claude Code with the official one-line installer on Windows or Mac: what account you need, how to sign in, how to check it works, and how to fix common errors.">
+<link rel="canonical" href="https://mingchengli465-coder.github.io/Claude-agent/guides/install-claude-code.html">
+<link rel="alternate" hreflang="en" href="https://mingchengli465-coder.github.io/Claude-agent/guides/install-claude-code.html">
+<link rel="alternate" hreflang="zh-Hant" href="https://mingchengli465-coder.github.io/Claude-agent/guides/claude-code-install.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How to Install Claude Code on Windows and Mac (2026 Guide) | vinc">
+<meta property="og:description" content="Install Claude Code with the official one-line installer on Windows or Mac: what account you need, how to sign in, how to check it works, and how to fix common errors.">
+<meta property="og:url" content="https://mingchengli465-coder.github.io/Claude-agent/guides/install-claude-code.html">
+<meta name="theme-color" content="#ffffff">
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("siteTheme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d1d1f'/%3E%3Ctext x='29' y='45' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='38' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3Ccircle cx='47' cy='42' r='4.5' fill='%230071e3'/%3E%3C/svg%3E">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "HowTo", "name": "How to install Claude Code on Windows and Mac", "description": "Install Claude Code with the official one-line installer on Windows or Mac: what account you need, how to sign in, how to check it works, and how to fix common errors.", "inLanguage": "en", "datePublished": "2026-10-01", "dateModified": "2026-10-01", "author": {"@type": "Person", "name": "vinc"}, "mainEntityOfPage": "https://mingchengli465-coder.github.io/Claude-agent/guides/install-claude-code.html", "step": [{"@type": "HowToStep", "name": "Open a terminal", "text": "Terminal on Mac, PowerShell on Windows."}, {"@type": "HowToStep", "name": "Paste the install command", "text": "Mac: curl -fsSL https://claude.ai/install.sh | bash. Windows: irm https://claude.ai/install.ps1 | iex"}, {"@type": "HowToStep", "name": "Check the install", "text": "Open a new terminal and run claude --version."}, {"@type": "HowToStep", "name": "Sign in and start", "text": "In your project folder run claude and sign in with your browser."}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Is Claude Code free?", "acceptedAnswer": {"@type": "Answer", "text": "Installing it is free, but you need a Claude Pro, Max, Team, Enterprise or Console (API) account to use it. The free Claude plan doesn't include it."}}, {"@type": "Question", "name": "Do I need to know how to code?", "acceptedAnswer": {"@type": "Answer", "text": "No. Describe what you want in plain language; it writes the code and edits files, and asks before each change."}}, {"@type": "Question", "name": "Do I need WSL on Windows?", "acceptedAnswer": {"@type": "Answer", "text": "No. Claude Code runs natively on Windows. If your projects already live in WSL, you can install it there instead."}}, {"@type": "Question", "name": "What if I can't get it working?", "acceptedAnswer": {"@type": "Answer", "text": "I can install it for you over screen share in about an hour, from US$14. Ask the assistant in the corner."}}]}</script>
+<style>
+  :root { color-scheme: light; --bg:#fff; --bg2:#f5f5f7; --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --line:rgba(0,0,0,.12); --accent:#0071e3; --accent-h:#0077ed; --link:#0066cc; --code:#f5f5f7;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace; }
+  html[data-theme="dark"] { color-scheme: dark; --bg:#000; --bg2:#161617; --ink:#f5f5f7; --ink2:#d2d2d7; --muted:#a1a1a6; --line:rgba(255,255,255,.16); --link:#2997ff; --code:#1d1d1f; }
+  *,*::before,*::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:400 18px/1.7 var(--sans); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid var(--line); }
+  .bar .in { max-width: 760px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 18px; }
+  .logo { font: 700 21px/1 var(--sans); letter-spacing: -.04em; color: var(--ink); }
+  .logo:hover { text-decoration: none; }
+  .logo i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .bar .sp { flex: 1; }
+  .bar .lang { font-size: 14px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 400 15px/1 var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--accent-h); text-decoration: none; }
+  .btn.line { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px var(--link); }
+  .btn.line:hover { background: var(--accent); color: #fff; box-shadow: none; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 40px; }
+  .crumb { font-size: 14px; color: var(--muted); }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.12; letter-spacing: -.035em; margin: 12px 0 0; font-weight: 700; text-wrap: balance; }
+  html[lang="zh-TW"] h1 { letter-spacing: -.015em; line-height: 1.22; }
+  .lead { font-size: 21px; color: var(--ink2); margin: 20px 0 0; }
+  .meta { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.03em; margin: 56px 0 0; font-weight: 700; }
+  html[lang="zh-TW"] h2 { letter-spacing: -.01em; }
+  h3 { font-size: 21px; margin: 32px 0 0; letter-spacing: -.02em; }
+  p, li { color: var(--ink2); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 8px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 400 .88em var(--mono); background: var(--code); padding: 2px 6px; border-radius: 6px; }
+  .cmd { position: relative; margin: 14px 0; border-radius: 14px; background: var(--code); }
+  .cmd small { display: block; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
+  .cmd pre { margin: 0; padding: 10px 92px 14px 16px; overflow-x: auto; font: 400 15px/1.6 var(--mono); color: var(--ink); }
+  .cmd button { position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg); color: var(--link); font: 500 13px var(--sans); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+  .cmd button.ok { background: #1fa84a; color: #fff; box-shadow: none; }
+  .note { margin: 20px 0; padding: 16px 18px; border-radius: 14px; background: var(--bg2); font-size: 16px; }
+  .note p { margin: 0; }
+  .cta { margin: 48px 0; padding: 28px; border-radius: 24px; background: var(--bg2); }
+  .cta h2 { margin: 0; font-size: 26px; }
+  .cta p { margin: 10px 0 20px; }
+  .cta .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .faq dt { font-weight: 600; color: var(--ink); margin-top: 22px; }
+  .faq dd { margin: 6px 0 0; color: var(--ink2); }
+  .more { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .more ul { list-style: none; padding: 0; }
+  footer { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink2); }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <a class="logo" href="../">vinc<i></i></a>
+  <a class="lang" href="index.html">Guides</a>
+  <span class="sp"></span>
+  <a class="lang" href="claude-code-install.html" hreflang="zh-Hant">繁體中文</a>
+  <button class="btn" type="button" data-chat>Ask my AI</button>
+</div></header>
+<main>
+  <div class="crumb"><a href="../">vinc · AI studio</a> / <a href="index.html">Guides</a></div>
+  <h1>How to install Claude Code on Windows and Mac</h1>
+  <p class="lead">Claude Code is Anthropic's AI coding assistant. It works in your terminal, writing code, fixing bugs and building small sites for you. Four steps, about ten minutes.</p>
+  <div class="meta">5-minute read · Based on the official docs, updated October 2026</div>
+
+  <h2>Before you start</h2>
+  <ul>
+    <li><strong>Computer:</strong> macOS 13+ or Windows 10 (1809)+, with 4 GB of RAM or more.</li>
+    <li><strong>Account:</strong> Claude Pro, Max, Team, Enterprise or a Console (API) account. The free Claude plan doesn't include Claude Code.</li>
+    <li><strong>Network:</strong> an internet connection, in a country Anthropic supports.</li>
+  </ul>
+
+  <h2>Step 1: Open a terminal</h2>
+  <p><strong>Mac:</strong> press ⌘ + Space, type "Terminal" and press Enter.<br><strong>Windows:</strong> open the Start menu, type "PowerShell" and open it. You don't need to run it as Administrator.</p>
+
+  <h2>Step 2: Paste the install command</h2>
+  <p>Pick the line for your computer, copy it into the terminal and press Enter.</p>
+  <div class="cmd"><small>Mac / Linux</small><pre>curl -fsSL https://claude.ai/install.sh | bash</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <div class="cmd"><small>Windows (PowerShell)</small><pre>irm https://claude.ai/install.ps1 | iex</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <div class="cmd"><small>Windows (Command Prompt)</small><pre>curl -fsSL https://claude.ai/install.cmd -o install.cmd &amp;&amp; install.cmd &amp;&amp; del install.cmd</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <div class="note"><p>On Windows, installing <a href="https://git-scm.com/downloads/win" rel="noopener">Git for Windows</a> is optional but recommended: it lets Claude Code run commands through Bash. Without it, Claude Code uses PowerShell instead.</p></div>
+
+  <h2>Step 3: Check it worked</h2>
+  <p><strong>Close the terminal and open a new one</strong>, then run:</p>
+  <div class="cmd"><small>Check the version</small><pre>claude --version</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <p>If you see a version number such as <code>2.1.x (Claude Code)</code>, you're done. For a full health check, run:</p>
+  <div class="cmd"><small>Full check</small><pre>claude doctor</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+
+  <h2>Step 4: Sign in and start</h2>
+  <p>Go to your project folder (for example <code>cd Desktop/my-project</code>) and run:</p>
+  <div class="cmd"><small>Start</small><pre>claude</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <p>The first time, a browser window opens so you can sign in to your Claude account. Then just tell it what you want in plain English, like "what's in this folder?" or "build me a small expense-tracker page".</p>
+
+  <div class="cta"><h2>Rather not do it yourself?</h2><p>Over screen share, I install it on your own computer, sign you in, make sure it runs and walk you through your first task. <strong>From US$14</strong>, or US$21 for Claude Code and Codex together. You sign up and pay for your own account under the official terms.</p><div class="row"><button class="btn" type="button" data-chat>Ask my AI to book</button><a class="btn line" href="../#pricing">Services and pricing</a></div></div>
+
+  <h2>Other ways to install</h2>
+  <p>Package managers work too, but these two <strong>don't update automatically</strong>:</p>
+  <div class="cmd"><small>Mac (Homebrew)</small><pre>brew install --cask claude-code</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <div class="cmd"><small>Windows (WinGet)</small><pre>winget install Anthropic.ClaudeCode</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <p>The npm package needs Node.js 22 or later. Don't use <code>sudo</code>:</p>
+  <div class="cmd"><small>npm</small><pre>npm install -g @anthropic-ai/claude-code</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+
+  <h2>Updating</h2>
+  <p>The official installer keeps Claude Code updated in the background. To update right away, run <code>claude update</code>.</p>
+
+  <h2>Common errors</h2>
+  <table>
+    <tr><th>You see</th><th>Fix</th></tr>
+    <tr><td>'claude' is not recognized / command not found</td><td>Open a new terminal. If it still fails, the install folder isn't on your PATH: run <code>claude doctor</code> for the fix.</td></tr>
+    <tr><td>The token '&amp;&amp;' is not a valid statement separator</td><td>You pasted the CMD command into PowerShell. Use the PowerShell line.</td></tr>
+    <tr><td>'irm' is not recognized</td><td>You pasted the PowerShell command into CMD. Use the CMD line.</td></tr>
+    <tr><td>403, syntax error near unexpected token '&lt;', or another curl error</td><td>Usually the network can't reach the download server. Try another connection.</td></tr>
+  </table>
+
+  <h2>FAQ</h2>
+  <dl class="faq"><dt>Is Claude Code free?</dt><dd>Installing it is free, but you need a Claude Pro, Max, Team, Enterprise or Console (API) account to use it. The free Claude plan doesn't include it.</dd><dt>Do I need to know how to code?</dt><dd>No. Describe what you want in plain language; it writes the code and edits files, and asks before each change.</dd><dt>Do I need WSL on Windows?</dt><dd>No. Claude Code runs natively on Windows. If your projects already live in WSL, you can install it there instead.</dd><dt>What if I can't get it working?</dt><dd>I can install it for you over screen share in about an hour, from US$14. Ask the assistant in the corner.</dd></dl>
+  <div class="more"><strong>More guides</strong><ul><li><a href="install-codex-cli.html">How to install OpenAI Codex CLI</a></li><li><a href="ai-chatbot-small-business.html">AI customer service for small businesses</a></li><li><a href="claude-code-install.html">Claude Code 安裝教學（繁體中文）</a></li></ul></div>
+</main>
+<footer>© 2026 vinc · AI studio · Written by me, last updated October 2026.</footer>
+<script src="/widget.js" data-color="#0071e3" data-track defer></script>
+<script>
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector("button"), text = box.querySelector("pre").textContent, label = b.textContent;
+    b.addEventListener("click", function () {
+      function done() { b.classList.add("ok"); b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.classList.remove("ok"); b.textContent = label; }, 1600); }
+      function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) { b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); }); });
+</script>
+</body>
+</html>

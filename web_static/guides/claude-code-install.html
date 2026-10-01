@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Claude Code 安裝教學（2026）：Windows、Mac 一步一步裝好 | vinc</title>
+<meta name="description" content="用官方指令在 Windows 或 Mac 安裝 Claude Code：需要什麼帳號、怎麼登入、怎麼確認裝好，以及常見錯誤怎麼處理。">
+<link rel="canonical" href="https://mingchengli465-coder.github.io/Claude-agent/guides/claude-code-install.html">
+<link rel="alternate" hreflang="zh-Hant" href="https://mingchengli465-coder.github.io/Claude-agent/guides/claude-code-install.html">
+<link rel="alternate" hreflang="en" href="https://mingchengli465-coder.github.io/Claude-agent/guides/install-claude-code.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Claude Code 安裝教學（2026）：Windows、Mac 一步一步裝好 | vinc">
+<meta property="og:description" content="用官方指令在 Windows 或 Mac 安裝 Claude Code：需要什麼帳號、怎麼登入、怎麼確認裝好，以及常見錯誤怎麼處理。">
+<meta property="og:url" content="https://mingchengli465-coder.github.io/Claude-agent/guides/claude-code-install.html">
+<meta name="theme-color" content="#ffffff">
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("siteTheme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d1d1f'/%3E%3Ctext x='29' y='45' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='38' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3Ccircle cx='47' cy='42' r='4.5' fill='%230071e3'/%3E%3C/svg%3E">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "HowTo", "name": "Claude Code 安裝教學：Windows、Mac 一步一步裝好", "description": "用官方指令在 Windows 或 Mac 安裝 Claude Code：需要什麼帳號、怎麼登入、怎麼確認裝好，以及常見錯誤怎麼處理。", "inLanguage": "zh-TW", "datePublished": "2026-10-01", "dateModified": "2026-10-01", "author": {"@type": "Person", "name": "vinc"}, "mainEntityOfPage": "https://mingchengli465-coder.github.io/Claude-agent/guides/claude-code-install.html", "step": [{"@type": "HowToStep", "name": "打開終端機", "text": "Mac 打開「終端機」，Windows 打開 PowerShell。"}, {"@type": "HowToStep", "name": "貼上安裝指令", "text": "Mac：curl -fsSL https://claude.ai/install.sh | bash；Windows：irm https://claude.ai/install.ps1 | iex"}, {"@type": "HowToStep", "name": "確認安裝", "text": "開新的終端機視窗，輸入 claude --version，出現版本號就是裝好了。"}, {"@type": "HowToStep", "name": "登入並開始", "text": "進到專案資料夾，輸入 claude，用瀏覽器登入 Claude 帳號。"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Claude Code 要錢嗎？", "acceptedAnswer": {"@type": "Answer", "text": "軟體本身免費安裝，但需要 Claude Pro、Max、Team、Enterprise 或 Console（API）帳號才能使用，免費版 Claude 不行。"}}, {"@type": "Question", "name": "一定要會寫程式嗎？", "acceptedAnswer": {"@type": "Answer", "text": "不用。可以直接用中文告訴它你要做什麼，它會自己寫程式、改檔案，每一步做之前會先問你。"}}, {"@type": "Question", "name": "Windows 要裝 WSL 嗎？", "acceptedAnswer": {"@type": "Answer", "text": "不用。Claude Code 可以直接在 Windows 上用；如果你的專案本來就在 WSL 裡，也可以在 WSL 裡安裝。"}}, {"@type": "Question", "name": "裝不起來怎麼辦？", "acceptedAnswer": {"@type": "Answer", "text": "可以找我遠端幫你裝，約一小時，US$14 起。點右下角的 AI 助理問就行。"}}]}</script>
+<style>
+  :root { color-scheme: light; --bg:#fff; --bg2:#f5f5f7; --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --line:rgba(0,0,0,.12); --accent:#0071e3; --accent-h:#0077ed; --link:#0066cc; --code:#f5f5f7;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace; }
+  html[data-theme="dark"] { color-scheme: dark; --bg:#000; --bg2:#161617; --ink:#f5f5f7; --ink2:#d2d2d7; --muted:#a1a1a6; --line:rgba(255,255,255,.16); --link:#2997ff; --code:#1d1d1f; }
+  *,*::before,*::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:400 18px/1.7 var(--sans); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid var(--line); }
+  .bar .in { max-width: 760px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 18px; }
+  .logo { font: 700 21px/1 var(--sans); letter-spacing: -.04em; color: var(--ink); }
+  .logo:hover { text-decoration: none; }
+  .logo i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .bar .sp { flex: 1; }
+  .bar .lang { font-size: 14px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 400 15px/1 var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--accent-h); text-decoration: none; }
+  .btn.line { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px var(--link); }
+  .btn.line:hover { background: var(--accent); color: #fff; box-shadow: none; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 40px; }
+  .crumb { font-size: 14px; color: var(--muted); }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.12; letter-spacing: -.035em; margin: 12px 0 0; font-weight: 700; text-wrap: balance; }
+  html[lang="zh-TW"] h1 { letter-spacing: -.015em; line-height: 1.22; }
+  .lead { font-size: 21px; color: var(--ink2); margin: 20px 0 0; }
+  .meta { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.03em; margin: 56px 0 0; font-weight: 700; }
+  html[lang="zh-TW"] h2 { letter-spacing: -.01em; }
+  h3 { font-size: 21px; margin: 32px 0 0; letter-spacing: -.02em; }
+  p, li { color: var(--ink2); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 8px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 400 .88em var(--mono); background: var(--code); padding: 2px 6px; border-radius: 6px; }
+  .cmd { position: relative; margin: 14px 0; border-radius: 14px; background: var(--code); }
+  .cmd small { display: block; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
+  .cmd pre { margin: 0; padding: 10px 92px 14px 16px; overflow-x: auto; font: 400 15px/1.6 var(--mono); color: var(--ink); }
+  .cmd button { position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg); color: var(--link); font: 500 13px var(--sans); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+  .cmd button.ok { background: #1fa84a; color: #fff; box-shadow: none; }
+  .note { margin: 20px 0; padding: 16px 18px; border-radius: 14px; background: var(--bg2); font-size: 16px; }
+  .note p { margin: 0; }
+  .cta { margin: 48px 0; padding: 28px; border-radius: 24px; background: var(--bg2); }
+  .cta h2 { margin: 0; font-size: 26px; }
+  .cta p { margin: 10px 0 20px; }
+  .cta .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .faq dt { font-weight: 600; color: var(--ink); margin-top: 22px; }
+  .faq dd { margin: 6px 0 0; color: var(--ink2); }
+  .more { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .more ul { list-style: none; padding: 0; }
+  footer { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink2); }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <a class="logo" href="../">vinc<i></i></a>
+  <a class="lang" href="index.html">教學</a>
+  <span class="sp"></span>
+  <a class="lang" href="install-claude-code.html" hreflang="en">English</a>
+  <button class="btn" type="button" data-chat>問 AI 助理</button>
+</div></header>
+<main>
+  <div class="crumb"><a href="../">vinc · AI 工作室</a> / <a href="index.html">教學</a></div>
+  <h1>Claude Code 安裝教學：Windows、Mac 一步一步裝好</h1>
+  <p class="lead">Claude Code 是 Anthropic 的 AI 編程助手，在終端機裡幫你寫程式、改 bug、做網站。照下面四步，大約 10 分鐘就能裝好。</p>
+  <div class="meta">約 5 分鐘讀完 · 依官方文件整理，2026 年 10 月更新</div>
+
+  <h2>開始前先確認</h2>
+  <ul>
+    <li><strong>電腦：</strong>macOS 13 以上，或 Windows 10（1809 版）以上；記憶體 4 GB 以上。</li>
+    <li><strong>帳號：</strong>Claude Pro、Max、Team、Enterprise，或 Console（API）帳號。免費版 Claude 不能用 Claude Code。</li>
+    <li><strong>網路：</strong>要能上網，並且在 Anthropic 支援的國家或地區使用。</li>
+  </ul>
+
+  <h2>第 1 步：打開終端機</h2>
+  <p><strong>Mac：</strong>按 ⌘ + 空白鍵，輸入「終端機」（Terminal）後按 Enter。<br><strong>Windows：</strong>按開始鍵，輸入「PowerShell」後打開。不需要用系統管理員身分。</p>
+
+  <h2>第 2 步：貼上安裝指令</h2>
+  <p>依你的電腦選一行，複製後貼進終端機，按 Enter。</p>
+  <div class="cmd"><small>Mac / Linux</small><pre>curl -fsSL https://claude.ai/install.sh | bash</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <div class="cmd"><small>Windows（PowerShell）</small><pre>irm https://claude.ai/install.ps1 | iex</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <div class="cmd"><small>Windows（命令提示字元 CMD）</small><pre>curl -fsSL https://claude.ai/install.cmd -o install.cmd &amp;&amp; install.cmd &amp;&amp; del install.cmd</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <div class="note"><p>Windows 建議另外裝 <a href="https://git-scm.com/downloads/win" rel="noopener">Git for Windows</a>（可選），這樣 Claude Code 可以用 Bash 執行指令；沒裝也能用，會改用 PowerShell。</p></div>
+
+  <h2>第 3 步：確認裝好了</h2>
+  <p><strong>關掉終端機，再開一個新的</strong>，輸入：</p>
+  <div class="cmd"><small>檢查版本</small><pre>claude --version</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <p>出現版本號（例如 <code>2.1.x (Claude Code)</code>）就是裝好了。想做完整檢查可以再跑：</p>
+  <div class="cmd"><small>完整檢查</small><pre>claude doctor</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+
+  <h2>第 4 步：登入，開始用</h2>
+  <p>先進到你的專案資料夾（例如 <code>cd Desktop/my-project</code>），然後輸入：</p>
+  <div class="cmd"><small>啟動</small><pre>claude</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <p>第一次會打開瀏覽器讓你登入 Claude 帳號，登入後回到終端機就能直接用中文下指令，例如「幫我看看這個資料夾裡有什麼」或「幫我做一個記帳的小網頁」。</p>
+
+  <div class="cta"><h2>嫌麻煩？我遠端幫你裝好</h2><p>透過螢幕分享，在你自己的電腦上裝好、登入、跑通，再帶你完成第一個小任務。<strong>US$14 起</strong>，Claude Code 和 Codex 一起裝 US$21。帳號需要你本人按官方條款註冊和付費。</p><div class="row"><button class="btn" type="button" data-chat>問 AI 助理怎麼約</button><a class="btn line" href="../#pricing">看服務和價格</a></div></div>
+
+  <h2>其他安裝方式</h2>
+  <p>習慣用套件管理工具也可以，但這兩種<strong>不會自動更新</strong>：</p>
+  <div class="cmd"><small>Mac（Homebrew）</small><pre>brew install --cask claude-code</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <div class="cmd"><small>Windows（WinGet）</small><pre>winget install Anthropic.ClaudeCode</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <p>用 npm 安裝需要 Node.js 22 以上，而且不要加 <code>sudo</code>：</p>
+  <div class="cmd"><small>npm</small><pre>npm install -g @anthropic-ai/claude-code</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+
+  <h2>怎麼更新</h2>
+  <p>用官方安裝指令裝的會在背景自動更新。想立刻更新就輸入 <code>claude update</code>。</p>
+
+  <h2>常見錯誤</h2>
+  <table>
+    <tr><th>看到的訊息</th><th>怎麼處理</th></tr>
+    <tr><td>claude 不是內部或外部命令 / command not found</td><td>關掉終端機重開一個。還是不行，代表安裝位置沒加進 PATH，跑 <code>claude doctor</code> 看建議。</td></tr>
+    <tr><td>The token '&amp;&amp;' is not a valid statement separator</td><td>你在 PowerShell 裡貼了 CMD 的指令，改用 PowerShell 那一行。</td></tr>
+    <tr><td>'irm' is not recognized</td><td>你在 CMD 裡貼了 PowerShell 的指令，改用 CMD 那一行。</td></tr>
+    <tr><td>403、syntax error near unexpected token '&lt;' 或其他 curl 錯誤</td><td>通常是網路連不到官方伺服器，換個網路再試。</td></tr>
+  </table>
+
+  <h2>常見問題</h2>
+  <dl class="faq"><dt>Claude Code 要錢嗎？</dt><dd>軟體本身免費安裝，但需要 Claude Pro、Max、Team、Enterprise 或 Console（API）帳號才能使用，免費版 Claude 不行。</dd><dt>一定要會寫程式嗎？</dt><dd>不用。可以直接用中文告訴它你要做什麼，它會自己寫程式、改檔案，每一步做之前會先問你。</dd><dt>Windows 要裝 WSL 嗎？</dt><dd>不用。Claude Code 可以直接在 Windows 上用；如果你的專案本來就在 WSL 裡，也可以在 WSL 裡安裝。</dd><dt>裝不起來怎麼辦？</dt><dd>可以找我遠端幫你裝，約一小時，US$14 起。點右下角的 AI 助理問就行。</dd></dl>
+  <div class="more"><strong>其他教學</strong><ul><li><a href="codex-install.html">Codex CLI 安裝教學</a></li><li><a href="ai-customer-service.html">小店怎麼加 AI 客服？</a></li><li><a href="install-claude-code.html">Install Claude Code (English)</a></li></ul></div>
+</main>
+<footer>© 2026 vinc的ai鋪子 · 由本人撰寫，最後更新 2026 年 10 月。</footer>
+<script src="/widget.js" data-color="#0071e3" data-track defer></script>
+<script>
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector("button"), text = box.querySelector("pre").textContent, label = b.textContent;
+    b.addEventListener("click", function () {
+      function done() { b.classList.add("ok"); b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.classList.remove("ok"); b.textContent = label; }, 1600); }
+      function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) { b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); }); });
+</script>
+</body>
+</html>

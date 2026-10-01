@@ -46,6 +46,7 @@ _FAVICON = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect w
             "<text x='32' y='46' font-family='Georgia,serif' font-style='italic' font-size='40' fill='white'"
             " text-anchor='middle'>v</text></svg>")
 _FONT = re.compile(r"^[a-z0-9-]+\.woff2$")
+_GUIDE = re.compile(r"^[a-z0-9-]+\.html$")
 # Per IP address: messages a minute, and new visitor ids an hour (each new
 # visitor pings the owner, so this is what keeps a script from spamming them).
 IP_MESSAGES_PER_MINUTE = int(os.environ.get("WEB_IP_MESSAGES_PER_MINUTE", "20"))
@@ -179,6 +180,9 @@ class WebChat:
         app.router.add_get("/api/messages", self.messages)
         app.router.add_post("/api/hit", self.hit)
         app.router.add_get("/privacy", self.privacy)
+        app.router.add_get("/guides", self.guides_home)
+        app.router.add_get("/guides/", self.guide)
+        app.router.add_get("/guides/{name}", self.guide)
         app.router.add_get("/s/{slug}", self.built_site)
         if self.messenger is not None:
             self.messenger.routes(app)
@@ -216,6 +220,16 @@ class WebChat:
         return web.Response(text=site["html"], content_type="text/html", headers={
             "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups allow-modals",
             "Cache-Control": "no-cache"})
+
+    async def guides_home(self, request: web.Request) -> web.Response:
+        raise web.HTTPMovedPermanently("/guides/")
+
+    async def guide(self, request: web.Request) -> web.Response:
+        """The how-to guides (web_static/guides): Claude Code, Codex, AI customer service."""
+        name = request.match_info.get("name", "index.html")
+        if not _GUIDE.match(name) or not (_STATIC / "guides" / name).is_file():
+            raise web.HTTPNotFound()
+        return self._render(f"guides/{name}")
 
     async def privacy(self, request: web.Request) -> web.Response:
         return self._render("privacy.html")
