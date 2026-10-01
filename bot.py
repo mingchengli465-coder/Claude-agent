@@ -1087,7 +1087,7 @@ async def send_owner_links_once(application: Application) -> None:
 # --- the business intro video (media/), sent to the owner once and on /video ---------------
 INTRO_VIDEOS = [
     (Path(__file__).with_name("media") / "vinc-intro.mp4",
-     "🎬 业务介绍视频（一般版）：发 X、Telegram 频道、给客人看用这个。"),
+     "🎬 新版业务介绍视频（有音乐音效）一般版：发 X、Telegram 频道、给客人看用这个。"),
     (Path(__file__).with_name("media") / "vinc-intro-fiverr.mp4",
      "🎬 Fiverr 版：结尾没有联系方式，放进 Fiverr gig 的视频栏用这个。"),
 ]
@@ -1116,7 +1116,7 @@ async def video_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def send_intro_videos_once(application: Application) -> None:
     """The business bot sends the owner the new intro videos once, so they needn't ask."""
-    if visits is None or service is None or not OWNER_CHAT_ID or not visits.take_flag("intro_video_v1"):
+    if visits is None or service is None or not OWNER_CHAT_ID or not visits.take_flag("intro_video_v2"):
         return
     try:
         await send_intro_videos(application.bot, int(OWNER_CHAT_ID))
