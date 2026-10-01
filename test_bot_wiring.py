@@ -491,6 +491,8 @@ class MeBot:
     def __init__(self): self.sent = []
     async def get_me(self): return types.SimpleNamespace(username="vinc_design_bot")
     async def send_message(self, chat_id, text, **kw): self.sent.append((chat_id, text))
+    async def send_video(self, chat_id, video, caption, **kw): self.videos.append(caption)
+    videos = []
 me_bot = MeBot()
 tweet_mod.X_TELEGRAM_LINK = "bot"
 import web as web_mod
@@ -511,6 +513,7 @@ assert bot.visits is not None and bot.web_chat.visits is bot.visits, "the site c
 assert "/visits" in hello and f"?me={bot.visits.owner_token()}" in hello, "the owner gets their device links"
 asyncio.run(bot.send_owner_links_once(types.SimpleNamespace(bot=me_bot)))
 assert len(me_bot.sent) == 1, "only once, not on every restart"
+assert len(MeBot.videos) == 2, "the business bot sends the owner the intro videos on first start"
 assert "visits-daily" in __import__("inspect").getsource(bot.schedule_visits_report)
 assert "schedule_visits_report(application)" in __import__("inspect").getsource(bot.main)
 # X posts are copied to the Facebook Page when it's connected

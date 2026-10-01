@@ -12,6 +12,7 @@ import os
 import re
 import secrets
 from collections import defaultdict, deque
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from openai import (
@@ -1083,6 +1084,46 @@ async def send_owner_links_once(application: Application) -> None:
         logger.exception("访客统计说明发送失败")
 
 
+# --- the business intro video (media/), sent to the owner once and on /video ---------------
+INTRO_VIDEOS = [
+    (Path(__file__).with_name("media") / "vinc-intro.mp4",
+     "🎬 业务介绍视频（一般版）：发 X、Telegram 频道、给客人看用这个。"),
+    (Path(__file__).with_name("media") / "vinc-intro-fiverr.mp4",
+     "🎬 Fiverr 版：结尾没有联系方式，放进 Fiverr gig 的视频栏用这个。"),
+]
+
+
+async def send_intro_videos(bot, chat_id: int) -> None:
+    for path, caption in INTRO_VIDEOS:
+        if not path.is_file():
+            continue
+        with path.open("rb") as video:
+            await bot.send_video(chat_id=chat_id, video=video, caption=caption,
+                                 width=1920, height=1080, supports_streaming=True)
+
+
+async def video_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/video — the business intro videos, ready to save or forward."""
+    if not is_owner(update.effective_chat.id):
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+    try:
+        await send_intro_videos(context.bot, update.effective_chat.id)
+    except TelegramError:
+        logger.exception("介绍视频发送失败")
+        await update.effective_message.reply_text("视频发送失败了，过一会儿再发 /video 试试。")
+
+
+async def send_intro_videos_once(application: Application) -> None:
+    """The business bot sends the owner the new intro videos once, so they needn't ask."""
+    if visits is None or service is None or not OWNER_CHAT_ID or not visits.take_flag("intro_video_v1"):
+        return
+    try:
+        await send_intro_videos(application.bot, int(OWNER_CHAT_ID))
+    except TelegramError:
+        logger.exception("介绍视频发送失败")
+
+
 def schedule_visits_report(application: Application) -> None:
     if not OWNER_CHAT_ID or application.job_queue is None:
         return
@@ -1554,6 +1595,7 @@ async def post_init(application: Application) -> None:
     schedule_post_on_start(application)
     await start_web_chat(username, application.bot)
     await send_owner_links_once(application)
+    await send_intro_videos_once(application)
     await hello_channel_once()
     await hello_bluesky_once()
     await send_mail_setup_once(application.bot)
@@ -1662,6 +1704,7 @@ def main() -> None:
     application.add_handler(CommandHandler("ai", ai_command))
     application.add_handler(CommandHandler("customers", customers_command))
     application.add_handler(CommandHandler("visits", visits_command))
+    application.add_handler(CommandHandler("video", video_command))
     application.add_handler(CommandHandler("post", post_command))
     application.add_handler(CommandHandler("mail", mail_command))
     application.add_handler(CommandHandler("outreach", outreach_command))
