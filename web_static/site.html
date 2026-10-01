@@ -47,7 +47,6 @@
     --band-muted: #a1a1a6;
     --band-line: rgba(255, 255, 255, .16);
     --ok: #1fa84a;
-    --ai: linear-gradient(90deg, #0894ff 0%, #c959dd 38%, #ff2e54 72%, #ff9004 100%);
     --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang TC", "PingFang HK", "Geist", "Microsoft JhengHei", "Noto Sans CJK TC", sans-serif;
     --mono: "SF Mono", ui-monospace, Menlo, "Geist Mono", Consolas, "PingFang TC", monospace;
     --pad: clamp(20px, 4.4vw, 64px);
@@ -97,13 +96,13 @@
   /* CJK punctuation takes half a square in headings, so "，" doesn't open a hole */
   html:not([lang="en"]) .serif { font-feature-settings: "palt"; }
   .mono { font-family: var(--mono); }
-  em { font-style: normal; color: var(--accent); }
+  em { font-style: normal; color: var(--faint); }
   .nw { white-space: nowrap; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   /* ---------- small building blocks ---------- */
   .kicker { display: flex; align-items: center; gap: 10px; font: 600 17px/1.2 var(--sans); letter-spacing: -.01em; color: var(--muted); }
-  .kicker .n { color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+  .kicker .n { color: var(--ink); font-variant-numeric: tabular-nums; }
   .h2 { font-size: clamp(40px, 5.4vw, 80px); line-height: 1.05; letter-spacing: -.035em; margin: 16px 0 0; text-wrap: balance; }
   html:not([lang="en"]) .h2 { letter-spacing: -.02em; line-height: 1.14; }
   .lead { font-size: clamp(18px, 1.5vw, 21px); line-height: 1.6; color: var(--ink2); max-width: 34em; margin: 26px 0 0; text-wrap: pretty; }
@@ -200,7 +199,7 @@
     font-size: clamp(56px, 7.6vw, 112px); line-height: 1.02; letter-spacing: -.045em;
   }
   html:not([lang="en"]) .h1 { font-size: clamp(54px, 7.4vw, 108px); line-height: 1.12; letter-spacing: -.03em; }
-  .h1 em, .final .h2 em, .quote em { background: var(--ai); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-box-decoration-break: clone; }
+
   .hero-copy { grid-column: 1 / 7; grid-row: 3; align-self: end; padding: 40px 0 48px; }
   .hero-copy .lead { margin-top: 0; }
   .ctas { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; margin-top: 32px; }
@@ -342,7 +341,7 @@
   /* claude code: a dark band in both themes */
   .band { background: var(--band); color: var(--band-ink); --line: var(--band-line); --line2: var(--band-line); --ink2: #c9c6be; --muted: var(--band-muted); }
   .band .kicker { color: var(--band-muted); }
-  .band .kicker .n { color: #2997ff; }
+  .band .kicker .n { color: var(--band-ink); }
   .band .lead { color: #c9c6be; }
   .band .ticks li { color: #d6d3cb; }
   .cc { display: grid; grid-template-columns: 7fr 5fr; gap: clamp(40px, 6vw, 96px); align-items: start; }
