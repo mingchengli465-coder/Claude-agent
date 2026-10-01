@@ -96,6 +96,49 @@ Telegram：{telegram}
 P.S. 如果暫時不需要，回覆「不用了」就可以，我不會再打擾你。"""
 ZH_PRICE = {"sg": "正式搭建一次性 US$70 起，之後每月 US$9.9。",
             "hk": "正式搭建一次性 US$70（約 HK$550）起，之後每月 US$9.9（約 HK$78）。"}
+# Web design studios get a partnership offer instead: they refer clients, I build, they earn 30%.
+DEMO_LINK = os.environ.get("OUTREACH_DEMO_LINK", "https://mingchengli465-coder.github.io/Claude-agent/demo.html?from=email")
+AGENCY_ZH_SUBJECT = "合作提案：讓 {name} 的網站客戶多一個 AI 客服"
+AGENCY_ZH_BODY = """{name}你好，
+
+{first}
+
+我是 Vincent，在新加坡幫小店做 AI 客服：放在網站右下角或 Telegram 上，按店家自己的價目表 24 小時回覆客人，客人準備下單時第一時間通知老闆。
+
+想問你們有沒有興趣合作：你們幫客戶做網站時，順便推薦 AI 客服，架設和維護都由我負責。每成交一家，你們拿架設費的 30%。客戶還是你們的，我不會另外接觸；也可以用你們的名義交付。
+
+做好的示範可以看這裡：{demo}
+
+有興趣的話直接回覆這封郵件，我可以先免費幫你們的一個客戶做試用版。
+
+Vincent
+Telegram：{telegram}
+{email}
+
+P.S. 如果暫時不需要，回覆「不用了」就可以，我不會再打擾你們。"""
+AGENCY_ZH_FIRST = "你們幫小店做網站，網站上線後，店家最常遇到的問題之一，就是晚上和週末的客人訊息沒人回。"
+AGENCY_EN_SUBJECT = "Partnership idea: an AI assistant for your clients' websites"
+AGENCY_EN_BODY = """Hi {name} team,
+
+{first}
+
+I'm Vincent, based in Singapore. I build AI customer assistants for small shops: a chat window on their website (or Telegram) that answers customers 24/7 from the shop's own price list and alerts the owner the moment someone is ready to buy.
+
+Would you be open to a simple partnership? When you build a site, you offer the AI assistant as an add-on, and I handle the setup and maintenance. For every client who signs up, you keep 30% of the setup fee. The client stays yours, I won't contact them separately, and I can deliver under your name if you prefer.
+
+Here's a finished demo: {demo}
+
+If it sounds interesting, just reply to this email and I'll set up a free trial for one of your clients first.
+
+Best,
+Vincent
+Telegram: {telegram}
+{email}
+
+P.S. If this isn't for you, just reply "no thanks" and I won't email again."""
+AGENCY_EN_FIRST = ("You build websites for small businesses, and one of the most common problems those shops have after launch "
+                   "is customer messages at night and on weekends that nobody answers.")
+
 # Every email carries both languages: 繁體中文 first, English underneath.
 BILINGUAL_RULE = "\n\n———— English below ————\n\n"
 ZH_FIRST = "很多客人會在晚上發訊息問價錢、款式和預約時間，第二天才回覆的話，有些客人可能已經找了別家。"
@@ -144,10 +187,15 @@ def script_for(secret: str) -> str:
 
 def compose(lead: dict) -> tuple[str, str]:
     """Subject and body for one business: 繁體中文 first, then the same email in English."""
-    fill = {"name": lead["name"], "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL}
+    fill = {"name": lead["name"], "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL, "demo": DEMO_LINK}
     region = lead.get("region") or "sg"
     # "Monice Bakes 你好" but "思思蛋糕你好": a space only after a Latin name
     zh_name = lead["name"] + (" " if lead["name"][-1:].isascii() else "")
+    if lead.get("kind") == "agency":
+        zh = AGENCY_ZH_BODY.replace("{name}", zh_name, 1).format(first=lead.get("first_zh") or AGENCY_ZH_FIRST, **fill)
+        en = AGENCY_EN_BODY.format(first=lead.get("first") or AGENCY_EN_FIRST, **fill)
+        subject = AGENCY_ZH_SUBJECT.format(**fill) + " | " + AGENCY_EN_SUBJECT
+        return subject, zh + BILINGUAL_RULE + en
     zh = ZH_BODY.replace("{name}", zh_name, 1).format(first=lead.get("first_zh") or ZH_FIRST, price=ZH_PRICE.get(region, ZH_PRICE["sg"]), **fill)
     # leads written in Chinese only carry a Chinese first line; English gets the general one
     first_en = lead.get("first") if lead.get("lang") != "zh" else ""
@@ -183,8 +231,11 @@ class Leads:
                 CREATE TABLE IF NOT EXISTS lead_replies (id TEXT PRIMARY KEY, email TEXT, seen TEXT);
                 CREATE TABLE IF NOT EXISTS outreach_settings (key TEXT PRIMARY KEY, value TEXT);
             """)
-            if "first_zh" not in [r[1] for r in db.execute("PRAGMA table_info(leads)")]:
+            columns = [r[1] for r in db.execute("PRAGMA table_info(leads)")]
+            if "first_zh" not in columns:
                 db.execute("ALTER TABLE leads ADD COLUMN first_zh TEXT")
+            if "kind" not in columns:
+                db.execute("ALTER TABLE leads ADD COLUMN kind TEXT")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path)
@@ -213,14 +264,15 @@ class Leads:
         """New businesses are added; ones already known keep their status. Businesses not yet
         emailed take the latest wording (name, first lines), so a fixed list applies before sending."""
         rows = [(l["email"].strip().lower(), l["name"], l.get("region", "sg"), l.get("lang", "en"),
-                 l.get("first", ""), l.get("first_zh", "")) for l in leads]
+                 l.get("first", ""), l.get("first_zh", ""), l.get("kind", "shop")) for l in leads]
         with self._db() as db:
             count = lambda: db.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
             before = count()
-            db.executemany("INSERT OR IGNORE INTO leads (email, name, region, lang, first, first_zh) "
-                           "VALUES (?, ?, ?, ?, ?, ?)", rows)
-            db.executemany("UPDATE leads SET name=?, region=?, lang=?, first=?, first_zh=? WHERE email=? AND status='new'",
-                           [(n, r, la, f, fz, e) for e, n, r, la, f, fz in rows])
+            db.executemany("INSERT OR IGNORE INTO leads (email, name, region, lang, first, first_zh, kind) "
+                           "VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+            db.executemany("UPDATE leads SET name=?, region=?, lang=?, first=?, first_zh=?, kind=? "
+                           "WHERE email=? AND status='new'",
+                           [(n, r, la, f, fz, k, e) for e, n, r, la, f, fz, k in rows])
             return count() - before
 
     def get(self, email: str) -> dict | None:
