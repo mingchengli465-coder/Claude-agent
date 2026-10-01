@@ -1654,8 +1654,6 @@ def main() -> None:
     )
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("reset", reset))
-    application.add_handler(CommandHandler("xhs", xhs_command))
-    application.add_handler(CallbackQueryHandler(xhs_button, pattern=r"^xhs:"))
     application.add_handler(CallbackQueryHandler(agent_post_button, pattern=r"^agpost:"))
     application.add_handler(CommandHandler("sites", sites_command))
     application.add_handler(CommandHandler("tweet", tweet_command))
@@ -1676,7 +1674,7 @@ def main() -> None:
     global service
     service = build_customer_service(application.bot)
 
-    schedule_daily_note(application)
+    # No more daily 小红书 notes: the owner turned them off. (/xhs is gone too.)
     schedule_daily_tweets(application)
     schedule_visits_report(application)
     start_outreach()
