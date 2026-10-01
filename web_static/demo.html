@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-TW">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{TITLE}} · AI 客服</title>
-<meta name="description" content="给你的店铺配一个 24 小时在线的 AI 客服：按你的价目表回答客户，要下单、砍价自动转给你本人。">
+<meta name="description" content="給你的店配一個 24 小時在線的 AI 客服：按你的價目表回答客人，要下單、殺價自動轉給你本人。">
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23000'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-style='italic' font-size='40' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3C/svg%3E">
 <link rel="preload" href="/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -190,7 +190,7 @@
 
   /* ---- pricing ---- */
   .pricing { padding-top: clamp(110px, 13vw, 200px); padding-bottom: clamp(110px, 13vw, 200px); }
-  .plans { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(245,243,238,.2); }
+  .plans { display: grid; grid-template-columns: minmax(0, 640px); justify-content: center; border-top: 1px solid rgba(245,243,238,.2); }
   .plan { padding: 44px 40px 48px 0; }
   .plan + .plan { padding-left: 40px; border-left: 1px solid rgba(245,243,238,.2); }
   .plan .amount { font-family: var(--serif); font-size: clamp(60px, 7vw, 116px); line-height: 1; margin: 24px 0 8px; letter-spacing: -.03em; }
@@ -279,12 +279,12 @@
   <div class="mid">
     <a href="#features" data-i="navFeatures">功能</a>
     <a href="#cases" data-i="navCases">案例</a>
-    <a href="#pricing" data-i="navPricing">价格</a>
-    <a href="#contact" data-i="navContact">联系</a>
+    <a href="#pricing" data-i="navPricing">價格</a>
+    <a href="#contact" data-i="navContact">聯絡</a>
   </div>
   <div class="right">
-    <div class="langs"><button type="button" data-lang="zh-CN">简</button><button type="button" data-lang="zh-TW">繁</button><button type="button" data-lang="en">EN</button></div>
-    <button class="ulink" type="button" data-chat data-i="navBook">预约咨询</button>
+    <div class="langs"><button type="button" data-lang="zh-TW">繁</button><button type="button" data-lang="en">EN</button></div>
+    <button class="ulink" type="button" data-chat data-i="navBook">預約諮詢</button>
   </div>
 </nav>
 
@@ -292,11 +292,11 @@
   <canvas id="silk" aria-hidden="true"></canvas>
   <div class="grain"></div>
   <div class="hero-in">
-    <div class="label fade" data-i="heroLabel">AI 客服 · 为小店私人定制</div>
-    <h1 class="serif" data-ih="heroTitle" data-lines>你的店，<br><em>从此不打烊</em></h1>
+    <div class="label fade" data-i="heroLabel">AI 客服 · 為小店私人訂製</div>
+    <h1 class="serif" data-ih="heroTitle" data-lines>你的店，<br><em>從此不打烊</em></h1>
   </div>
   <div class="hero-foot fade">
-    <p data-i="heroSub">它按你的价目表接待每一位客人，中文、英文都能聊；客人想买、要付款的那一刻，第一时间请你出面。</p>
+    <p data-i="heroSub">它按你的價目表接待每一位客人，中文、英文都能聊；客人想買、要付款的那一刻，第一時間請你出面。</p>
     <a class="round" href="#statement" aria-label="scroll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 4v16M5 13l7 7 7-7"/></svg></a>
   </div>
 </header>
@@ -304,26 +304,26 @@
 <main>
   <section class="light pad statement" id="statement">
     <div class="label" data-i="stLabel">(01) 理念</div>
-    <p class="serif" data-i="statement" data-lit>客人深夜来问价格，你正忙着，AI 已经替你答好了。它只说你给的话，只报你定的价；真正要成交的时刻，它会第一时间请你出面。</p>
+    <p class="serif" data-i="statement" data-lit>客人深夜來問價格，你正忙著，AI 已經替你答好了。它只說你給的話，只報你定的價；真正要成交的時刻，它會第一時間請你出面。</p>
   </section>
 
   <section class="light pad chapters" id="features">
     <div class="sec-head">
-      <div><div class="label" data-i="ftLabel">(02) 功能</div><h2 class="serif" data-ih="ftTitle" data-lines>它能为你<br><em>做什么</em></h2></div>
-      <p class="fade" data-i="ftSub">不是冷冰冰的机器人，而是一位熟悉你店里每件事的助理。</p>
+      <div><div class="label" data-i="ftLabel">(02) 功能</div><h2 class="serif" data-ih="ftTitle" data-lines>它能為你<br><em>做什麼</em></h2></div>
+      <p class="fade" data-i="ftSub">不是冷冰冰的機器人，而是一位熟悉你店裡每件事的助理。</p>
     </div>
     <div class="rows">
-      <div class="row fade"><span class="num">01</span><h3 class="serif" data-i="f1">随时回复</h3><p data-i="f1d">半夜、上课、忙的时候客人来问，也能马上得到回复，不会因为回得慢跑掉。</p><span class="arr">→</span></div>
-      <div class="row fade"><span class="num">02</span><h3 class="serif" data-i="f2">只说你给的信息</h3><p data-i="f2d">价格、交付时间、付款方式都只按你的资料回答，不乱编、不乱承诺。</p><span class="arr">→</span></div>
-      <div class="row fade"><span class="num">03</span><h3 class="serif" data-i="f3">重要的事叫你</h3><p data-i="f3d">有新客人、客人想买、要下单付款时，第一时间通知你，附上聊天记录。</p><span class="arr">→</span></div>
-      <div class="row fade"><span class="num">04</span><h3 class="serif" data-i="f4">多种语言</h3><p data-i="f4d">客人用什么语言问，它就用什么语言答，海外客人也不怕。</p><span class="arr">→</span></div>
+      <div class="row fade"><span class="num">01</span><h3 class="serif" data-i="f1">隨時回覆</h3><p data-i="f1d">半夜、上課、忙的時候客人來問，也能馬上得到回覆，不會因為回得慢跑掉。</p><span class="arr">→</span></div>
+      <div class="row fade"><span class="num">02</span><h3 class="serif" data-i="f2">只說你給的資訊</h3><p data-i="f2d">價格、交付時間、付款方式都只按你的資料回答，不亂編、不亂承諾。</p><span class="arr">→</span></div>
+      <div class="row fade"><span class="num">03</span><h3 class="serif" data-i="f3">重要的事叫你</h3><p data-i="f3d">有新客人、客人想買、要下單付款時，第一時間通知你，附上聊天紀錄。</p><span class="arr">→</span></div>
+      <div class="row fade"><span class="num">04</span><h3 class="serif" data-i="f4">多種語言</h3><p data-i="f4d">客人用什麼語言問，它就用什麼語言答，海外客人也不怕。</p><span class="arr">→</span></div>
     </div>
   </section>
 
   <section class="dark hscroll" id="cases">
     <div class="hs-sticky pad">
       <div class="hs-head">
-        <div><div class="label" data-i="csLabel">(03) 适合谁</div><h2 class="serif" data-ih="csTitle" data-lines>每一家小店，<br><em>都值得一位助理</em></h2></div>
+        <div><div class="label" data-i="csLabel">(03) 適合誰</div><h2 class="serif" data-ih="csTitle" data-lines>每一家小店，<br><em>都值得一位助理</em></h2></div>
         <div class="prog"><span id="hsNow">01</span> / <span id="hsAll">05</span></div>
       </div>
       <div class="track-wrap"><div class="track" id="track"></div></div>
@@ -332,15 +332,15 @@
 
   <section class="light pad live" id="try">
     <div>
-      <div class="label" data-i="tryLabel">(04) 亲自体验</div>
-      <h2 class="serif" data-ih="tryTitle" data-lines>现在就<br><em>试一试</em></h2>
-      <p class="fade" data-i="trySub">右下角就是真的 AI 客服。点下面任意一个问题，看看它怎么回答——装到你网站上，就是这个样子。</p>
+      <div class="label" data-i="tryLabel">(04) 親自體驗</div>
+      <h2 class="serif" data-ih="tryTitle" data-lines>現在就<br><em>試一試</em></h2>
+      <p class="fade" data-i="trySub">右下角就是真的 AI 客服。點下面任意一個問題，看看它怎麼回答——裝到你網站上，就是這個樣子。</p>
       <div class="asks fade" id="asks"></div>
-      <button class="pill fade" type="button" data-chat><span data-i="tryBtn">打开聊天窗口</span><span>→</span></button>
+      <button class="pill fade" type="button" data-chat><span data-i="tryBtn">打開聊天視窗</span><span>→</span></button>
     </div>
     <div class="fade">
       <div class="phone"><div class="phone-in">
-        <div class="phone-head"><b data-i="mockName">某某烘焙</b><small data-i="mockStatus">AI 客服 · 在线</small></div>
+        <div class="phone-head"><b data-i="mockName">某某烘焙</b><small data-i="mockStatus">AI 客服 · 在線</small></div>
         <div class="feed" id="feed"></div>
       </div></div>
     </div>
@@ -348,64 +348,57 @@
 
   <section class="dark pad alerts">
     <div class="sec-head">
-      <div><div class="label" data-i="alLabel">(05) 通知</div><h2 class="serif" data-ih="alTitle" data-lines>重要的时刻，<br><em>一个都不错过</em></h2></div>
-      <p class="fade" data-i="alSub">通知直接发到你手机上，附带聊天记录；回复通知，就能亲自跟客人说话。</p>
+      <div><div class="label" data-i="alLabel">(05) 通知</div><h2 class="serif" data-ih="alTitle" data-lines>重要的時刻，<br><em>一個都不錯過</em></h2></div>
+      <p class="fade" data-i="alSub">通知直接傳到你手機上，附上聊天紀錄；回覆通知，就能親自跟客人說話。</p>
     </div>
     <div class="alert-grid fade">
-      <div><div class="ic">👋</div><h3 class="serif" data-i="a1">有客人来咨询了</h3><p data-i="a1d">新客人第一次开口，AI 已经在接待。</p></div>
-      <div><div class="ic">🔥</div><h3 class="serif" data-i="a2">客人有购买意向</h3><p data-i="a2d">在问具体价格、时间，认真在考虑。</p></div>
-      <div><div class="ic">💰</div><h3 class="serif" data-i="a3">客人准备购买了</h3><p data-i="a3d">明确想买，该你出场了。</p></div>
-      <div><div class="ic">🔔</div><h3 class="serif" data-i="a4">需要你接手</h3><p data-i="a4d">要付款、砍价，或 AI 答不了的问题。</p></div>
+      <div><div class="ic">👋</div><h3 class="serif" data-i="a1">有客人來詢問了</h3><p data-i="a1d">新客人第一次開口，AI 已經在接待。</p></div>
+      <div><div class="ic">🔥</div><h3 class="serif" data-i="a2">客人有購買意向</h3><p data-i="a2d">在問具體價格、時間，認真在考慮。</p></div>
+      <div><div class="ic">💰</div><h3 class="serif" data-i="a3">客人準備購買了</h3><p data-i="a3d">明確想買，換你上場了。</p></div>
+      <div><div class="ic">🔔</div><h3 class="serif" data-i="a4">需要你接手</h3><p data-i="a4d">要付款、殺價，或 AI 答不了的問題。</p></div>
     </div>
   </section>
 
   <section class="light pad process">
     <div class="sec-head">
-      <div><div class="label" data-i="prLabel">(06) 流程</div><h2 class="serif" data-ih="prTitle" data-lines>三步，<br><em>两到三天上线</em></h2></div>
+      <div><div class="label" data-i="prLabel">(06) 流程</div><h2 class="serif" data-ih="prTitle" data-lines>三步，<br><em>兩到三天上線</em></h2></div>
     </div>
     <div class="steps fade">
-      <div class="step"><div class="n">STEP 01</div><h3 class="serif" data-i="s1">把资料发给我</h3><p data-i="s1d">你卖什么、价格、常见问题。没有价目表，我帮你整理。</p></div>
-      <div class="step"><div class="n">STEP 02</div><h3 class="serif" data-i="s2">我来搭建</h3><p data-i="s2d">按你的店名、颜色和说话风格调好，接到微信、Telegram 或你的网站。</p></div>
-      <div class="step"><div class="n">STEP 03</div><h3 class="serif" data-i="s3">客人来了它接待</h3><p data-i="s3d">24 小时回复、问清需求；下单、砍价这一步转给你本人。</p></div>
+      <div class="step"><div class="n">STEP 01</div><h3 class="serif" data-i="s1">把資料傳給我</h3><p data-i="s1d">你賣什麼、價格、常見問題。沒有價目表，我幫你整理。</p></div>
+      <div class="step"><div class="n">STEP 02</div><h3 class="serif" data-i="s2">我來架設</h3><p data-i="s2d">依照你的店名、顏色和說話風格調好，接到微信、Telegram 或你的網站。</p></div>
+      <div class="step"><div class="n">STEP 03</div><h3 class="serif" data-i="s3">客人來了它接待</h3><p data-i="s3d">24 小時回覆、問清需求；下單、殺價這一步轉給你本人。</p></div>
     </div>
   </section>
 
   <section class="dark pad pricing" id="pricing">
     <div class="sec-head">
-      <div><div class="label" data-i="pcLabel">(07) 价格</div><h2 class="serif" data-ih="pcTitle" data-lines>明码标价，<br><em>按月随时可停</em></h2></div>
-      <p class="fade" data-i="pcSub">一次性搭建费 + 月费。月费包含服务器、AI 用量、价目表和常见问题的更新。</p>
+      <div><div class="label" data-i="pcLabel">(07) 價格</div><h2 class="serif" data-ih="pcTitle" data-lines>明碼標價，<br><em>按月隨時可停</em></h2></div>
+      <p class="fade" data-i="pcSub">全部以美元（USD）計價。一次性架設費 + 月費，月費包含伺服器、AI 用量、價目表和常見問題的更新。</p>
     </div>
     <div class="plans fade">
       <div class="plan">
-        <div class="label" data-i="p1Tag">国内商户</div>
-        <div class="amount">¥200<small data-i="once">一次性搭建</small></div>
-        <div class="monthly" data-i="p1M">之后每月 ¥49</div>
-        <ul><li data-i="pA">微信、Telegram 或你的网站</li><li data-i="pB">多语言自动回复</li><li data-i="pC">新客人、购买意向、付款通知</li><li data-i="pD">价目表更新包含在月费里</li></ul>
-        <button class="pill line" type="button" data-chat><span data-i="pCta">问问 AI 助理</span><span>→</span></button>
-      </div>
-      <div class="plan">
-        <div class="label" data-i="p2Tag">海外商户</div>
-        <div class="amount">US$70–85<small data-i="once2">一次性搭建（美元）</small></div>
-        <div class="monthly" data-i="p2M">之后每月 US$9.9</div>
-        <ul><li data-i="pA">微信、Telegram 或你的网站</li><li data-i="pB2">中英文等多语言接待</li><li data-i="pC">新客人、购买意向、付款通知</li><li data-i="pD2">支持 Alipay 或银行卡付款</li></ul>
-        <button class="pill inv" type="button" data-chat><span data-i="pCta">问问 AI 助理</span><span>→</span></button>
+        <div class="label" data-i="p1Tag">AI 客服架設</div>
+        <div class="amount">US$70–85<small data-i="once2">一次性架設（美元）</small></div>
+        <div class="monthly" data-i="p2M">之後每月 US$9.9</div>
+        <ul><li data-i="pA">微信、Telegram 或你的網站</li><li data-i="pB2">中英文等多語言接待</li><li data-i="pC">新客人、購買意向、付款通知</li><li data-i="pD">價目表更新包含在月費裡</li><li data-i="pD2">支援 Alipay 或銀行卡付款</li></ul>
+        <button class="pill inv" type="button" data-chat><span data-i="pCta">問問 AI 助理</span><span>→</span></button>
       </div>
     </div>
-    <div class="referral fade" data-i="referral">推荐有礼：每成功介绍一家商户开通，你免 1 个月月费。</div>
+    <div class="referral fade" data-i="referral">推薦有禮：每成功介紹一家商戶開通，你免 1 個月月費。</div>
   </section>
 
   <section class="light pad embed">
     <div>
       <div class="label" data-i="emLabel">(08) 接入</div>
-      <h2 class="serif" data-ih="emTitle" data-lines>只需<br><em>一行代码</em></h2>
-      <p class="fade" data-i="emSub">放进你网站的任意位置，右下角就会出现聊天窗口。不会弄也没关系，我帮你加。</p>
+      <h2 class="serif" data-ih="emTitle" data-lines>只需<br><em>一行程式碼</em></h2>
+      <p class="fade" data-i="emSub">放進你網站的任意位置，右下角就會出現聊天視窗。不會弄也沒關係，我幫你加。</p>
     </div>
-    <div class="code fade"><button class="copy" type="button" id="copySnippet" data-i="copy">复制</button><span class="t">&lt;!-- AI 客服 --&gt;</span><br><span id="snippet"></span></div>
+    <div class="code fade"><button class="copy" type="button" id="copySnippet" data-i="copy">複製</button><span class="t">&lt;!-- AI 客服 --&gt;</span><br><span id="snippet"></span></div>
   </section>
 
   <section class="dark pad cta" id="contact">
-    <div class="label" data-i="ctLabel">(09) 开始</div>
-    <h2 class="serif" data-ih="ctTitle" data-lines>让你的店<br><em>开始 24 小时营业</em></h2>
+    <div class="label" data-i="ctLabel">(09) 開始</div>
+    <h2 class="serif" data-ih="ctTitle" data-lines>讓你的店<br><em>開始 24 小時營業</em></h2>
     <div class="btns fade">
       <button class="pill inv" type="button" data-chat><span data-i="ctChat">和 AI 助理聊聊</span><span>→</span></button>
       <a class="pill line" href="{{OWNER_TG}}" target="_blank" rel="noopener" style="display: {{OWNER_TG_DISPLAY}}"><span data-i="ctTg">Telegram 找我本人</span><span>↗</span></a>
@@ -414,7 +407,7 @@
       <div style="display: {{WECHAT_DISPLAY}}"><span class="label" data-i="wxLabel">微信</span>{{WECHAT_IDS}}</div>
       <div style="display: {{OWNER_TG_DISPLAY}}"><span class="label">Telegram</span><a class="big" href="{{OWNER_TG}}" target="_blank" rel="noopener">{{OWNER_TG_HANDLE}}</a></div>
       <div style="display: {{SOCIAL_DISPLAY}}"><span class="label" data-i="moreLabel">其他</span>{{SOCIAL_LINKS}}</div>
-      <div><span class="label" data-i="siteLabel">个人主页</span><a class="big" href="/" data-i="siteLink">vinc · AI studio →</a></div>
+      <div><span class="label" data-i="siteLabel">個人主頁</span><a class="big" href="/" data-i="siteLink">vinc · AI studio →</a></div>
     </div>
   </section>
 
@@ -452,14 +445,14 @@
     csLabel: ["(03) 适合谁", "(03) 適合誰", "(03) Who it's for"],
     csTitle: ["每一家小店，<br><em>都值得一位助理</em>", "每一家小店，<br><em>都值得一位助理</em>", "Every small shop<br><em>deserves an assistant</em>"],
     scenes: [
-      [["烘焙店", "BAKERY", "生日蛋糕 6 寸多少钱？明天能拿吗？", "6 寸 168 元，今天 6 点前下单明天就能取～想要什么口味？🎂", "🔥", "客人有购买意向"],
+      [["烘焙店", "BAKERY", "生日蛋糕 6 寸多少钱？明天能拿吗？", "6 寸 US$38，今天 6 点前下单明天就能取～想要什么口味？🎂", "🔥", "客人有购买意向"],
        ["美甲美睫", "NAIL STUDIO", "周六下午还有位置吗？", "周六 2 点和 4 点还有位～想做纯色还是款式？💅", "💰", "客人准备预约了"],
-       ["民宿", "GUESTHOUSE", "国庆两晚，两个大人一个小孩多少钱？", "国庆大床房 588 元/晚，可以加床 80 元～需要帮你留房吗？", "🔔", "需要你确认房态"],
+       ["民宿", "GUESTHOUSE", "国庆两晚，两个大人一个小孩多少钱？", "国庆大床房 US$82/晚，可以加床 US$11～需要帮你留房吗？", "🔔", "需要你确认房态"],
        ["外贸小店", "EXPORT SHOP", "Do you ship to Singapore? MOQ?", "Yes! Shipping to Singapore takes 5–7 days, and the MOQ is 50 pcs.", "🔥", "海外客人有购买意向"],
        ["设计工作室", "DESIGN STUDIO", "做一个 logo 要多久？", "一般 3–5 天出初稿，含 3 次修改～方便说说你的品牌吗？", "👋", "有客人来咨询了"]],
-      [["烘焙店", "BAKERY", "生日蛋糕 6 吋多少錢？明天能拿嗎？", "6 吋 168 元，今天 6 點前訂明天就能取～想要什麼口味？🎂", "🔥", "客人有購買意向"],
+      [["烘焙店", "BAKERY", "生日蛋糕 6 吋多少錢？明天能拿嗎？", "6 吋 US$38，今天 6 點前訂明天就能取～想要什麼口味？🎂", "🔥", "客人有購買意向"],
        ["美甲美睫", "NAIL STUDIO", "週六下午還有位置嗎？", "週六 2 點和 4 點還有位～想做純色還是款式？💅", "💰", "客人準備預約了"],
-       ["民宿", "GUESTHOUSE", "國慶兩晚，兩個大人一個小孩多少錢？", "國慶大床房 588 元/晚，可以加床 80 元～需要幫你留房嗎？", "🔔", "需要你確認房態"],
+       ["民宿", "GUESTHOUSE", "國慶兩晚，兩個大人一個小孩多少錢？", "國慶大床房 US$82/晚，可以加床 US$11～需要幫你留房嗎？", "🔔", "需要你確認房態"],
        ["外貿小店", "EXPORT SHOP", "Do you ship to Singapore? MOQ?", "Yes! Shipping to Singapore takes 5–7 days, and the MOQ is 50 pcs.", "🔥", "海外客人有購買意向"],
        ["設計工作室", "DESIGN STUDIO", "做一個 logo 要多久？", "一般 3–5 天出初稿，含 3 次修改～方便說說你的品牌嗎？", "👋", "有客人來詢問了"]],
       [["Bakery", "01", "How much is a 6-inch birthday cake? Tomorrow?", "It's $38, order before 6pm and it's ready tomorrow. Which flavour? 🎂", "🔥", "Customer is interested"],
@@ -481,10 +474,10 @@
     mockName: ["某某烘焙", "某某烘焙", "Sunny Bakery"],
     mockStatus: ["AI 客服 · 在线", "AI 客服 · 在線", "AI concierge · online"],
     feed: [
-      [["c", "你好，生日蛋糕 6 寸多少钱？"], ["n", "👋", "有客人来咨询了", "AI 正在接待"], ["a", "你好呀～6 寸 168 元，今天下午 6 点前下单，明天就能取。想要什么口味？🎂"],
+      [["c", "你好，生日蛋糕 6 寸多少钱？"], ["n", "👋", "有客人来咨询了", "AI 正在接待"], ["a", "你好呀～6 寸 US$38，今天下午 6 点前下单，明天就能取。想要什么口味？🎂"],
        ["c", "巧克力的，明天下午能拿吗"], ["n", "🔥", "客人有购买意向", "在问具体时间"], ["a", "可以的！巧克力 6 寸，明天下午取～"], ["c", "那就订一个吧"],
        ["n", "💰", "客人准备购买了", "已推送到老板手机"], ["a", "好的！我请老板跟你确认付款和取货时间，稍等哦"]],
-      [["c", "你好，生日蛋糕 6 吋多少錢？"], ["n", "👋", "有客人來詢問了", "AI 正在接待"], ["a", "你好～6 吋 168 元，今天下午 6 點前訂，明天就能取。想要什麼口味呢？🎂"],
+      [["c", "你好，生日蛋糕 6 吋多少錢？"], ["n", "👋", "有客人來詢問了", "AI 正在接待"], ["a", "你好～6 吋 US$38，今天下午 6 點前訂，明天就能取。想要什麼口味呢？🎂"],
        ["c", "巧克力的，明天下午能拿嗎"], ["n", "🔥", "客人有購買意向", "在問具體時間"], ["a", "可以的！巧克力 6 吋，明天下午取～"], ["c", "那就訂一個吧"],
        ["n", "💰", "客人準備購買了", "已推播到老闆手機"], ["a", "好的！我請老闆跟你確認付款和取貨時間，稍等喔"]],
       [["c", "Hi, how much is a 6-inch birthday cake?"], ["n", "👋", "New customer", "The AI is on it"], ["a", "Hi! It's $38, and if you order before 6pm it's ready tomorrow. Which flavour? 🎂"],
@@ -505,8 +498,8 @@
     s3: ["客人来了它接待", "客人來了它接待", "It takes care of customers"], s3d: ["24 小时回复、问清需求；下单、砍价这一步转给你本人。", "24 小時回覆、問清需求；下單、殺價這一步轉給你本人。", "Replies 24/7 and finds out what people need; orders and haggling go to you."],
     pcLabel: ["(07) 价格", "(07) 價格", "(07) Pricing"],
     pcTitle: ["明码标价，<br><em>按月随时可停</em>", "明碼標價，<br><em>按月隨時可停</em>", "Clear pricing,<br><em>cancel any month</em>"],
-    pcSub: ["一次性搭建费 + 月费。月费包含服务器、AI 用量、价目表和常见问题的更新。", "一次性架設費 + 月費。月費包含伺服器、AI 用量、價目表和常見問題的更新。", "A one-off setup fee plus a monthly fee for hosting, AI usage and price-list updates."],
-    p1Tag: ["国内商户", "中國大陸商戶", "Mainland China"], once: ["一次性搭建", "一次性架設", "one-off setup"], p1M: ["之后每月 ¥49", "之後每月 ¥49", "then ¥49 a month"],
+    pcSub: ["全部以美元（USD）计价。一次性搭建费 + 月费，月费包含服务器、AI 用量、价目表和常见问题的更新。", "全部以美元（USD）計價。一次性架設費 + 月費，月費包含伺服器、AI 用量、價目表和常見問題的更新。", "Priced in US dollars: a one-off setup fee plus a monthly fee for hosting, AI usage and price-list updates."],
+    p1Tag: ["AI 客服搭建", "AI 客服架設", "AI assistant"], once: ["一次性搭建", "一次性架設", "one-off setup"], p1M: ["之后每月 ¥49", "之後每月 ¥49", "then ¥49 a month"],
     pA: ["微信、Telegram 或你的网站", "微信、Telegram 或你的網站", "WeChat, Telegram or your website"], pB: ["多语言自动回复", "多語言自動回覆", "Multilingual replies"],
     pC: ["新客人、购买意向、付款通知", "新客人、購買意向、付款通知", "New-customer, buying and payment alerts"], pD: ["价目表更新包含在月费里", "價目表更新包含在月費裡", "Price-list updates included"],
     pCta: ["问问 AI 助理", "問問 AI 助理", "Ask my AI"],
@@ -523,10 +516,11 @@
     wxLabel: ["微信", "微信", "WeChat"], moreLabel: ["其他", "其他", "Elsewhere"], siteLabel: ["个人主页", "個人主頁", "Main site"],
     wxCopy: ["复制", "複製", "Copy"], wxCopied: ["已复制", "已複製", "Copied"]
   };
-  var TAGS = ["zh-CN", "zh-TW", "en"];
+  var TAGS = ["zh-TW", "zh-TW", "en"];
   var reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var lang = 0;
-  function indexFor(tag) { tag = String(tag || "").toLowerCase(); if (!/^zh/.test(tag)) return 2; return /hant|tw|hk|mo/.test(tag) ? 1 : 0; }
+  var lang = 1;
+  // 繁體中文 or English: any Chinese browser gets 繁體, everyone else English.
+  function indexFor(tag) { return /^zh/i.test(String(tag || "")) ? 1 : 2; }
 
   // ---- line + word splitting ----
   function lines(el) {
@@ -719,7 +713,7 @@
   if ("IntersectionObserver" in window) {
     new IntersectionObserver(function (e) { var was = feedVisible; feedVisible = e[0].isIntersecting; if (feedVisible && !was && !feed.children.length) restartFeed(); }, { threshold: .25 }).observe(feed);
   } else feedVisible = true;
-  apply(saved || (indexFor(navigator.language) === 1 ? "zh-TW" : "zh-CN"));
+  apply(saved || navigator.language);
   try { silk(); } catch (e) {}
   cursor();
 
