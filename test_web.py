@@ -48,8 +48,9 @@ async def main():
         assert r.status == 200 and "text/html" in r.headers["Content-Type"]
         assert "Claude Code" in site and "AI 客服" in site and '<script src="/widget.js"' in site
         assert "https://t.me/emilyhanbot" in site and "{{" not in site
-        for tag in ("zh-CN", "zh-TW", "en"):
+        for tag in ("zh-TW", "en"):
             assert f'data-lang="{tag}"' in site, tag
+        assert 'data-lang="zh-CN"' not in site, "the site is in 繁體中文 and English only"
         assert 'href="/demo"' in site, "the site links to the merchant demo"
         # The owner's own contacts come from products.yaml.
         assert 'href="https://t.me/Vinceeeeentttt"' in site and "@Vinceeeeentttt" in site
