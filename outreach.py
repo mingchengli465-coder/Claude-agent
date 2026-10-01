@@ -63,6 +63,7 @@ EN_BODY = """Hi {name} team,
 
 I'm Vincent, a Singaporean student who builds AI customer assistants for small businesses. It sits on your website (or Telegram), answers questions like prices, availability and how to order 24/7 using your own price list and FAQs, and alerts you straight away when a customer is ready to buy, so you can close the sale yourself.
 
+Here's a 38-second video of it at work: {video}
 You can try the one on my own site: {link}
 
 If you send me your price list or FAQ, I'm happy to set up a free demo on it so you can see how it answers your customers before deciding anything. {price}
@@ -85,6 +86,7 @@ ZH_BODY = """{name}你好，
 
 我是 Vincent，一名新加坡大學生，專門幫小店做 AI 客服。它可以放在你的網站或 Telegram 上，按你自己的價目表和常見問題 24 小時自動回覆，繁體、英文都可以；客人準備下單時會第一時間通知你，由你親自成交。
 
+38 秒短片，看它怎麼接客：{video}
 可以先到我的網站試試看：{link}
 
 如果你願意把價目表或常見問題發給我，我可以免費幫你做一個示範版，你先試用，滿意再決定。{price}
@@ -98,6 +100,8 @@ ZH_PRICE = {"sg": "正式搭建一次性 US$70 起，之後每月 US$9.9。",
             "hk": "正式搭建一次性 US$70（約 HK$550）起，之後每月 US$9.9（約 HK$78）。"}
 # Web design studios get a partnership offer instead: they refer clients, I build, they earn 30%.
 DEMO_LINK = os.environ.get("OUTREACH_DEMO_LINK", "https://mingchengli465-coder.github.io/Claude-agent/demo.html?from=email")
+# A 38-second video page, linked rather than attached: attachments from a new sender land in spam.
+VIDEO_LINK = os.environ.get("OUTREACH_VIDEO_LINK", "https://mingchengli465-coder.github.io/Claude-agent/video.html?from=email")
 AGENCY_ZH_SUBJECT = "合作提案：讓 {name} 的網站客戶多一個 AI 客服"
 AGENCY_ZH_BODY = """{name}你好，
 
@@ -107,6 +111,7 @@ AGENCY_ZH_BODY = """{name}你好，
 
 想問你們有沒有興趣合作：你們幫客戶做網站時，順便推薦 AI 客服，架設和維護都由我負責。每成交一家，你們拿架設費的 30%。客戶還是你們的，我不會另外接觸；也可以用你們的名義交付。
 
+38 秒短片介紹：{video}
 做好的示範可以看這裡：{demo}
 
 有興趣的話直接回覆這封郵件，我可以先免費幫你們的一個客戶做試用版。
@@ -126,6 +131,7 @@ I'm Vincent, based in Singapore. I build AI customer assistants for small shops:
 
 Would you be open to a simple partnership? When you build a site, you offer the AI assistant as an add-on, and I handle the setup and maintenance. For every client who signs up, you keep 30% of the setup fee. The client stays yours, I won't contact them separately, and I can deliver under your name if you prefer.
 
+A 38-second video: {video}
 Here's a finished demo: {demo}
 
 If it sounds interesting, just reply to this email and I'll set up a free trial for one of your clients first.
@@ -187,7 +193,7 @@ def script_for(secret: str) -> str:
 
 def compose(lead: dict) -> tuple[str, str]:
     """Subject and body for one business: 繁體中文 first, then the same email in English."""
-    fill = {"name": lead["name"], "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL, "demo": DEMO_LINK}
+    fill = {"name": lead["name"], "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL, "demo": DEMO_LINK, "video": VIDEO_LINK}
     region = lead.get("region") or "sg"
     # "Monice Bakes 你好" but "思思蛋糕你好": a space only after a Latin name
     zh_name = lead["name"] + (" " if lead["name"][-1:].isascii() else "")

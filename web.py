@@ -2,6 +2,7 @@
 
     GET  /            the owner's own site: services, prices, and the chat window
     GET  /demo        a demo page to send merchants (the chat window is on it)
+    GET  /video       the 38-second intro video (media/), linked from the cold emails
     GET  /widget.js   the chat window itself; one <script> tag embeds it in any site
     POST /api/chat    a visitor's message -> the AI's reply (customer_service.handle)
     GET  /api/messages  new messages for a visitor, so the owner's replies show up
@@ -54,6 +55,8 @@ IP_NEW_VISITORS_PER_HOUR = int(os.environ.get("WEB_IP_NEW_VISITORS_PER_HOUR", "5
 IP_HITS_PER_MINUTE = int(os.environ.get("WEB_IP_HITS_PER_MINUTE", "30"))
 
 _STATIC = Path(__file__).with_name("web_static")
+# The intro video and its poster: the only files under media/ the site serves.
+_MEDIA = {"vinc-intro.mp4": "video/mp4", "vinc-intro-poster.jpg": "image/jpeg"}
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -172,6 +175,8 @@ class WebChat:
             return app
         app.router.add_get("/", self.site)
         app.router.add_get("/demo", self.page)
+        app.router.add_get("/video", self.video)
+        app.router.add_get("/media/{name}", self.media)
         app.router.add_get("/widget.js", self.widget)
         app.router.add_get("/fonts/{name}", self.font)
         app.router.add_get("/healthz", self.health)
@@ -207,6 +212,17 @@ class WebChat:
 
     async def page(self, request: web.Request) -> web.Response:
         return self._render("demo.html")
+
+    async def video(self, request: web.Request) -> web.Response:
+        return self._render("video.html")
+
+    async def media(self, request: web.Request) -> web.StreamResponse:
+        """The intro video (with range requests, which phones need to play it)."""
+        name = request.match_info["name"]
+        path = Path(__file__).with_name("media") / name
+        if name not in _MEDIA or not path.is_file():
+            raise web.HTTPNotFound()
+        return web.FileResponse(path, headers={"Content-Type": _MEDIA[name], "Cache-Control": "public, max-age=86400"})
 
     async def sites_home(self, request: web.Request) -> web.Response:
         return web.Response(text="🌐", content_type="text/plain")

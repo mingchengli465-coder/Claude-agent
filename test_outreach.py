@@ -29,7 +29,7 @@ assert subject == "Whyzee Bakery 的客人查詢，可以交給 AI 24 小時回�
 zh, en = body.split("———— English below ————")
 assert zh.startswith("Whyzee Bakery 你好，\n\n你們的 WhatsApp 只在早上") and "US$70 起，之後每月 US$9.9。" in zh and "HK$" not in zh
 assert en.strip().startswith("Hi Whyzee Bakery team,\n\nI noticed your WhatsApp") and "from US$70, then US$9.9/month" in en
-assert body.count("?from=email") == 2 and 'reply "no thanks"' in en and "不用了" in zh and "{" not in body
+assert body.count("?from=email") == 4 and body.count("video.html?from=email") == 2 and 'reply "no thanks"' in en and "不用了" in zh and "{" not in body
 subject, body = om.compose(leads[1])
 zh, en = body.split("———— English below ————")
 assert "很多客人會在晚上" in zh and "HK$550" in zh and "after hours" in en and "HK$550" in en
@@ -38,7 +38,7 @@ assert subject.startswith("InCake 3D 的客人查詢") and body.index("你好") 
 subject, body = om.compose({"email": "a@studio.sg", "name": "Pixel Studio", "region": "sg", "kind": "agency"})
 zh, en = body.split("———— English below ————")
 assert subject.startswith("合作提案：讓 Pixel Studio 的網站客戶") and "Partnership idea" in subject
-assert zh.startswith("Pixel Studio 你好") and "30%" in zh and "demo.html?from=email" in zh and "US$" not in zh
+assert zh.startswith("Pixel Studio 你好") and "30%" in zh and "demo.html?from=email" in zh and "video.html?from=email" in zh and "US$" not in zh
 assert "keep 30% of the setup fee" in en and "no thanks" in en and "{" not in body
 script = om.script_for("s3cret")
 assert "const SECRET = 's3cret';" in script and "GmailApp.sendEmail" in script and "{secret}" not in script
