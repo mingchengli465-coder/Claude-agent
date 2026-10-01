@@ -35,6 +35,11 @@ zh, en = body.split("———— English below ————")
 assert "很多客人會在晚上" in zh and "HK$550" in zh and "after hours" in en and "HK$550" in en
 subject, body = om.compose(leads[2])
 assert subject.startswith("InCake 3D 的客人查詢") and body.index("你好") < body.index("Hi InCake")
+subject, body = om.compose({"email": "a@studio.sg", "name": "Pixel Studio", "region": "sg", "kind": "agency"})
+zh, en = body.split("———— English below ————")
+assert subject.startswith("合作提案：讓 Pixel Studio 的網站客戶") and "Partnership idea" in subject
+assert zh.startswith("Pixel Studio 你好") and "30%" in zh and "demo.html?from=email" in zh and "US$" not in zh
+assert "keep 30% of the setup fee" in en and "no thanks" in en and "{" not in body
 script = om.script_for("s3cret")
 assert "const SECRET = 's3cret';" in script and "GmailApp.sendEmail" in script and "{secret}" not in script
 print("PASS every email is 繁體中文 first, then English, each with its own first line, price line and opt-out")
@@ -58,6 +63,8 @@ db.add([{"email": "info@whyzee.com.sg", "name": "again"}])
 assert db.get("info@whyzee.com.sg")["status"] == "sent", "a business already emailed is never emailed again"
 assert db.get("info@whyzee.com.sg")["name"] == "Whyzee Bakery", "an emailed business keeps its record"
 db.add([{"email": "shop11@ex.com", "name": "Shop Eleven", "first_zh": "新的開頭"}])
+db.add([{"email": "studio@ex.com", "name": "A Studio", "kind": "agency"}])
+assert db.get("studio@ex.com")["kind"] == "agency" and db.get("shop11@ex.com")["kind"] == "shop"
 assert db.get("shop11@ex.com")["first_zh"] == "新的開頭", "a business not yet emailed takes the new wording"
 assert db.first_sight("m1", "a") and not db.first_sight("m1", "a")
 print("PASS at most 10 a day, each business once, the list survives re-seeding")
