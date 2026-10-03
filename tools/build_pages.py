@@ -72,6 +72,8 @@ def build(out: Path) -> None:
         (out / "guides" / guide.name).write_text(static_copy(html).replace('href="../demo"', 'href="../demo.html"'), encoding="utf-8")
     write_sitemap(out)
     (out / "media").mkdir()
+    # the mockups the English-market emails link to (their plain-text version)
+    shutil.copytree(ROOT / "web_static" / "mockups", out / "mockups")
     for name in web._MEDIA:
         shutil.copy(ROOT / "media" / name, out / "media" / name)
     for font in (ROOT / "web_static" / "fonts").iterdir():

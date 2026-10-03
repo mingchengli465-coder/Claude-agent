@@ -217,6 +217,7 @@ assert "Sitemap:" in (out / "robots.txt").read_text(encoding="utf-8")
 video = (out / "video.html").read_text(encoding="utf-8")
 assert 'href="demo.html"' in video and 'href="./"' in video and (out / "media" / "vinc-intro.mp4").stat().st_size > 1_000_000
 assert not (out / "media" / "vinc-intro-fiverr.mp4").exists() and "/video.html</loc>" in sitemap
+assert (out / "mockups" / "gale-green.png").exists() and "mockups" not in sitemap, "mockups are linked, not listed"
 print("PASS the GitHub Pages copy is self-contained apart from the chat server")
 
 print("\nALL WEB CHAT TESTS PASSED")

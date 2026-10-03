@@ -1154,6 +1154,17 @@ MAIL_SETUP_TEXT = (
 )
 
 
+MAIL_UPDATE_TEXT = (
+    "🖼 要在邮件里直接放设计图，得更新一下 Gmail 发信脚本（1 分钟，iPad 上就行）：\n\n"
+    "1. Safari 打开 https://script.google.com ，点开你之前建的那个项目\n"
+    "2. 把代码全删掉，粘贴我下一条发的新代码，点上面的💾保存\n"
+    "3. 点右上角「部署 / Deploy」→「管理部署 / Manage deployments」→ 点 ✏️ 编辑 →"
+    "「版本 / Version」选「新版本 / New version」→ 点「部署 / Deploy」\n"
+    "   （如果你点成了「新部署」也没关系，把新的 /exec 链接发给我就行）\n\n"
+    "更新好我会自己发现（5 分钟内），然后在对方的上班时间开始发那批带设计图的邮件，发完告诉你。"
+)
+
+
 def mailer() -> outreach_mod.Mailer | None:
     if leads_db is None:
         return None
@@ -1259,42 +1270,55 @@ async def mail_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     start_sending(query.message, emails)
 
 
-def start_sending(message, emails: list[str]) -> None:
-    task = asyncio.get_running_loop().create_task(send_emails(message, emails))
+def start_sending(message, emails: list[str], batch: bool = False) -> None:
+    task = asyncio.get_running_loop().create_task(send_emails(message, emails, batch))
     fb_setup_tasks.add(task)
     task.add_done_callback(fb_setup_tasks.discard)
 
 
-async def send_emails(message, emails: list[str]) -> None:
+async def send_emails(message, emails: list[str], batch: bool = False) -> None:
+    """Send one by one, a gap between each. A batch (the English-market list with mockups) is outside
+    the daily limit but keeps to the recipients' working hours."""
     box, done, problem, failed_in_a_row = mailer(), [], "", 0
-    for email in emails:
-        if leads_db.setting("stopped"):
-            problem = "你让我停了，剩下的没发。发 /outreach 可以重新开始。"
-            break
-        lead = leads_db.get(email)
-        if lead is None or lead["status"] != "new":
-            continue
-        if leads_db.room_today() <= 0:
-            problem = f"今天已经发满 {outreach_mod.DAILY_LIMIT} 封，剩下的明天发。"
-            break
-        if done or failed_in_a_row:
-            await asyncio.sleep(outreach_mod.GAP_SECONDS)
-        subject, body = outreach_mod.compose(lead)
-        try:
-            await box.send(email, subject, body)
-        except outreach_mod.MailError as exc:
-            logger.warning("邮件没发出去（%s）：%s", email, exc)
-            failed_in_a_row += 1
-            if failed_in_a_row >= 2:
-                # twice in a row is Gmail or the script, not one bad address: keep the rest for later
-                problem = f"发到 {lead['name']} 时又出错了，后面的先停了：{exc}"
+    gap = outreach_mod.BATCH_GAP_SECONDS if batch else outreach_mod.GAP_SECONDS
+    try:
+        for email in emails:
+            if leads_db.setting("stopped"):
+                problem = "你让我停了，剩下的没发。发 /outreach 可以重新开始。"
                 break
-            leads_db.mark(email, "failed", str(exc)[:200])
-            done.append(f"⚠️ {lead['name']} 发不出去（{exc}）")
-            continue
-        failed_in_a_row = 0
-        leads_db.mark(email, "sent")
-        done.append(f"✅ {lead['name']}")
+            lead = leads_db.get(email)
+            if lead is None or lead["status"] != "new":
+                continue
+            if not batch and leads_db.room_today() <= 0:
+                problem = f"今天已经发满 {outreach_mod.DAILY_LIMIT} 封，剩下的明天发。"
+                break
+            if batch and not outreach_mod.in_work_hours(lead):
+                problem = "对方那边已经下班了，剩下的等他们明天上班（当地 8:30）我接着发。"
+                break
+            if done or failed_in_a_row:
+                await asyncio.sleep(gap)
+            subject, body = outreach_mod.compose(lead)
+            html, image = "", None
+            if outreach_mod.is_intl(lead) and lead.get("mockup"):
+                html, image = outreach_mod.compose_html(lead), outreach_mod.mockup_png(lead)
+            try:
+                await box.send(email, subject, body, html=html, image=image)
+            except outreach_mod.MailError as exc:
+                logger.warning("邮件没发出去（%s）：%s", email, exc)
+                failed_in_a_row += 1
+                if failed_in_a_row >= 2:
+                    # twice in a row is Gmail or the script, not one bad address: keep the rest for later
+                    problem = f"发到 {lead['name']} 时又出错了，后面的先停了：{exc}"
+                    break
+                leads_db.mark(email, "failed", str(exc)[:200])
+                done.append(f"⚠️ {lead['name']} 发不出去（{exc}）")
+                continue
+            failed_in_a_row = 0
+            leads_db.mark(email, "sent")
+            done.append(f"✅ {lead['name']}")
+    finally:
+        if batch:
+            leads_db.set_setting("batch_running", "")
     ok = sum(line.startswith("✅") for line in done)
     text = f"📧 发好了 {ok} 封：\n" + "\n".join(done) if done else "📧 这次一封都没发出去。"
     if problem:
@@ -1350,6 +1374,36 @@ async def send_mail_setup_once(bot) -> None:
         logger.exception("Gmail 设置步骤发送失败")
 
 
+async def batch_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """The English-market list (leads with a "batch"): once the Gmail script can carry images,
+    send them all in the recipients' working hours. Until then, ask the owner once to update it."""
+    if leads_db is None or not OWNER_CHAT_ID or leads_db.setting("stopped") or leads_db.setting("batch_running"):
+        return
+    waiting = [lead for lead in leads_db.batch_waiting() if outreach_mod.in_work_hours(lead)]
+    box = mailer()
+    if not waiting or box is None:
+        return
+    try:
+        version = await box.version()
+    except outreach_mod.MailError as exc:
+        logger.warning("查 Gmail 发信脚本版本失败：%s", exc)
+        return
+    if version < outreach_mod.MAILER_VERSION:
+        if not leads_db.setting("update_asked"):
+            leads_db.set_setting("update_asked", "1")
+            await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=MAIL_UPDATE_TEXT,
+                                           disable_web_page_preview=True)
+            await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=outreach_mod.script_for(leads_db.secret()))
+        return
+    leads_db.set_setting("batch_running", "1")
+    lines = "\n".join(f"{i}. {lead['name']} · {lead['email']}" for i, lead in enumerate(waiting, 1))
+    note = await context.bot.send_message(
+        chat_id=int(OWNER_CHAT_ID), disable_web_page_preview=True,
+        text=f"🖼 开始发英国这批 {len(waiting)} 封（每封带一张为他们做的设计图，每封隔 1–2 分钟）：\n\n{lines}"
+             "\n\n想停就发 /outreach_stop。")
+    start_sending(note, [lead["email"] for lead in waiting], batch=True)
+
+
 async def outreach_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     if leads_db is not None and leads_db.setting("stopped"):
         return
@@ -1402,6 +1456,7 @@ def start_outreach() -> None:
         return
     if added:
         logger.info("邮件名单新加了 %d 家", added)
+    leads_db.set_setting("batch_running", "")  # a batch cut short by a restart starts again
 
 
 def schedule_outreach(application: Application) -> None:
@@ -1415,6 +1470,7 @@ def schedule_outreach(application: Application) -> None:
     else:
         application.job_queue.run_daily(outreach_daily_job, time=when, name="outreach-daily")
     application.job_queue.run_repeating(email_replies_job, interval=1800, first=120, name="email-replies")
+    application.job_queue.run_repeating(batch_job, interval=300, first=60, name="outreach-batch")
 
 
 def _fit_notice(text: str) -> str:
