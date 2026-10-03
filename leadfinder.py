@@ -23,7 +23,8 @@ from aiohttp import ClientSession, ClientTimeout
 logger = logging.getLogger(__name__)
 
 OVERPASS = [u.strip() for u in os.environ.get(
-    "OVERPASS_URLS", "https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter").split(",") if u.strip()]
+    "OVERPASS_URLS", "https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter,"
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter,https://overpass.kumi.systems/api/interpreter").split(",") if u.strip()]
 COUNTRY = {"uk": "GB", "ie": "IE", "au": "AU", "nz": "NZ", "sg": "SG", "hk": "HK", "my": "MY"}
 COUNTRY_NAME = {"uk": "the UK", "ie": "Ireland", "au": "Australia", "nz": "New Zealand", "sg": "Singapore",
                 "hk": "Hong Kong", "my": "Malaysia"}

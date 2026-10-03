@@ -1565,7 +1565,8 @@ def schedule_outreach(application: Application) -> None:
     application.job_queue.run_repeating(email_replies_job, interval=1800, first=120, name="email-replies")
     application.job_queue.run_repeating(batch_job, interval=300, first=60, name="outreach-batch")
     application.job_queue.run_repeating(intl_daily_job, interval=900, first=180, name="outreach-intl")
-    application.job_queue.run_daily(find_leads_job, time=dt.time(1, 0, tzinfo=dt.timezone.utc), name="find-leads")
+    # every 4 hours: the free map servers are often busy, and a full list makes this a no-op
+    application.job_queue.run_repeating(find_leads_job, interval=4 * 3600, first=4 * 3600, name="find-leads")
     application.job_queue.run_once(find_leads_job, when=120, name="find-leads-now")
 
 
