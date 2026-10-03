@@ -562,7 +562,8 @@ class Mailer:
         except json.JSONDecodeError:
             # Apps Script shows an HTML page when the script throws (a passing Gmail hiccup,
             # usually) or when the deployment isn't public; keep a little of it for the log
-            seen = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text)).strip()[:160]
+            page = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", text)
+            seen = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page)).strip()[:300]
             raise MailError("Gmail 发信脚本没有正常回应（部署时“谁可以访问”要选“任何人”）"
                             + (f"：{seen}" if seen else "")) from None
         if not data.get("ok"):
