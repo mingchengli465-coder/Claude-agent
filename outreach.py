@@ -9,7 +9,9 @@ Every morning the bot offers the day's batch (at most OUTREACH_DAILY_LIMIT) and 
 nothing until the owner taps ✅, or with OUTREACH_AUTO=true sends it straight away and
 reports. Each business is emailed once, never followed up.
 
-    OUTREACH_LEADS          JSON list: [{"email", "name", "region": "sg"|"hk", "lang": "en"|"zh", "first"}]
+    OUTREACH_LEADS          JSON list: [{"email", "name", "region": "sg"|"hk"|"uk"…, "lang": "en"|"zh", "first"}]
+                            Leads with a "batch" go out together as soon as the mailer can carry images,
+                            outside the daily limit, each with its own "mockup" (web_static/mockups/<slug>.png).
     OUTREACH_DAILY_LIMIT    default 10
     OUTREACH_MIX            e.g. hk:6,sg:4 — each region's share of the day; any room left goes to the rest
     OUTREACH_TIME           default 10:00, in OUTREACH_TIMEZONE (default Asia/Singapore)
@@ -18,6 +20,7 @@ reports. Each business is emailed once, never followed up.
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import json
 import os
@@ -54,6 +57,13 @@ TELEGRAM_LINK = os.environ.get("OUTREACH_TELEGRAM", "https://t.me/Vinceeeeentttt
 REPLY_EMAIL = os.environ.get("OUTREACH_EMAIL", "mingchengli465@gmail.com")
 
 SCRIPT_URL = re.compile(r"https://script\.google\.com/macros/s/[\w-]+/exec")
+# Outside HK/SG/MY the email is English only, sent in the recipient's working hours.
+REGION_TZ = {"uk": "Europe/London", "ie": "Europe/Dublin", "au": "Australia/Sydney", "nz": "Pacific/Auckland",
+             "ca": "America/Toronto", "us": "America/New_York"}
+WORK_HOURS = (dt.time(8, 30), dt.time(18, 0))
+BATCH_GAP_SECONDS = float(os.environ.get("OUTREACH_BATCH_GAP_SECONDS", "90"))
+MOCKUP_DIR = Path(__file__).with_name("web_static") / "mockups"
+MOCKUP_URL = os.environ.get("OUTREACH_MOCKUP_URL", "https://mingchengli465-coder.github.io/Claude-agent/mockups/{slug}.png")
 OPT_OUT = re.compile(r"no thanks|not interested|unsubscribe|remove me|stop email|不用了|不需要|唔使|唔需要", re.I)
 
 EN_SUBJECT = "Quick idea for {name}'s customer enquiries"
@@ -150,14 +160,24 @@ BILINGUAL_RULE = "\n\n———— English below ————\n\n"
 ZH_FIRST = "很多客人會在晚上發訊息問價錢、款式和預約時間，第二天才回覆的話，有些客人可能已經找了別家。"
 
 # The owner pastes this into script.google.com once. {secret} is filled in per bot.
+# version 2 sends HTML with inline images (the mockups); version 1 sent plain text only
+MAILER_VERSION = 2
 MAILER_SCRIPT = """const SECRET = '{secret}';
 
 function doPost(e) {
   const req = JSON.parse(e.postData.contents);
   if (req.secret !== SECRET) return out({ok: false, error: 'bad secret'});
-  if (req.action === 'ping') return out({ok: true, email: Session.getEffectiveUser().getEmail()});
+  if (req.action === 'ping') return out({ok: true, version: 2, email: Session.getEffectiveUser().getEmail()});
   if (req.action === 'send') {
-    GmailApp.sendEmail(req.to, req.subject, req.body, {name: req.name || 'Vincent'});
+    const options = {name: req.name || 'Vincent'};
+    if (req.html) {
+      options.htmlBody = req.html;
+      options.inlineImages = {};
+      Object.keys(req.images || {}).forEach(function (k) {
+        options.inlineImages[k] = Utilities.newBlob(Utilities.base64Decode(req.images[k]), 'image/png', k + '.png');
+      });
+    }
+    GmailApp.sendEmail(req.to, req.subject, req.body, options);
     return out({ok: true});
   }
   if (req.action === 'replies') {
@@ -187,12 +207,94 @@ function out(o) {
 """
 
 
+INTL_SUBJECT = "A quick mockup for {name}"
+INTL_BODY = """{greeting}
+
+{first}
+
+{problem} So I put together a quick mockup of {name}'s website with a 24/7 assistant on it:
+
+{mockup}
+
+It answers from your own information ({facts}), takes down every enquiry, and sends it straight to you to confirm.
+
+I'm Vincent, a student developer in Singapore, and I set these up for small businesses. I'd be happy to build you a free trial version first, so you can see how it handles real questions. If you decide to keep it, it's a one-off US$70 (about £55), then US$9.9 (about £8) a month, cancel anytime.
+
+Here's a 38-second video of how it works: {video}
+
+Best,
+Vincent
+{link}
+
+P.S. If this isn't for you, just reply "no thanks" and I won't email again."""
+INTL_PROBLEM = {
+    "bnb": "Guests often message in the evening asking about rooms, dates and arrival times, and by morning some have booked elsewhere.",
+    "florist": "A lot of flower orders and wedding enquiries arrive after the shop has closed, and by morning some customers have ordered elsewhere.",
+    "tutor": "Parents often look for tuition in the evening, once the children are in bed, and by morning some have enquired elsewhere.",
+}
+INTL_FACTS = {"bnb": "rooms, prices, house rules", "florist": "flowers, prices, delivery areas",
+              "tutor": "courses, fees, timetables"}
+MOCKUP_MARK = "{mockup}"
+
+
+def is_intl(lead: dict) -> bool:
+    return (lead.get("region") or "") in REGION_TZ
+
+
+def _intl_parts(lead: dict) -> tuple[str, str]:
+    cat = lead.get("cat") or "bnb"
+    host = (lead.get("host") or "").strip()
+    fill = {"name": lead["name"], "first": lead.get("first") or f"I came across {lead['name']} online.",
+            "greeting": f"Hi {host}," if host else "Hello,", "problem": INTL_PROBLEM.get(cat, INTL_PROBLEM["bnb"]),
+            "facts": INTL_FACTS.get(cat, INTL_FACTS["bnb"]), "video": VIDEO_LINK.replace("from=email", "from=uk"),
+            "link": SITE_LINK.replace("from=email", "from=uk"), "mockup": MOCKUP_MARK}
+    return INTL_SUBJECT.format(**fill), INTL_BODY.format(**fill)
+
+
+def mockup_png(lead: dict) -> bytes | None:
+    slug = lead.get("mockup") or ""
+    path = MOCKUP_DIR / f"{slug}.png"
+    return path.read_bytes() if re.fullmatch(r"[a-z0-9-]+", slug) and path.is_file() else None
+
+
+def compose_html(lead: dict) -> str:
+    """The same English letter as HTML, with the mockup shown inline (cid:mockup)."""
+    _, body = _intl_parts(lead)
+    import html as _html
+    link = re.compile(r"(https://\S+)")
+    paras = []
+    for para in body.split("\n\n"):
+        if para == MOCKUP_MARK:
+            alt = _html.escape(f"Mockup of {lead['name']}'s website with a 24/7 assistant", quote=True)
+            paras.append(f'<p><img src="cid:mockup" width="560" alt="{alt}" '
+                         'style="width:100%;max-width:560px;height:auto;border:1px solid #e5e5ea;border-radius:12px"></p>')
+            continue
+        text = link.sub(r'<a href="\1">\1</a>', _html.escape(para)).replace("\n", "<br>")
+        paras.append(f"<p>{text}</p>")
+    return ('<div style="font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1d1d1f;max-width:600px">'
+            + "".join(paras) + "</div>")
+
+
+def in_work_hours(lead: dict, now: dt.datetime | None = None) -> bool:
+    """English-market emails go out on the recipient's own clock, 8:30–18:00."""
+    tz = REGION_TZ.get(lead.get("region") or "")
+    if not tz:
+        return True
+    local = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo(tz)).time()
+    return WORK_HOURS[0] <= local <= WORK_HOURS[1]
+
+
 def script_for(secret: str) -> str:
     return MAILER_SCRIPT.replace("{secret}", secret)
 
 
 def compose(lead: dict) -> tuple[str, str]:
-    """Subject and body for one business: 繁體中文 first, then the same email in English."""
+    """Subject and body for one business: 繁體中文 first, then the same email in English.
+    English-speaking markets get the English letter alone, with a link to their mockup."""
+    if is_intl(lead):
+        subject, body = _intl_parts(lead)
+        url = MOCKUP_URL.format(slug=lead.get("mockup") or "")
+        return subject, body.replace(MOCKUP_MARK, f"(mockup: {url})" if lead.get("mockup") else "").replace("\n\n\n\n", "\n\n")
     fill = {"name": lead["name"], "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL, "demo": DEMO_LINK, "video": VIDEO_LINK}
     region = lead.get("region") or "sg"
     # "Monice Bakes 你好" but "思思蛋糕你好": a space only after a Latin name
@@ -240,8 +342,9 @@ class Leads:
             columns = [r[1] for r in db.execute("PRAGMA table_info(leads)")]
             if "first_zh" not in columns:
                 db.execute("ALTER TABLE leads ADD COLUMN first_zh TEXT")
-            if "kind" not in columns:
-                db.execute("ALTER TABLE leads ADD COLUMN kind TEXT")
+            for column in ("kind", "batch", "mockup", "cat", "host"):
+                if column not in columns:
+                    db.execute(f"ALTER TABLE leads ADD COLUMN {column} TEXT")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path)
@@ -269,16 +372,16 @@ class Leads:
     def add(self, leads: list[dict]) -> int:
         """New businesses are added; ones already known keep their status. Businesses not yet
         emailed take the latest wording (name, first lines), so a fixed list applies before sending."""
-        rows = [(l["email"].strip().lower(), l["name"], l.get("region", "sg"), l.get("lang", "en"),
-                 l.get("first", ""), l.get("first_zh", ""), l.get("kind", "shop")) for l in leads]
+        fields = ("name", "region", "lang", "first", "first_zh", "kind", "batch", "mockup", "cat", "host")
+        default = {"region": "sg", "lang": "en", "kind": "shop"}
+        rows = [(l["email"].strip().lower(),) + tuple(str(l.get(f, default.get(f, ""))) for f in fields) for l in leads]
         with self._db() as db:
             count = lambda: db.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
             before = count()
-            db.executemany("INSERT OR IGNORE INTO leads (email, name, region, lang, first, first_zh, kind) "
-                           "VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
-            db.executemany("UPDATE leads SET name=?, region=?, lang=?, first=?, first_zh=?, kind=? "
-                           "WHERE email=? AND status='new'",
-                           [(n, r, la, f, fz, k, e) for e, n, r, la, f, fz, k in rows])
+            db.executemany(f"INSERT OR IGNORE INTO leads (email, {', '.join(fields)}) "
+                           f"VALUES ({', '.join('?' * (len(fields) + 1))})", rows)
+            db.executemany(f"UPDATE leads SET {', '.join(f + '=?' for f in fields)} WHERE email=? AND status='new'",
+                           [r[1:] + r[:1] for r in rows])
             return count() - before
 
     def get(self, email: str) -> dict | None:
@@ -298,7 +401,7 @@ class Leads:
 
     def sent_today(self, now: dt.datetime | None = None) -> int:
         with self._db() as db:
-            return db.execute("SELECT COUNT(*) FROM leads WHERE sent_at >= ?",
+            return db.execute("SELECT COUNT(*) FROM leads WHERE sent_at >= ? AND COALESCE(batch, '') = ''",
                               (self._day_start(now).isoformat(),)).fetchone()[0]
 
     def room_today(self, now: dt.datetime | None = None) -> int:
@@ -309,7 +412,8 @@ class Leads:
         taking each region's share from OUTREACH_MIX first."""
         room = self.room_today(now)
         with self._db() as db:
-            waiting = [dict(r) for r in db.execute("SELECT * FROM leads WHERE status='new' ORDER BY rowid")]
+            waiting = [dict(r) for r in db.execute(
+                "SELECT * FROM leads WHERE status='new' AND COALESCE(batch, '') = '' ORDER BY rowid")]
             sent = dict(db.execute("SELECT region, COUNT(*) FROM leads WHERE sent_at >= ? GROUP BY region",
                                    (self._day_start(now).isoformat(),)).fetchall())
         batch = []
@@ -318,6 +422,12 @@ class Leads:
             batch += [l for l in waiting if l["region"] == region][:min(left, room - len(batch))]
         batch += [l for l in waiting if l not in batch][:room - len(batch)]
         return batch
+
+    def batch_waiting(self) -> list[dict]:
+        """Leads in a batch (see OUTREACH_LEADS) not emailed yet."""
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "SELECT * FROM leads WHERE status='new' AND COALESCE(batch, '') != '' ORDER BY rowid")]
 
     def emailed(self) -> list[str]:
         with self._db() as db:
@@ -365,8 +475,15 @@ class Mailer:
     async def ping(self) -> str:
         return (await self._call("ping")).get("email", "")
 
-    async def send(self, to: str, subject: str, body: str) -> None:
-        await self._call("send", to=to, subject=subject, body=body, name=SENDER_NAME)
+    async def version(self) -> int:
+        """1 for the first script (plain text only), 2 once it can send images."""
+        return int((await self._call("ping")).get("version", 1))
+
+    async def send(self, to: str, subject: str, body: str, html: str = "", image: bytes | None = None) -> None:
+        extra = {}
+        if html:
+            extra = {"html": html, "images": {"mockup": base64.b64encode(image).decode()} if image else {}}
+        await self._call("send", to=to, subject=subject, body=body, name=SENDER_NAME, **extra)
 
     async def replies(self, emails: list[str], days: int = 3) -> list[dict]:
         if not emails:
