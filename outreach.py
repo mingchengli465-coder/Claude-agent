@@ -374,6 +374,14 @@ def parse_leads(raw: str) -> list[dict]:
 ASIA = "COALESCE(region, '') NOT IN ('uk', 'ie', 'au', 'nz', 'ca', 'us')"
 
 
+# errors from Gmail or the network rather than from the address: worth another try later
+TRANSIENT = ("没有正常回应", "连不上")
+
+
+def is_transient(error: Exception) -> bool:
+    return any(t in str(error) for t in TRANSIENT)
+
+
 class MailError(RuntimeError):
     pass
 
@@ -500,6 +508,12 @@ class Leads:
             rows = db.execute("SELECT email, name FROM leads").fetchall()
         return {r[0].lower() for r in rows}, {r[1].lower() for r in rows}
 
+    def retry_transient(self) -> int:
+        """Emails that failed on a Gmail hiccup (not a bad address) go back on the list."""
+        with self._db() as db:
+            return db.execute("UPDATE leads SET status='new', note='' WHERE status='failed' AND "
+                              "(note LIKE ? OR note LIKE ?)", (f"%{TRANSIENT[0]}%", f"%{TRANSIENT[1]}%")).rowcount
+
     def batch_waiting(self) -> list[dict]:
         """Leads in a batch (see OUTREACH_LEADS) not emailed yet."""
         with self._db() as db:
@@ -544,7 +558,11 @@ class Mailer:
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
-            raise MailError("Gmail 发信脚本没有正常回应（部署时“谁可以访问”要选“任何人”）") from None
+            # Apps Script shows an HTML page when the script throws (a passing Gmail hiccup,
+            # usually) or when the deployment isn't public; keep a little of it for the log
+            seen = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text)).strip()[:160]
+            raise MailError("Gmail 发信脚本没有正常回应（部署时“谁可以访问”要选“任何人”）"
+                            + (f"：{seen}" if seen else "")) from None
         if not data.get("ok"):
             raise MailError(f"Gmail 发信脚本出错：{data.get('error') or data}")
         return data

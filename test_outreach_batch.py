@@ -6,7 +6,8 @@ import asyncio, base64, datetime as dt, os, sys, tempfile, types
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.update({"TELEGRAM_BOT_TOKEN": "123:fake", "OPENROUTER_API_KEY": "sk-test", "OWNER_CHAT_ID": "424242",
-                   "OUTREACH_GAP_SECONDS": "0", "OUTREACH_BATCH_GAP_SECONDS": "0"})
+                   "OUTREACH_GAP_SECONDS": "0", "OUTREACH_BATCH_GAP_SECONDS": "0",
+                   "OUTREACH_RETRY_SECONDS": "0"})
 from aiohttp import web
 from aiohttp.test_utils import TestServer
 
@@ -150,6 +151,51 @@ async def main():
         assert bot.leads_db.get("late2@ex.co.uk")["status"] == "new" and not bot.leads_db.setting("batch_running")
         om.in_work_hours = real_hours
         print("PASS at the end of their working day the rest wait for tomorrow")
+
+        # Gmail hiccups (an HTML page instead of JSON): one retry; still failing, it stays on the list
+        hiccups = {"once@ex.co.uk": 1, "twice@ex.co.uk": 2}
+        real_exec = exec_
+
+        async def flaky(request):
+            req = await request.json()
+            if req["action"] == "send" and hiccups.get(req["to"], 0) > 0:
+                hiccups[req["to"]] -= 1
+                return web.Response(text="<html><title>Error</title>Exception: Service error: Gmail</html>",
+                                    content_type="text/html")
+            request._read_bytes = None
+            return await real_exec_json(req)
+
+        async def real_exec_json(req):
+            if req["action"] == "ping":
+                out = {"ok": True, "email": "me@gmail.com", "version": 2}
+            else:
+                sent.append(req); out = {"ok": True}
+            key = str(len(results)); results[key] = out
+            raise web.HTTPFound(f"/echo?k={key}")
+
+        app2 = web.Application()
+        app2.router.add_post("/exec", flaky)
+        app2.router.add_get("/echo", echo)
+        async with TestServer(app2) as server2:
+            bot.leads_db.set_setting("url", str(server2.make_url("/exec")))
+            sent.clear(); told.clear()
+            bot.leads_db.add([{**UK, "email": "once@ex.co.uk", "name": "Once"}, {**UK, "email": "twice@ex.co.uk", "name": "Twice"},
+                              {**UK, "email": "fine@ex.co.uk", "name": "Fine"}])
+            om.in_work_hours = lambda lead, now=None: True
+            await bot.batch_job(ctx)
+            for _ in range(300):
+                if any(t.startswith("📧") for t in told[1:]):
+                    break
+                await asyncio.sleep(0.01)
+            om.in_work_hours = real_hours
+            assert [s["to"] for s in sent] == ["late2@ex.co.uk", "once@ex.co.uk", "fine@ex.co.uk"], [s["to"] for s in sent]
+            assert "⏳ Twice" in told[-1] and "Service error: Gmail" not in told[-1]
+            assert bot.leads_db.get("twice@ex.co.uk")["status"] == "new", "it waits for the next round"
+            bot.leads_db.mark("twice@ex.co.uk", "failed", "Gmail 发信脚本没有正常回应：x")
+            bot.leads_db.mark("fine@ex.co.uk", "failed", "Invalid email: fine@ex.co.uk")
+            assert bot.leads_db.retry_transient() == 1
+            assert bot.leads_db.get("twice@ex.co.uk")["status"] == "new" and bot.leads_db.get("fine@ex.co.uk")["status"] == "failed"
+        print("PASS a Gmail hiccup gets one retry, then waits for the next round; a bad address doesn't")
 
     # the batch job is scheduled every five minutes
     from telegram.ext import Application
