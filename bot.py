@@ -9,7 +9,6 @@ import datetime as dt
 import json
 import logging
 import os
-import random
 import re
 import secrets
 from collections import defaultdict, deque
@@ -1437,12 +1436,10 @@ async def find_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         if region not in leadfinder.COUNTRY or share <= 0:
             continue
         need = share * 5 - leads_db.waiting(region)
-        kinds = sorted(leadfinder.TAGS)
-        random.Random(day * 31 + sum(map(ord, region))).shuffle(kinds)
-        for kind in kinds[:2]:
+        for attempt in range(2):  # two towns at most a day, to be kind to the free map servers
             if need <= 0:
                 break
-            fresh = [lead for lead in await leadfinder.find(region, kind)
+            fresh = [lead for lead in await leadfinder.find(region, day, attempt)
                      if lead["email"] not in emails and lead["name"].lower() not in names][:need]
             if fresh:
                 leads_db.add(fresh)
