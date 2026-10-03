@@ -9,6 +9,7 @@ import datetime as dt
 import json
 import logging
 import os
+import random
 import re
 import secrets
 from collections import defaultdict, deque
@@ -40,6 +41,7 @@ import tweet as tweet_mod
 import agent as agent_mod
 import bluesky
 import messenger as messenger_mod
+import leadfinder
 import outreach as outreach_mod
 import visits as visits_mod
 import web
@@ -1299,8 +1301,12 @@ async def send_emails(message, emails: list[str], batch: bool = False) -> None:
                 await asyncio.sleep(gap)
             subject, body = outreach_mod.compose(lead)
             html, image = "", None
-            if outreach_mod.is_intl(lead) and lead.get("mockup"):
-                html, image = outreach_mod.compose_html(lead), outreach_mod.mockup_png(lead)
+            try:
+                image = await asyncio.to_thread(outreach_mod.mockup_png, lead, mockup_cache())
+            except Exception:  # noqa: BLE001 - the letter still goes, with its link
+                logger.exception("设计图没画出来（%s）", email)
+            if image:
+                html = outreach_mod.compose_html(lead)
             try:
                 await box.send(email, subject, body, html=html, image=image)
             except outreach_mod.MailError as exc:
@@ -1374,26 +1380,95 @@ async def send_mail_setup_once(bot) -> None:
         logger.exception("Gmail 设置步骤发送失败")
 
 
+def mockup_cache() -> Path | None:
+    """Drawn mockups live next to the database, on the volume; web.py serves them at /mockups/."""
+    return Path(leads_db.path).with_name("mockups") if leads_db is not None else None
+
+
+REGION_ZH = {"uk": "英国", "ie": "爱尔兰", "au": "澳洲", "nz": "新西兰", "sg": "新加坡", "hk": "香港", "my": "马来西亚"}
+
+
+async def _image_mailer(context) -> outreach_mod.Mailer | None:
+    """The mailer, once its script can carry images; until then the owner is asked (once) to update it."""
+    box = mailer()
+    if box is None:
+        return None
+    try:
+        version = await box.version()
+    except outreach_mod.MailError as exc:
+        logger.warning("查 Gmail 发信脚本版本失败：%s", exc)
+        return None
+    if version >= outreach_mod.MAILER_VERSION:
+        return box
+    if not leads_db.setting("update_asked"):
+        leads_db.set_setting("update_asked", "1")
+        await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=MAIL_UPDATE_TEXT, disable_web_page_preview=True)
+        await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=outreach_mod.script_for(leads_db.secret()))
+    return None
+
+
+async def intl_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Every weekday morning in each English-speaking country, that day's share (OUTREACH_INTL_MIX)
+    goes out, each with its own mockup."""
+    if leads_db is None or not OWNER_CHAT_ID or leads_db.setting("stopped") or leads_db.setting("batch_running"):
+        return
+    due = [lead for region in outreach_mod.INTL_MIX if outreach_mod.daily_window(region)
+           for lead in leads_db.intl_due(region)]
+    if not due or await _image_mailer(context) is None:
+        return
+    leads_db.set_setting("batch_running", "1")
+    lines = "\n".join(f"{i}. {REGION_ZH.get(lead['region'], lead['region'])} · {lead['name']} · {lead['email']}"
+                      for i, lead in enumerate(due, 1))
+    note = await context.bot.send_message(
+        chat_id=int(OWNER_CHAT_ID), disable_web_page_preview=True,
+        text=f"🌍 现在是他们那边上班时间，发今天的 {len(due)} 封（每封都带为这家店画的设计图）：\n\n{lines}\n\n想停就发 /outreach_stop。")
+    start_sending(note, [lead["email"] for lead in due], batch=True)
+
+
+async def find_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Keep about a week of businesses waiting in every country, found on the map."""
+    if leads_db is None or not OWNER_CHAT_ID:
+        return
+    shares = {**outreach_mod.MIX, **outreach_mod.INTL_MIX}
+    emails, names = leads_db.known()
+    added: dict[str, int] = {}
+    day = dt.date.today().toordinal()
+    for region, share in shares.items():
+        if region not in leadfinder.COUNTRY or share <= 0:
+            continue
+        need = share * 5 - leads_db.waiting(region)
+        kinds = sorted(leadfinder.TAGS)
+        random.Random(day * 31 + sum(map(ord, region))).shuffle(kinds)
+        for kind in kinds[:2]:
+            if need <= 0:
+                break
+            fresh = [lead for lead in await leadfinder.find(region, kind)
+                     if lead["email"] not in emails and lead["name"].lower() not in names][:need]
+            if fresh:
+                leads_db.add(fresh)
+                emails |= {lead["email"] for lead in fresh}
+                names |= {lead["name"].lower() for lead in fresh}
+                added[region] = added.get(region, 0) + len(fresh)
+                need -= len(fresh)
+    if added:
+        parts = "、".join(f"{REGION_ZH.get(r, r)} {n}" for r, n in added.items())
+        logger.info("地图上新找到 %s 家：%s", sum(added.values()), parts)
+        try:
+            await context.bot.send_message(
+                chat_id=int(OWNER_CHAT_ID),
+                text=f"🗺 在地图上新找到 {sum(added.values())} 家有公开邮箱的小店：{parts}。\n"
+                     "每家都会配一张专属设计图，在他们当地的上班时间发出去。")
+        except TelegramError:
+            logger.exception("新名单提醒发送失败")
+
+
 async def batch_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """The English-market list (leads with a "batch"): once the Gmail script can carry images,
     send them all in the recipients' working hours. Until then, ask the owner once to update it."""
     if leads_db is None or not OWNER_CHAT_ID or leads_db.setting("stopped") or leads_db.setting("batch_running"):
         return
     waiting = [lead for lead in leads_db.batch_waiting() if outreach_mod.in_work_hours(lead)]
-    box = mailer()
-    if not waiting or box is None:
-        return
-    try:
-        version = await box.version()
-    except outreach_mod.MailError as exc:
-        logger.warning("查 Gmail 发信脚本版本失败：%s", exc)
-        return
-    if version < outreach_mod.MAILER_VERSION:
-        if not leads_db.setting("update_asked"):
-            leads_db.set_setting("update_asked", "1")
-            await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=MAIL_UPDATE_TEXT,
-                                           disable_web_page_preview=True)
-            await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=outreach_mod.script_for(leads_db.secret()))
+    if not waiting or await _image_mailer(context) is None:
         return
     leads_db.set_setting("batch_running", "1")
     lines = "\n".join(f"{i}. {lead['name']} · {lead['email']}" for i, lead in enumerate(waiting, 1))
@@ -1471,6 +1546,9 @@ def schedule_outreach(application: Application) -> None:
         application.job_queue.run_daily(outreach_daily_job, time=when, name="outreach-daily")
     application.job_queue.run_repeating(email_replies_job, interval=1800, first=120, name="email-replies")
     application.job_queue.run_repeating(batch_job, interval=300, first=60, name="outreach-batch")
+    application.job_queue.run_repeating(intl_daily_job, interval=900, first=180, name="outreach-intl")
+    application.job_queue.run_daily(find_leads_job, time=dt.time(1, 0, tzinfo=dt.timezone.utc), name="find-leads")
+    application.job_queue.run_once(find_leads_job, when=120, name="find-leads-now")
 
 
 def _fit_notice(text: str) -> str:

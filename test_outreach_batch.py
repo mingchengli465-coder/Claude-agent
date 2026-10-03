@@ -21,7 +21,7 @@ UK = {"email": "Jill@GaleGreen.com", "name": "Gale Green Cottage", "region": "uk
 subject, body = om.compose(UK)
 assert subject == "A quick mockup for Gale Green Cottage"
 assert body.startswith("Hi Jill,\n\nI came across Gale Green Cottage on the Ingleton village website.")
-assert "(mockup: https://mingchengli465-coder.github.io/Claude-agent/mockups/gale-green.png)" in body
+assert "(mockup: https://worker-production-42fb.up.railway.app/mockups/gale-green.png)" in body
 assert "你好" not in body and "English below" not in body and "{" not in body and 'reply "no thanks"' in body
 assert "?from=uk" in body and "US$70 (about £55)" in body
 html = om.compose_html({**UK, "name": "Bob's <B&B>"})
