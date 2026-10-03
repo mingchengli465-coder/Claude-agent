@@ -16,24 +16,27 @@ import outreach as om
 import bot
 
 # --- reading the map -------------------------------------------------------------------------
-q = leadfinder.query("au", "bakery")
-assert '"ISO3166-1"="AU"' in q and '["shop"="pastry"]["email"]' in q and '["shop"="bakery"]["contact:email"]' in q
+q = leadfinder.query(-31.95, 115.86, 25000)
+assert '["shop"="pastry"]["email"](around:25000,-31.95,115.86)' in q and '["tourism"="guest_house"]["contact:email"]' in q
+assert leadfinder.town_for("au", 10) != leadfinder.town_for("au", 11), "a different town each day"
+assert leadfinder.town_for("au", 10, 0) != leadfinder.town_for("au", 10, 1)
 ELEMENTS = [
-    {"tags": {"name": "Rosie's Cakes", "email": "Hello@RosiesCakes.com.au", "addr:city": "Perth", "website": "https://rosiescakes.com.au"}},
-    {"tags": {"name": "Big Chain Bakery", "email": "info@chain.com", "brand": "Chain"}},
+    {"tags": {"name": "Rosie's Cakes", "shop": "pastry", "email": "Hello@RosiesCakes.com.au", "addr:city": "Perth", "website": "https://rosiescakes.com.au"}},
+    {"tags": {"name": "Not Ours", "shop": "hardware", "email": "x@hardware.au"}},
+    {"tags": {"name": "Big Chain Bakery", "shop": "bakery", "email": "info@chain.com", "brand": "Chain"}},
     {"tags": {"email": "noname@ex.com"}},
-    {"tags": {"name": "Bad Email", "email": "not an email"}},
-    {"tags": {"name": "Via Booking", "email": "x@booking.com"}},
-    {"tags": {"name": "Closed Shop", "contact:email": "a@closed.au", "disused:shop": "bakery"}},
-    {"tags": {"name": "Two Emails", "contact:email": "first@two.au; second@two.au", "addr:town": "Margaret River"}},
-    {"tags": {"name": "Rosie's Again", "email": "hello@rosiescakes.com.au"}},
+    {"tags": {"name": "Bad Email", "shop": "bakery", "email": "not an email"}},
+    {"tags": {"name": "Via Booking", "shop": "bakery", "email": "x@booking.com"}},
+    {"tags": {"name": "Closed Shop", "shop": "bakery", "contact:email": "a@closed.au", "disused:shop": "bakery"}},
+    {"tags": {"name": "Two Emails", "tourism": "guest_house", "contact:email": "first@two.au; second@two.au", "addr:town": "Margaret River"}},
+    {"tags": {"name": "Rosie's Again", "shop": "bakery", "email": "hello@rosiescakes.com.au"}},
 ]
-found = leadfinder.pick(ELEMENTS, "au", "bakery")
+found = leadfinder.pick(ELEMENTS, "au")
 assert [l["email"] for l in found] == ["hello@rosiescakes.com.au", "first@two.au"]
 rosie = found[0]
 assert rosie["city"] == "Perth" and rosie["site"] == "https://rosiescakes.com.au" and rosie["cat"] == "bakery"
 assert rosie["first"] == "I came across Rosie's Cakes on the map while looking at cake shops and bakeries in Perth."
-assert found[1]["city"] == "Margaret River"
+assert found[1]["city"] == "Margaret River" and found[1]["cat"] == "bnb"
 print("PASS the map gives independent, open businesses with a real email; chains and platforms are left out")
 
 
@@ -51,11 +54,12 @@ async def overpass():
     app.router.add_post("/b", good)
     async with TestServer(app) as server:
         leadfinder.OVERPASS = [str(server.make_url("/a")), str(server.make_url("/b"))]
-        leads = await leadfinder.find("au", "bakery")
-    assert calls[0] == "broken" and '"ISO3166-1"="AU"' in calls[1]
+        leads = await leadfinder.find("au", 3)
+    _, lat, lon, radius = leadfinder.town_for("au", 3)
+    assert calls[0] == "broken" and f"(around:{radius},{lat},{lon})" in calls[1]
     assert sorted(l["email"] for l in leads) == ["first@two.au", "hello@rosiescakes.com.au"]
     leadfinder.OVERPASS = ["http://127.0.0.1:1/x"]
-    assert await leadfinder.find("au", "bakery") == [], "no map, no leads, no crash"
+    assert await leadfinder.find("au", 3) == [], "no map, no leads, no crash"
 
 asyncio.run(overpass())
 print("PASS when one map server is down the next one answers")
@@ -143,15 +147,17 @@ async def main():
         ctx = types.SimpleNamespace(bot=Bot())
 
         asked = []
-        async def fake_find(region, kind):
-            asked.append((region, kind))
-            return [{**rosie, "region": region, "email": f"{region}-{kind}-{i}@ex.com", "name": f"{region} {kind} {i}",
-                     "cat": kind} for i in range(40)] + [{**rosie, "email": "old@ex.au", "name": "Already Known"}]
+        async def fake_find(region, day, attempt=0):
+            asked.append((region, attempt))
+            kind = "bnb"
+            return [{**rosie, "region": region, "email": f"{region}-{attempt}-{i}@ex.com", "name": f"{region} {attempt} {i}",
+                     "cat": kind} for i in range(15)] + [{**rosie, "email": "old@ex.au", "name": "Already Known"}]
         real_find = leadfinder.find
         leadfinder.find = fake_find
         await bot.find_leads_job(ctx)
         leadfinder.find = real_find
         assert bot.leads_db.waiting("au") == om.INTL_MIX["au"] * 5, "about a week waiting in each country"
+        assert ("au", 1) in asked and ("ie", 1) not in asked, "a second town only when the first wasn't enough"
         assert bot.leads_db.waiting("uk") == om.INTL_MIX["uk"] * 5
         assert "在地图上新找到" in told[0] and "澳洲" in told[0]
         told.clear()
