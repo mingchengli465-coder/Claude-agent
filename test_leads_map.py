@@ -17,7 +17,7 @@ import bot
 
 # --- reading the map -------------------------------------------------------------------------
 q = leadfinder.query(-31.95, 115.86, 25000)
-assert '["shop"="pastry"]["email"](around:25000,-31.95,115.86)' in q and '["tourism"="guest_house"]["contact:email"]' in q
+assert '["shop"="pastry"]["email"](-32.1746,115.5953,-31.7254,116.1247)' in q and '["tourism"="guest_house"]["contact:email"]' in q
 assert leadfinder.town_for("au", 10) != leadfinder.town_for("au", 11), "a different town each day"
 assert leadfinder.town_for("au", 10, 0) != leadfinder.town_for("au", 10, 1)
 ELEMENTS = [
@@ -56,7 +56,7 @@ async def overpass():
         leadfinder.OVERPASS = [str(server.make_url("/a")), str(server.make_url("/b"))]
         leads = await leadfinder.find("au", 3)
     _, lat, lon, radius = leadfinder.town_for("au", 3)
-    assert calls[0] == "broken" and f"(around:{radius},{lat},{lon})" in calls[1]
+    assert calls[0] == "broken" and calls[1] == leadfinder.query(lat, lon, radius)
     assert sorted(l["email"] for l in leads) == ["first@two.au", "hello@rosiescakes.com.au"]
     leadfinder.OVERPASS = ["http://127.0.0.1:1/x"]
     assert await leadfinder.find("au", 3) == [], "no map, no leads, no crash"

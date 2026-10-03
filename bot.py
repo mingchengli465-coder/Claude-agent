@@ -1320,6 +1320,7 @@ async def send_emails(message, emails: list[str], batch: bool = False) -> None:
                 continue
             failed_in_a_row = 0
             leads_db.mark(email, "sent")
+            logger.info("邮件已发给 %s（%s）%s", lead["name"], lead.get("region"), "，带设计图" if image else "")
             done.append(f"✅ {lead['name']}")
     finally:
         if batch:

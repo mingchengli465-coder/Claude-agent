@@ -13,6 +13,7 @@ search covers one town and its surroundings; the town changes from day to day.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import random
 import re
@@ -62,7 +63,9 @@ NOT_THEIRS = ("booking.com", "airbnb", "example.", "wix.com", "sentry.", "facebo
 
 def query(lat: float, lon: float, radius: int) -> str:
     """Every kind of business we write to, with an email, around one town."""
-    near = f"(around:{radius},{lat},{lon})"
+    # a box around the town: much lighter for the servers than "around"
+    dlat, dlon = radius / 111_320, radius / (111_320 * max(0.2, math.cos(math.radians(lat))))
+    near = f"({lat - dlat:.4f},{lon - dlon:.4f},{lat + dlat:.4f},{lon + dlon:.4f})"
     parts = "".join(f'nwr["{k}"="{v}"]["{key}"]{near};' for tags in TAGS.values() for k, v in tags
                     for key in ("email", "contact:email"))
     return f"[out:json][timeout:50];({parts});out tags 600;"
