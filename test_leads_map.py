@@ -17,7 +17,8 @@ import bot
 
 # --- reading the map -------------------------------------------------------------------------
 q = leadfinder.query(-31.95, 115.86, 25000)
-assert '["shop"="pastry"]["email"](-32.1746,115.5953,-31.7254,116.1247)' in q and '["tourism"="guest_house"]["contact:email"]' in q
+assert '["shop"~"^(florist|pastry|bakery|beauty|pet_grooming)$"]["email"](-32.1746,115.5953,-31.7254,116.1247)' in q
+assert '["tourism"~"^(guest_house)$"]["contact:email"]' in q and q.count("nwr[") == 4
 assert leadfinder.town_for("au", 10) != leadfinder.town_for("au", 11), "a different town each day"
 assert leadfinder.town_for("au", 10, 0) != leadfinder.town_for("au", 10, 1)
 ELEMENTS = [
