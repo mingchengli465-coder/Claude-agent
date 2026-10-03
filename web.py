@@ -3,6 +3,7 @@
     GET  /            the owner's own site: services, prices, and the chat window
     GET  /demo        a demo page to send merchants (the chat window is on it)
     GET  /video       the 38-second intro video (media/), linked from the cold emails
+    GET  /mockups/<x>.png  a business's mockup from a cold email (web_static/mockups, or drawn ones on the volume)
     GET  /widget.js   the chat window itself; one <script> tag embeds it in any site
     POST /api/chat    a visitor's message -> the AI's reply (customer_service.handle)
     GET  /api/messages  new messages for a visitor, so the owner's replies show up
@@ -48,6 +49,7 @@ _FAVICON = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect w
             " text-anchor='middle'>v</text></svg>")
 _FONT = re.compile(r"^[a-z0-9-]+\.woff2$")
 _GUIDE = re.compile(r"^[a-z0-9-]+\.html$")
+_MOCKUP = re.compile(r"^[a-z0-9-]+\.png$")
 # Per IP address: messages a minute, and new visitor ids an hour (each new
 # visitor pings the owner, so this is what keeps a script from spamming them).
 IP_MESSAGES_PER_MINUTE = int(os.environ.get("WEB_IP_MESSAGES_PER_MINUTE", "20"))
@@ -177,6 +179,7 @@ class WebChat:
         app.router.add_get("/demo", self.page)
         app.router.add_get("/video", self.video)
         app.router.add_get("/media/{name}", self.media)
+        app.router.add_get("/mockups/{name}", self.mockup)
         app.router.add_get("/widget.js", self.widget)
         app.router.add_get("/fonts/{name}", self.font)
         app.router.add_get("/healthz", self.health)
@@ -223,6 +226,16 @@ class WebChat:
         if name not in _MEDIA or not path.is_file():
             raise web.HTTPNotFound()
         return web.FileResponse(path, headers={"Content-Type": _MEDIA[name], "Cache-Control": "public, max-age=86400"})
+
+    async def mockup(self, request: web.Request) -> web.StreamResponse:
+        name = request.match_info["name"]
+        if not _MOCKUP.match(name):
+            raise web.HTTPNotFound()
+        for folder in (_STATIC / "mockups", Path(cs.CS_DB_PATH).with_name("mockups")):
+            if (folder / name).is_file():
+                return web.FileResponse(folder / name, headers={"Content-Type": "image/png",
+                                                                "Cache-Control": "public, max-age=86400"})
+        raise web.HTTPNotFound()
 
     async def sites_home(self, request: web.Request) -> web.Response:
         return web.Response(text="🌐", content_type="text/plain")

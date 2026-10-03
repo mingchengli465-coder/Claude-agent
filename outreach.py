@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -63,7 +64,11 @@ REGION_TZ = {"uk": "Europe/London", "ie": "Europe/Dublin", "au": "Australia/Sydn
 WORK_HOURS = (dt.time(8, 30), dt.time(18, 0))
 BATCH_GAP_SECONDS = float(os.environ.get("OUTREACH_BATCH_GAP_SECONDS", "90"))
 MOCKUP_DIR = Path(__file__).with_name("web_static") / "mockups"
-MOCKUP_URL = os.environ.get("OUTREACH_MOCKUP_URL", "https://mingchengli465-coder.github.io/Claude-agent/mockups/{slug}.png")
+# the plain-text letter links its mockup here (web.py serves both the committed ones and the drawn ones)
+MOCKUP_URL = os.environ.get("OUTREACH_MOCKUP_URL", "https://worker-production-42fb.up.railway.app/mockups/{slug}.png")
+# English-speaking countries searched and emailed every working day: how many a day each
+INTL_MIX = parse_mix(os.environ.get("OUTREACH_INTL_MIX", "uk:5,au:4,ie:2,nz:2"))
+INTL_HOURS = (dt.time(9, 30), dt.time(16, 0))
 OPT_OUT = re.compile(r"no thanks|not interested|unsubscribe|remove me|stop email|不用了|不需要|唔使|唔需要", re.I)
 
 EN_SUBJECT = "Quick idea for {name}'s customer enquiries"
@@ -218,7 +223,7 @@ INTL_BODY = """{greeting}
 
 It answers from your own information ({facts}), takes down every enquiry, and sends it straight to you to confirm.
 
-I'm Vincent, a student developer in Singapore, and I set these up for small businesses. I'd be happy to build you a free trial version first, so you can see how it handles real questions. If you decide to keep it, it's a one-off US$70 (about £55), then US$9.9 (about £8) a month, cancel anytime.
+I'm Vincent, a student developer in Singapore, and I set these up for small businesses. I'd be happy to build you a free trial version first, so you can see how it handles real questions. If you decide to keep it, it's a one-off {price}, cancel anytime.
 
 Here's a 38-second video of how it works: {video}
 
@@ -227,13 +232,20 @@ Vincent
 {link}
 
 P.S. If this isn't for you, just reply "no thanks" and I won't email again."""
+INTL_PRICE = {"uk": "US$70 (about £55), then US$9.9 (about £8) a month", "ie": "US$70 (about €65), then US$9.9 (about €9) a month",
+              "au": "US$70 (about A$110), then US$9.9 (about A$15) a month",
+              "nz": "US$70 (about NZ$120), then US$9.9 (about NZ$17) a month"}
 INTL_PROBLEM = {
     "bnb": "Guests often message in the evening asking about rooms, dates and arrival times, and by morning some have booked elsewhere.",
     "florist": "A lot of flower orders and wedding enquiries arrive after the shop has closed, and by morning some customers have ordered elsewhere.",
     "tutor": "Parents often look for tuition in the evening, once the children are in bed, and by morning some have enquired elsewhere.",
+    "bakery": "Cake orders often start late in the evening with questions about sizes, flavours and dates, and by morning some customers have ordered elsewhere.",
+    "beauty": "Clients often message late in the evening to ask about treatments and book a time, and by morning some have booked elsewhere.",
+    "groomer": "Owners often message in the evening about prices and free slots, and by morning some have booked elsewhere.",
 }
 INTL_FACTS = {"bnb": "rooms, prices, house rules", "florist": "flowers, prices, delivery areas",
-              "tutor": "courses, fees, timetables"}
+              "tutor": "courses, fees, timetables", "bakery": "cakes, flavours, prices, lead times",
+              "beauty": "treatments, prices, opening hours", "groomer": "services, prices, opening hours"}
 MOCKUP_MARK = "{mockup}"
 
 
@@ -241,25 +253,56 @@ def is_intl(lead: dict) -> bool:
     return (lead.get("region") or "") in REGION_TZ
 
 
+def mockup_slug(lead: dict) -> str:
+    """The lead's mockup: one drawn for it before (web_static/mockups), else one drawn on demand."""
+    from mockup import kind_of
+    if lead.get("mockup"):
+        return lead["mockup"]
+    if lead.get("kind") == "agency" or not kind_of(lead):
+        return ""
+    return "m-" + hashlib.sha1(lead["email"].lower().encode()).hexdigest()[:12]
+
+
 def _intl_parts(lead: dict) -> tuple[str, str]:
-    cat = lead.get("cat") or "bnb"
+    from mockup import kind_of
+    cat = kind_of(lead) or "bnb"
     host = (lead.get("host") or "").strip()
     fill = {"name": lead["name"], "first": lead.get("first") or f"I came across {lead['name']} online.",
             "greeting": f"Hi {host}," if host else "Hello,", "problem": INTL_PROBLEM.get(cat, INTL_PROBLEM["bnb"]),
             "facts": INTL_FACTS.get(cat, INTL_FACTS["bnb"]), "video": VIDEO_LINK.replace("from=email", "from=uk"),
-            "link": SITE_LINK.replace("from=email", "from=uk"), "mockup": MOCKUP_MARK}
+            "link": SITE_LINK.replace("from=email", "from=uk"), "mockup": MOCKUP_MARK,
+            "price": INTL_PRICE.get(lead.get("region") or "", "US$70, then US$9.9 a month")}
     return INTL_SUBJECT.format(**fill), INTL_BODY.format(**fill)
 
 
-def mockup_png(lead: dict) -> bytes | None:
-    slug = lead.get("mockup") or ""
-    path = MOCKUP_DIR / f"{slug}.png"
-    return path.read_bytes() if re.fullmatch(r"[a-z0-9-]+", slug) and path.is_file() else None
+def mockup_png(lead: dict, cache: Path | None = None) -> bytes | None:
+    """The PNG: committed (web_static/mockups), cached in `cache`, or drawn now and cached there."""
+    slug = mockup_slug(lead)
+    if not re.fullmatch(r"[a-z0-9-]+", slug or ""):
+        return None
+    for folder in (MOCKUP_DIR, cache):
+        if folder is not None and (folder / f"{slug}.png").is_file():
+            return (folder / f"{slug}.png").read_bytes()
+    if lead.get("mockup") or cache is None:
+        return None  # a named mockup that isn't there is not redrawn
+    import mockup
+    png = mockup.render(lead)
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / f"{slug}.png").write_bytes(png)
+    return png
+
+
+MOCKUP_INTRO = "我為 {name} 做了一張示意圖：AI 客服放在你們網站上的樣子 / A quick mockup of {name}'s website with the AI assistant on it:"
 
 
 def compose_html(lead: dict) -> str:
-    """The same English letter as HTML, with the mockup shown inline (cid:mockup)."""
-    _, body = _intl_parts(lead)
+    """The letter as HTML, with the mockup shown inline (cid:mockup): in place in the English letter,
+    at the top of the 繁體 + English one."""
+    if is_intl(lead):
+        _, body = _intl_parts(lead)
+    else:
+        _, body = compose(lead)
+        body = MOCKUP_INTRO.format(name=lead["name"]) + "\n\n" + MOCKUP_MARK + "\n\n" + body
     import html as _html
     link = re.compile(r"(https://\S+)")
     paras = []
@@ -273,6 +316,12 @@ def compose_html(lead: dict) -> str:
         paras.append(f"<p>{text}</p>")
     return ('<div style="font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1d1d1f;max-width:600px">'
             + "".join(paras) + "</div>")
+
+
+def daily_window(region: str, now: dt.datetime | None = None) -> bool:
+    """The everyday English-market emails: weekday mornings, recipient's clock (replies come best then)."""
+    local = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo(REGION_TZ[region]))
+    return local.weekday() < 5 and INTL_HOURS[0] <= local.time() <= INTL_HOURS[1]
 
 
 def in_work_hours(lead: dict, now: dt.datetime | None = None) -> bool:
@@ -293,8 +342,8 @@ def compose(lead: dict) -> tuple[str, str]:
     English-speaking markets get the English letter alone, with a link to their mockup."""
     if is_intl(lead):
         subject, body = _intl_parts(lead)
-        url = MOCKUP_URL.format(slug=lead.get("mockup") or "")
-        return subject, body.replace(MOCKUP_MARK, f"(mockup: {url})" if lead.get("mockup") else "").replace("\n\n\n\n", "\n\n")
+        slug = mockup_slug(lead)
+        return subject, body.replace(MOCKUP_MARK, f"(mockup: {MOCKUP_URL.format(slug=slug)})" if slug else "").replace("\n\n\n\n", "\n\n")
     fill = {"name": lead["name"], "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL, "demo": DEMO_LINK, "video": VIDEO_LINK}
     region = lead.get("region") or "sg"
     # "Monice Bakes 你好" but "思思蛋糕你好": a space only after a Latin name
@@ -321,6 +370,10 @@ def parse_leads(raw: str) -> list[dict]:
     return [i for i in items if isinstance(i, dict) and "@" in str(i.get("email", "")) and i.get("name")]
 
 
+# the daily HK/SG/MY batch (and its limit) leaves the English-market countries alone
+ASIA = "COALESCE(region, '') NOT IN ('uk', 'ie', 'au', 'nz', 'ca', 'us')"
+
+
 class MailError(RuntimeError):
     pass
 
@@ -342,7 +395,7 @@ class Leads:
             columns = [r[1] for r in db.execute("PRAGMA table_info(leads)")]
             if "first_zh" not in columns:
                 db.execute("ALTER TABLE leads ADD COLUMN first_zh TEXT")
-            for column in ("kind", "batch", "mockup", "cat", "host"):
+            for column in ("kind", "batch", "mockup", "cat", "host", "city", "site"):
                 if column not in columns:
                     db.execute(f"ALTER TABLE leads ADD COLUMN {column} TEXT")
 
@@ -372,7 +425,7 @@ class Leads:
     def add(self, leads: list[dict]) -> int:
         """New businesses are added; ones already known keep their status. Businesses not yet
         emailed take the latest wording (name, first lines), so a fixed list applies before sending."""
-        fields = ("name", "region", "lang", "first", "first_zh", "kind", "batch", "mockup", "cat", "host")
+        fields = ("name", "region", "lang", "first", "first_zh", "kind", "batch", "mockup", "cat", "host", "city", "site")
         default = {"region": "sg", "lang": "en", "kind": "shop"}
         rows = [(l["email"].strip().lower(),) + tuple(str(l.get(f, default.get(f, ""))) for f in fields) for l in leads]
         with self._db() as db:
@@ -401,7 +454,7 @@ class Leads:
 
     def sent_today(self, now: dt.datetime | None = None) -> int:
         with self._db() as db:
-            return db.execute("SELECT COUNT(*) FROM leads WHERE sent_at >= ? AND COALESCE(batch, '') = ''",
+            return db.execute(f"SELECT COUNT(*) FROM leads WHERE sent_at >= ? AND COALESCE(batch, '') = '' AND {ASIA}",
                               (self._day_start(now).isoformat(),)).fetchone()[0]
 
     def room_today(self, now: dt.datetime | None = None) -> int:
@@ -413,7 +466,7 @@ class Leads:
         room = self.room_today(now)
         with self._db() as db:
             waiting = [dict(r) for r in db.execute(
-                "SELECT * FROM leads WHERE status='new' AND COALESCE(batch, '') = '' ORDER BY rowid")]
+                f"SELECT * FROM leads WHERE status='new' AND COALESCE(batch, '') = '' AND {ASIA} ORDER BY rowid")]
             sent = dict(db.execute("SELECT region, COUNT(*) FROM leads WHERE sent_at >= ? GROUP BY region",
                                    (self._day_start(now).isoformat(),)).fetchall())
         batch = []
@@ -422,6 +475,30 @@ class Leads:
             batch += [l for l in waiting if l["region"] == region][:min(left, room - len(batch))]
         batch += [l for l in waiting if l not in batch][:room - len(batch)]
         return batch
+
+    def intl_due(self, region: str, now: dt.datetime | None = None) -> list[dict]:
+        """Today's English-market emails for one country: up to its INTL_MIX share, counted on
+        that country's own calendar day."""
+        now = now or dt.datetime.now(dt.timezone.utc)
+        tz = ZoneInfo(REGION_TZ[region])
+        start = dt.datetime.combine(now.astimezone(tz).date(), dt.time(), tz).astimezone(dt.timezone.utc)
+        with self._db() as db:
+            sent = db.execute("SELECT COUNT(*) FROM leads WHERE region=? AND sent_at >= ? AND COALESCE(batch, '') = ''",
+                              (region, start.isoformat())).fetchone()[0]
+            room = max(0, INTL_MIX.get(region, 0) - sent)
+            return [dict(r) for r in db.execute(
+                "SELECT * FROM leads WHERE status='new' AND region=? AND COALESCE(batch, '') = '' ORDER BY rowid LIMIT ?",
+                (region, room))]
+
+    def waiting(self, region: str) -> int:
+        with self._db() as db:
+            return db.execute("SELECT COUNT(*) FROM leads WHERE status='new' AND region=?", (region,)).fetchone()[0]
+
+    def known(self) -> tuple[set[str], set[str]]:
+        """Every email and (lower-case) name on the list, sent or not."""
+        with self._db() as db:
+            rows = db.execute("SELECT email, name FROM leads").fetchall()
+        return {r[0].lower() for r in rows}, {r[1].lower() for r in rows}
 
     def batch_waiting(self) -> list[dict]:
         """Leads in a batch (see OUTREACH_LEADS) not emailed yet."""
