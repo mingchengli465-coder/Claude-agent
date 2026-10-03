@@ -91,7 +91,7 @@ print("PASS OUTREACH_MIX takes 6 from Hong Kong and 4 from Singapore, and fills 
 
 # --- the Apps Script mailer, against a fake that redirects like the real one ------------------
 async def mailer_tests():
-    sent, results = [], {}
+    sent, results, searched = [], {}, []
 
     async def exec_(request):
         req = await request.json()
@@ -105,6 +105,7 @@ async def mailer_tests():
             else:
                 sent.append(req); out = {"ok": True}
         elif req["action"] == "replies":
+            searched.append(len(req["emails"]))
             out = {"ok": True, "replies": [
                 {"id": "r1", "lead": "info@whyzee.com.sg", "bounce": False, "subject": "Re: Quick idea",
                  "text": "Hi Vincent, sounds interesting. How does the demo work?"},
@@ -140,6 +141,9 @@ async def mailer_tests():
             except om.MailError as exc:
                 assert words in str(exc), exc
         assert await box.replies([]) == []
+        searched.clear()
+        await box.replies([f"x{i}@ex.com" for i in range(40)])
+        assert searched == [15, 15, 10], "a few addresses per Gmail search"
         print("PASS the mailer follows the Apps Script redirect; a wrong secret, a private deployment "
               "and no network are readable errors")
 

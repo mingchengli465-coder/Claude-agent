@@ -520,9 +520,11 @@ class Leads:
             return [dict(r) for r in db.execute(
                 "SELECT * FROM leads WHERE status='new' AND COALESCE(batch, '') != '' ORDER BY rowid")]
 
-    def emailed(self) -> list[str]:
+    def emailed(self, days: int = 21) -> list[str]:
+        """Businesses emailed in the last few weeks: the ones whose replies are still worth watching."""
+        since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
         with self._db() as db:
-            return [r[0] for r in db.execute("SELECT email FROM leads WHERE sent_at IS NOT NULL")]
+            return [r[0] for r in db.execute("SELECT email FROM leads WHERE sent_at >= ? ORDER BY sent_at DESC", (since,))]
 
     def counts(self) -> dict[str, int]:
         with self._db() as db:
@@ -580,7 +582,10 @@ class Mailer:
             extra = {"html": html, "images": {"mockup": base64.b64encode(image).decode()} if image else {}}
         await self._call("send", to=to, subject=subject, body=body, name=SENDER_NAME, **extra)
 
-    async def replies(self, emails: list[str], days: int = 3) -> list[dict]:
-        if not emails:
-            return []
-        return (await self._call("replies", emails=emails, days=days)).get("replies", [])
+    async def replies(self, emails: list[str], days: int = 3, chunk: int = 15) -> list[dict]:
+        """Replies from these addresses. A few at a time: one Gmail search with every address in it
+        gets too long for Gmail once the list grows."""
+        found = []
+        for i in range(0, len(emails), chunk):
+            found += (await self._call("replies", emails=emails[i:i + chunk], days=days)).get("replies", [])
+        return found
