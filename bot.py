@@ -1436,8 +1436,8 @@ async def find_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     for region, share in shares.items():
         if region not in leadfinder.COUNTRY or share <= 0:
             continue
-        need = share * 5 - leads_db.waiting(region)
-        for attempt in range(2):  # two towns at most a day, to be kind to the free map servers
+        need = share * 3 - leads_db.waiting(region)
+        for attempt in range(4):  # four towns at most a day, to be kind to the free map servers
             if need <= 0:
                 break
             fresh = [lead for lead in await leadfinder.find(region, day, attempt)

@@ -151,14 +151,14 @@ async def main():
             asked.append((region, attempt))
             kind = "bnb"
             return [{**rosie, "region": region, "email": f"{region}-{attempt}-{i}@ex.com", "name": f"{region} {attempt} {i}",
-                     "cat": kind} for i in range(15)] + [{**rosie, "email": "old@ex.au", "name": "Already Known"}]
+                     "cat": kind} for i in range(10)] + [{**rosie, "email": "old@ex.au", "name": "Already Known"}]
         real_find = leadfinder.find
         leadfinder.find = fake_find
         await bot.find_leads_job(ctx)
         leadfinder.find = real_find
-        assert bot.leads_db.waiting("au") == om.INTL_MIX["au"] * 5, "about a week waiting in each country"
-        assert ("au", 1) in asked and ("ie", 1) not in asked, "a second town only when the first wasn't enough"
-        assert bot.leads_db.waiting("uk") == om.INTL_MIX["uk"] * 5
+        assert bot.leads_db.waiting("au") == om.INTL_MIX["au"] * 3, "a few days waiting in each country"
+        assert ("uk", 1) in asked and ("ie", 1) not in asked, "a second town only when the first wasn't enough"
+        assert bot.leads_db.waiting("uk") == om.INTL_MIX["uk"] * 3
         assert "在地图上新找到" in told[0] and "澳洲" in told[0]
         told.clear()
 
