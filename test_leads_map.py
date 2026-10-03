@@ -17,7 +17,7 @@ import bot
 
 # --- reading the map -------------------------------------------------------------------------
 q = leadfinder.query(-31.95, 115.86, 25000)
-assert '["shop"="pastry"]["email"](around:25000,-31.95,115.86)' in q and '["tourism"="guest_house"]["contact:email"]' in q
+assert '["shop"="pastry"]["email"](-32.1746,115.5953,-31.7254,116.1247)' in q and '["tourism"="guest_house"]["contact:email"]' in q
 assert leadfinder.town_for("au", 10) != leadfinder.town_for("au", 11), "a different town each day"
 assert leadfinder.town_for("au", 10, 0) != leadfinder.town_for("au", 10, 1)
 ELEMENTS = [
@@ -56,7 +56,7 @@ async def overpass():
         leadfinder.OVERPASS = [str(server.make_url("/a")), str(server.make_url("/b"))]
         leads = await leadfinder.find("au", 3)
     _, lat, lon, radius = leadfinder.town_for("au", 3)
-    assert calls[0] == "broken" and f"(around:{radius},{lat},{lon})" in calls[1]
+    assert calls[0] == "broken" and calls[1] == leadfinder.query(lat, lon, radius)
     assert sorted(l["email"] for l in leads) == ["first@two.au", "hello@rosiescakes.com.au"]
     leadfinder.OVERPASS = ["http://127.0.0.1:1/x"]
     assert await leadfinder.find("au", 3) == [], "no map, no leads, no crash"
@@ -151,14 +151,14 @@ async def main():
             asked.append((region, attempt))
             kind = "bnb"
             return [{**rosie, "region": region, "email": f"{region}-{attempt}-{i}@ex.com", "name": f"{region} {attempt} {i}",
-                     "cat": kind} for i in range(15)] + [{**rosie, "email": "old@ex.au", "name": "Already Known"}]
+                     "cat": kind} for i in range(10)] + [{**rosie, "email": "old@ex.au", "name": "Already Known"}]
         real_find = leadfinder.find
         leadfinder.find = fake_find
         await bot.find_leads_job(ctx)
         leadfinder.find = real_find
-        assert bot.leads_db.waiting("au") == om.INTL_MIX["au"] * 5, "about a week waiting in each country"
-        assert ("au", 1) in asked and ("ie", 1) not in asked, "a second town only when the first wasn't enough"
-        assert bot.leads_db.waiting("uk") == om.INTL_MIX["uk"] * 5
+        assert bot.leads_db.waiting("au") == om.INTL_MIX["au"] * 3, "a few days waiting in each country"
+        assert ("uk", 1) in asked and ("ie", 1) not in asked, "a second town only when the first wasn't enough"
+        assert bot.leads_db.waiting("uk") == om.INTL_MIX["uk"] * 3
         assert "在地图上新找到" in told[0] and "澳洲" in told[0]
         told.clear()
 

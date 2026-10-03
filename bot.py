@@ -1307,9 +1307,24 @@ async def send_emails(message, emails: list[str], batch: bool = False) -> None:
             if image:
                 html = outreach_mod.compose_html(lead)
             try:
-                await box.send(email, subject, body, html=html, image=image)
+                try:
+                    await box.send(email, subject, body, html=html, image=image)
+                except outreach_mod.MailError as exc:
+                    if not outreach_mod.is_transient(exc):
+                        raise
+                    logger.warning("邮件没发出去（%s），过一会儿再试一次：%s", email, exc)
+                    await asyncio.sleep(RETRY_SECONDS)
+                    await box.send(email, subject, body, html=html, image=image)
             except outreach_mod.MailError as exc:
                 logger.warning("邮件没发出去（%s）：%s", email, exc)
+                if outreach_mod.is_transient(exc):
+                    # Gmail's hiccup, not the address: it stays on the list for the next round
+                    failed_in_a_row += 1
+                    if failed_in_a_row >= 2:
+                        problem = f"Gmail 暂时没反应，后面的先停了，过一会儿自动接着发：{exc}"
+                        break
+                    done.append(f"⏳ {lead['name']} 这次没发出去，稍后自动重发")
+                    continue
                 failed_in_a_row += 1
                 if failed_in_a_row >= 2:
                     # twice in a row is Gmail or the script, not one bad address: keep the rest for later
@@ -1320,6 +1335,7 @@ async def send_emails(message, emails: list[str], batch: bool = False) -> None:
                 continue
             failed_in_a_row = 0
             leads_db.mark(email, "sent")
+            logger.info("邮件已发给 %s（%s）%s", lead["name"], lead.get("region"), "，带设计图" if image else "")
             done.append(f"✅ {lead['name']}")
     finally:
         if batch:
@@ -1379,6 +1395,9 @@ async def send_mail_setup_once(bot) -> None:
         logger.exception("Gmail 设置步骤发送失败")
 
 
+RETRY_SECONDS = float(os.environ.get("OUTREACH_RETRY_SECONDS", "30"))
+
+
 def mockup_cache() -> Path | None:
     """Drawn mockups live next to the database, on the volume; web.py serves them at /mockups/."""
     return Path(leads_db.path).with_name("mockups") if leads_db is not None else None
@@ -1435,8 +1454,8 @@ async def find_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     for region, share in shares.items():
         if region not in leadfinder.COUNTRY or share <= 0:
             continue
-        need = share * 5 - leads_db.waiting(region)
-        for attempt in range(2):  # two towns at most a day, to be kind to the free map servers
+        need = share * 3 - leads_db.waiting(region)
+        for attempt in range(4):  # four towns at most a day, to be kind to the free map servers
             if need <= 0:
                 break
             fresh = [lead for lead in await leadfinder.find(region, day, attempt)
@@ -1529,6 +1548,8 @@ def start_outreach() -> None:
     if added:
         logger.info("邮件名单新加了 %d 家", added)
     leads_db.set_setting("batch_running", "")  # a batch cut short by a restart starts again
+    if leads_db.retry_transient():
+        logger.info("上次因为 Gmail 没反应没发出去的邮件，重新排进名单")
 
 
 def schedule_outreach(application: Application) -> None:
