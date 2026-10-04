@@ -91,7 +91,7 @@ print("PASS OUTREACH_MIX takes 6 from Hong Kong and 4 from Singapore, and fills 
 
 # --- the Apps Script mailer, against a fake that redirects like the real one ------------------
 async def mailer_tests():
-    sent, results, searched = [], {}, []
+    sent, results, searched, bounced = [], {}, [], []
 
     async def exec_(request):
         req = await request.json()
@@ -113,6 +113,10 @@ async def mailer_tests():
                 {"id": "r3", "lead": "shop1@ex.com", "bounce": True, "subject": "Delivery Status Notification",
                  "text": "Address not found"}]}
         key = str(len(results)); results[key] = out
+        if req.get("action") == "ping" and not bounced:
+            # now and then Apps Script sends a POST back to an /exec address: it must be POSTed again
+            bounced.append(1)
+            raise web.HTTPFound("/macros/s/ABC/exec")
         # Apps Script answers a POST with a 302 to googleusercontent, where a GET reads the result
         raise web.HTTPFound(f"/echo?k={key}")
 
@@ -129,7 +133,7 @@ async def mailer_tests():
     async with TestServer(app) as server:
         base = str(server.make_url("")).rstrip("/")
         box = om.Mailer(base + "/macros/s/ABC/exec", "s3cret")
-        assert await box.ping() == "me@gmail.com"
+        assert await box.ping() == "me@gmail.com" and bounced, "a redirect back to /exec is POSTed again"
         await box.send("a@ex.com", "Hi", "Body")
         assert sent[-1]["to"] == "a@ex.com" and sent[-1]["name"] == "Vincent"
         for bad, words in ((om.Mailer(base + "/macros/s/ABC/exec", "wrong"), "bad secret"),

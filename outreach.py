@@ -32,6 +32,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from aiohttp import ClientSession, ClientTimeout
+from yarl import URL
 
 DAILY_LIMIT = int(os.environ.get("OUTREACH_DAILY_LIMIT", "10"))
 
@@ -634,9 +635,7 @@ class Mailer:
         own = self._session is None
         session = self._session or ClientSession(timeout=ClientTimeout(total=60))
         try:
-            # Apps Script answers a POST with a redirect to the result; aiohttp follows it with a GET.
-            async with session.post(self.url, json={"secret": self.secret, "action": action, **body}) as r:
-                text = await r.text()
+            text = await self._post(session, {"secret": self.secret, "action": action, **body})
         except Exception as exc:  # noqa: BLE001 - network trouble becomes a readable error
             raise MailError(f"连不上 Gmail 发信脚本：{exc}") from exc
         finally:
@@ -654,6 +653,20 @@ class Mailer:
         if not data.get("ok"):
             raise MailError(f"Gmail 发信脚本出错：{data.get('error') or data}")
         return data
+
+    async def _post(self, session: ClientSession, payload: dict) -> str:
+        """Apps Script answers a POST with a redirect to the result (script.googleusercontent.com/
+        macros/echo), read with a GET. Now and then it redirects to an /exec address instead, which
+        has to be POSTed again; a GET there finds no doGet."""
+        url, method = self.url, "POST"
+        for _ in range(5):
+            kwargs = {"json": payload} if method == "POST" else {}
+            async with session.request(method, url, allow_redirects=False, **kwargs) as r:
+                if r.status not in (301, 302, 303, 307, 308) or "Location" not in r.headers:
+                    return await r.text()
+                url = str(r.url.join(URL(r.headers["Location"])))
+                method = "POST" if URL(url).path.endswith("/exec") else "GET"
+        raise MailError("Gmail 发信脚本转了太多次")
 
     async def ping(self) -> str:
         return (await self._call("ping")).get("email", "")
