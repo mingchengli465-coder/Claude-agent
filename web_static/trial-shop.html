@@ -93,6 +93,7 @@
   </div>
   <div class="cta">
     <a class="btn primary" href="{{OWNER_TG}}" target="_blank" rel="noopener" style="display: {{OWNER_TG_DISPLAY}}">正式上線 <small>Make it official · US$70</small></a>
+    <a class="btn line" id="mail-us" href="mailto:{{EMAIL}}">用 Email 聯絡 <small>Email me to go live</small></a>
     <a class="btn line" href="video">38 秒影片 <small>Watch the video</small></a>
   </div>
 </main>
@@ -123,6 +124,8 @@
         $("read").hidden = false;
       }
       if (q.get("new")) $("fresh").hidden = false;
+      $("mail-us").href = "mailto:{{EMAIL}}?subject=" + encodeURIComponent("Going live: " + shop.name)
+        + "&body=" + encodeURIComponent("Hi Vincent, I'd like to make the assistant for " + shop.name + " official.\n" + location.href);
       var chips = $("chips");
       shop.questions.forEach(function (text) {
         var b = document.createElement("button");

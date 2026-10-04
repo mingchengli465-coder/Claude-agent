@@ -170,3 +170,44 @@ assert f'var API = "{build_pages.API}";' in (out / "trial.html").read_text(encod
 assert "/trial.html</loc>" in (out / "sitemap.xml").read_text(encoding="utf-8")
 print("PASS the trial form and the shop page are published with the site")
 print("\nALL TRIAL TESTS PASSED")
+
+# ---- a shop that made a trial and left its email gets how to use it, once ----------------------
+import datetime as dt, json, types
+import outreach as om2
+
+sent = []
+
+class Box:
+    async def send(self, to, subject, body, html="", image=None): sent.append((to, subject, body))
+
+told = []
+
+class TG:
+    async def send_message(self, **k): told.append(k["text"])
+
+bot.leads_db = om2.Leads(TMP / "leads.sqlite3")
+bot.mailer = lambda: Box()
+row = bot.trials_db.create("Bloom Room", "florist", "Roses US$60", "Owner@BloomRoom.test")
+due = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).isoformat()
+bot.leads_db.set_setting(f"trialmail:{row['slug']}", json.dumps({"due": due, "email": "owner@bloomroom.test",
+                                                                 "name": "Bloom Room", "slug": row["slug"]}))
+later = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=20)).isoformat()
+bot.leads_db.set_setting("trialmail:later-0000", json.dumps({"due": later, "email": "x@later.test", "name": "Later", "slug": "later-0000"}))
+ctx = types.SimpleNamespace(bot=TG())
+asyncio.run(bot.trial_mail_job(ctx))
+asyncio.run(bot.trial_mail_job(ctx))
+assert len(sent) == 1 and sent[0][0] == "owner@bloomroom.test", sent
+to, subject, body = sent[0]
+assert subject == "Your AI assistant for Bloom Room is ready | Bloom Room 的 AI 客服做好了"
+assert f"t.html?s={row['slug']}&from=trial" in body and f'data-demo="t-{row["slug"]}"' in body and "US$70" in body
+assert "繁體中文" in body and "已经给做了免费试用的 Bloom Room" in told[-1]
+lead = bot.leads_db.get("owner@bloomroom.test")
+assert lead["status"] == "sent" and lead["kind"] == "trial" and lead["region"] == "trial"
+assert "owner@bloomroom.test" in bot.leads_db.emailed(), "their reply is watched like any business's"
+assert bot.leads_db.followup_due(dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30)) == [], "no cold follow-up"
+assert bot.leads_db.sent_today() == 0, "not counted in the day's cold emails"
+msgs = om2.reply_messages(lead, "Re: ready", "How do I pay?")
+assert "Bloom Room" in msgs[1]["content"] and "one line of code" in msgs[1]["content"]
+shop_page = (pathlib.Path(__file__).parent / "web_static" / "trial-shop.html").read_text(encoding="utf-8")
+assert 'id="mail-us"' in shop_page and "Going live: " in shop_page
+print("PASS a shop that left its email gets how to use its trial and go live, once; its answer is watched")
