@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>免費試用 AI 客服 · {{TITLE}}</title>
+<meta name="description" content="把你店的價目表貼進來，幾秒鐘就有一個按你自己資料回覆客人的 AI 客服，免費試用。Paste your price list and get your own 24/7 AI assistant in seconds, free.">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23000'/%3E%3Ctext x='32' y='46' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='40' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3C/svg%3E">
+<style>
+  :root { --bg: #fff; --fg: #1d1d1f; --muted: #6e6e73; --soft: #f5f5f7; --line: #d2d2d7; --accent: #0071e3;
+          --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", Arial, sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #000; --fg: #f5f5f7; --muted: #a1a1a6; --soft: #1d1d1f; --line: #424245; --accent: #2997ff; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  .top { max-width: 1040px; margin: 0 auto; padding: 20px 20px 0; display: flex; justify-content: space-between; align-items: center; }
+  .logo { font-weight: 700; font-size: 22px; letter-spacing: -.04em; }
+  .logo i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .top nav { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 72px; }
+  .kick { font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 12px 0 0; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; letter-spacing: -.03em; font-weight: 700; text-wrap: balance; }
+  h1 span { display: block; color: var(--muted); font-size: .58em; letter-spacing: -.02em; margin-top: 10px; }
+  .lead { margin: 18px 0 0; font-size: 18px; line-height: 1.6; color: var(--muted); max-width: 660px; }
+  .ask { margin-top: 36px; }
+  .ask h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { font: inherit; font-size: 16px; border: 0; cursor: pointer; padding: 12px 18px; border-radius: 999px; background: var(--soft); color: var(--fg); text-align: left; }
+  .chip:hover { background: var(--line); }
+  .chip.go { background: var(--accent); color: #fff; font-weight: 600; }
+  .how { margin-top: 56px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--soft); border-radius: 18px; padding: 22px; }
+  .card b { display: block; font-size: 18px; }
+  .card p { margin: 6px 0 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  .others { margin-top: 56px; font-size: 15px; color: var(--muted); }
+  .others a { display: inline-block; margin: 6px 8px 0 0; padding: 8px 14px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); color: var(--fg); }
+  .cta { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 15px 26px; border-radius: 999px; font-size: 17px; font-weight: 600; }
+  .btn small { font-weight: 500; opacity: .75; font-size: 14px; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.line { box-shadow: inset 0 0 0 1.5px var(--line); }
+  footer { max-width: 1040px; margin: 0 auto; padding: 0 20px 40px; color: var(--muted); font-size: 13px; }
+  @media (max-width: 720px) { .how { grid-template-columns: 1fr; } .top nav a:not(:last-child) { display: none; } }
+  form { margin-top: 32px; max-width: 660px; display: grid; gap: 18px; }
+  label { display: grid; gap: 8px; font-size: 15px; font-weight: 600; }
+  label small { font-weight: 400; color: var(--muted); }
+  input, select, textarea { font: inherit; font-size: 16px; color: var(--fg); background: var(--soft); border: 1px solid transparent; border-radius: 14px; padding: 14px 16px; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { min-height: 220px; resize: vertical; line-height: 1.5; }
+  button.btn { border: 0; cursor: pointer; font-family: inherit; justify-self: start; }
+  button.btn[disabled] { opacity: .6; cursor: default; }
+  .err { color: #e5484d; font-size: 15px; min-height: 1em; }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="logo" href="/">vinc<i></i></a>
+  <nav><a href="video">影片 Video</a><a href="guides/">教學 Guides</a><a href="{{OWNER_TG}}" target="_blank" rel="noopener">Telegram</a></nav>
+</header>
+<main>
+  <div class="kick">免費試用 · Free trial</div>
+  <h1>幾秒鐘，做一個你店自己的 AI 客服<span>Your own 24/7 assistant, in seconds</span></h1>
+  <p class="lead">貼上你的價目表、營業時間和常見問題，它馬上就按你的資料回覆客人。試用完全免費，不用信用卡；滿意的話，一行代碼就能放進你的網站。<br>Paste your prices, opening hours and common questions, and it answers customers from them straight away. Free, no card needed; one line of code puts it on your website.</p>
+  <form id="trial" novalidate>
+    <label>店名 · Business name<input name="name" maxlength="80" required autocomplete="organization" placeholder="例如 Rose Cottage B&amp;B"></label>
+    <label>行業 · Type of business<select name="kind">{{TRIAL_KINDS}}</select></label>
+    <label>你的資料 · Your information<small>價目表、營業時間、地址、怎麼預約、常見問題… 寫得越清楚，回答越準。留空的話先用示範資料。<br>Prices, hours, address, how to book, FAQs… Leave it empty to start with sample information.</small>
+      <textarea name="info" maxlength="6000" placeholder="例如：&#10;雙人房 US$120／晚，含早餐&#10;入住 3pm–8pm，退房 10:30am&#10;可以帶小狗，每晚 US$15&#10;訂房先付一晚訂金"></textarea></label>
+    <label>聯絡方式（可選）· Your email or WhatsApp (optional)<small>有客人要預約時，我們會通知你；正式版直接通知你本人。<br>So we can pass on bookings; the full version notifies you directly.</small><input name="contact" maxlength="120" autocomplete="email"></label>
+    <div class="err" id="err" role="alert"></div>
+    <button class="btn primary" type="submit" id="go">做我的 AI 客服 <small>Make my assistant</small></button>
+  </form>
+</main>
+<footer>© {{TITLE}} · 試用版的資料只用來回答你的客人 · Your information is only used to answer your customers</footer>
+<script>
+(function () {
+  var API = "";
+  var form = document.getElementById("trial"), err = document.getElementById("err"), go = document.getElementById("go");
+  var q = new URLSearchParams(location.search);
+  if (q.get("name")) form.name.value = q.get("name");
+  if (q.get("kind")) form.kind.value = q.get("kind");
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    err.textContent = "";
+    if (form.elements.name.value.trim().length < 2) { err.textContent = "請填店名 · Please enter the business name"; return; }
+    go.disabled = true;
+    fetch(API + "/api/trial", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: form.elements.name.value, kind: form.kind.value, info: form.info.value, contact: form.contact.value }) })
+      .then(function (r) { return r.json().then(function (d) { return [r.status, d]; }); })
+      .then(function (res) {
+        if (res[1].slug) { location.href = API ? "t.html?s=" + res[1].slug + "&new=1" : "/t/" + res[1].slug + "?new=1"; return; }
+        err.textContent = res[0] === 429 ? "今天做得太多了，晚點再試 · Too many for now, please try later" : "出了點問題，請再試一次 · Something went wrong, please try again";
+        go.disabled = false;
+      }).catch(function () { err.textContent = "網路有點問題 · Connection problem"; go.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>

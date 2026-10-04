@@ -3,6 +3,9 @@
     GET  /            the owner's own site: services, prices, and the chat window
     GET  /demo        a demo page to send merchants (the chat window is on it)
     GET  /demo-<kind> an industry demo: a pretend B&B, florist… whose own assistant answers (demos.py)
+    GET  /trial       a free trial: a shop fills in its information and gets its own assistant (trials.py)
+    POST /api/trial   make one -> {slug}; GET /api/trial/<slug> what its page shows
+    GET  /t/<slug>    a shop's own assistant: a free trial, or the personal demo a cold email links to
     GET  /video       the 38-second intro video (media/), linked from the cold emails
     GET  /mockups/<x>.png  a business's mockup from a cold email (web_static/mockups, or drawn ones on the volume)
     GET  /widget.js   the chat window itself; one <script> tag embeds it in any site
@@ -33,6 +36,7 @@ from aiohttp import web
 
 import customer_service as cs
 import demos as demos_mod
+import trials as trials_mod
 import visits as visits_mod
 
 logger = logging.getLogger(__name__)
@@ -57,6 +61,11 @@ _MOCKUP = re.compile(r"^[a-z0-9-]+\.png$")
 IP_MESSAGES_PER_MINUTE = int(os.environ.get("WEB_IP_MESSAGES_PER_MINUTE", "20"))
 IP_NEW_VISITORS_PER_HOUR = int(os.environ.get("WEB_IP_NEW_VISITORS_PER_HOUR", "5"))
 IP_HITS_PER_MINUTE = int(os.environ.get("WEB_IP_HITS_PER_MINUTE", "30"))
+# Free trials: a few per address an hour, and a ceiling a day for everyone together.
+IP_TRIALS_PER_HOUR = int(os.environ.get("WEB_IP_TRIALS_PER_HOUR", "3"))
+TRIALS_PER_DAY = int(os.environ.get("WEB_TRIALS_PER_DAY", "60"))
+# a personal demo being opened is told to the owner at most this often
+TRIAL_VIEW_NOTICE_SECONDS = 6 * 3600
 
 _STATIC = Path(__file__).with_name("web_static")
 # The intro video and its poster: the only files under media/ the site serves.
@@ -163,8 +172,16 @@ def demo_fill(body: str, kind: str) -> str:
 class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
                  clock=time.time, visits: visits_mod.Visits | None = None, messenger=None, sites=None,
-                 demos: dict | None = None):
+                 demos: dict | None = None, trials: trials_mod.Trials | None = None, trial_service=None,
+                 on_trial=None):
         self.service = service
+        # free trials and personal demos (trials.py): trial_service(row) builds each one's assistant,
+        # on_trial(event, row) tells the owner ("new" for a trial made, "view" for a personal demo opened)
+        self.trials = trials
+        self.trial_service = trial_service
+        self.on_trial = on_trial
+        self._trial_services: dict[str, cs.CustomerService] = {}
+        self._trial_views: dict[str, float] = {}
         # industry demos: kind -> its own CustomerService (demos.py), chats kept under "web-<kind>"
         self.demos = demos or {}
         self.sites = sites
@@ -176,6 +193,8 @@ class WebChat:
         self.ip_messages = Window(IP_MESSAGES_PER_MINUTE, 60)
         self.ip_visitors = Window(IP_NEW_VISITORS_PER_HOUR, 3600)
         self.ip_hits = Window(IP_HITS_PER_MINUTE, 60)
+        self.ip_trials = Window(IP_TRIALS_PER_HOUR, 3600)
+        self.all_trials = Window(TRIALS_PER_DAY, 86400)
         self.runner: web.AppRunner | None = None
         # Owner replies are stored by deliver_owner_reply; the widget polls them out.
         if service is not None:
@@ -183,6 +202,7 @@ class WebChat:
             # an owner reply to a demo visitor's notice comes through the main service
             for kind in self.demos:
                 service.register_channel(f"{CHANNEL}-{kind}", self._send)
+            service.register_channel(f"{CHANNEL}-t-*", self._send)
         for kind, demo in self.demos.items():
             demo.register_channel(f"{CHANNEL}-{kind}", self._send)
 
@@ -203,6 +223,10 @@ class WebChat:
         app.router.add_get("/demo", self.page)
         app.router.add_get("/demo-{kind}", self.demo_page)
         app.router.add_get("/video", self.video)
+        app.router.add_get("/trial", self.trial_page)
+        app.router.add_get("/t/{slug}", self.trial_shop)
+        app.router.add_post("/api/trial", self.trial_create)
+        app.router.add_get("/api/trial/{slug}", self.trial_info)
         app.router.add_get("/media/{name}", self.media)
         app.router.add_get("/mockups/{name}", self.mockup)
         app.router.add_get("/widget.js", self.widget)
@@ -249,6 +273,18 @@ class WebChat:
 
     async def video(self, request: web.Request) -> web.Response:
         return self._render("video.html")
+
+    async def trial_page(self, request: web.Request) -> web.Response:
+        return self._render("trial.html")
+
+    async def trial_shop(self, request: web.Request) -> web.Response:
+        # the page fetches the shop from /api/trial/<slug> (the same page is on GitHub Pages as t.html)
+        if self.trials is None or self.trials.get(request.match_info["slug"]) is None:
+            raise web.HTTPNotFound(text="找不到這個示範 / Not found")
+        page = self._render("trial-shop.html")
+        # relative links (video, trial…) from /t/<slug> point at the site's root
+        page.text = page.text.replace("<head>", '<head>\n<base href="/">', 1)
+        return page
 
     async def media(self, request: web.Request) -> web.StreamResponse:
         """The intro video (with range requests, which phones need to play it)."""
@@ -320,7 +356,10 @@ class WebChat:
                     .replace("{{WECHAT_DISPLAY}}", "" if wechat else "none")
                     .replace("{{SOCIAL_LINKS}}", links_html)
                     .replace("{{SOCIAL_DISPLAY}}", "" if links else "none")
-                    .replace("{{EMAIL}}", html.escape(next((t for l, h, t in links if h.startswith("mailto:")), ""))))
+                    .replace("{{EMAIL}}", html.escape(next((t for l, h, t in links if h.startswith("mailto:")), "")))
+                    .replace("{{TRIAL_KINDS}}", "".join(
+                        f'<option value="{k}">{html.escape(d["label_zh"])} · {html.escape(d["label"])}</option>'
+                        for k, d in demos_mod.DEMOS.items())))
         return web.Response(text=body, content_type="text/html", headers={"Cache-Control": "no-cache"})
 
     async def widget(self, request: web.Request) -> web.Response:
@@ -420,10 +459,65 @@ class WebChat:
         ]})
 
     def _service_for(self, demo: str):
-        """The owner's own assistant, or an industry demo's (None for an unknown demo)."""
+        """The owner's own assistant, an industry demo's, or a trial's ("t-<slug>"); None for an unknown one."""
         if not demo:
             return self.service, CHANNEL
-        return self.demos.get(demo), f"{CHANNEL}-{demo}"
+        channel = f"{CHANNEL}-{demo}"
+        if not demo.startswith("t-"):
+            return self.demos.get(demo), channel
+        slug = demo[2:]
+        if slug not in self._trial_services:
+            row = self.trials.get(slug) if self.trials is not None and self.trial_service is not None else None
+            if row is None:
+                return None, channel
+            svc = self.trial_service(row)
+            if svc is None:
+                return None, channel
+            svc.register_channel(channel, self._send)
+            self._trial_services[slug] = svc
+        return self._trial_services[slug], channel
+
+    # ---- free trials -------------------------------------------------------------
+
+    async def _tell(self, event: str, row: dict) -> None:
+        if self.on_trial is None:
+            return
+        try:
+            await self.on_trial(event, row)
+        except Exception:  # noqa: BLE001 - the shop still gets its assistant
+            logger.exception("试用通知没发出去")
+
+    async def trial_create(self, request: web.Request) -> web.Response:
+        if self.trials is None or self.trial_service is None:
+            return self._json({"error": "not available"}, 404)
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001 - bad JSON, too big, wrong type
+            return self._json({"error": "bad request"}, 400)
+        if not isinstance(data, dict):
+            return self._json({"error": "bad request"}, 400)
+        field = lambda key, n: str(data.get(key) or "").strip()[:n]  # noqa: E731
+        name, info = field("name", 80), field("info", trials_mod.MAX_INFO)
+        if len(name) < 2:
+            return self._json({"error": "name"}, 400)
+        now, ip = self.clock(), self._ip(request)
+        if not self.ip_trials.allow(ip, now) or not self.all_trials.allow("all", now):
+            return self._json({"error": "slow down"}, 429)
+        row = self.trials.create(name, field("kind", 20), info, field("contact", 120))
+        await self._tell("new", row)
+        return self._json({"slug": row["slug"]})
+
+    async def trial_info(self, request: web.Request) -> web.Response:
+        row = self.trials.get(request.match_info["slug"]) if self.trials is not None else None
+        if row is None:
+            return self._json({"error": "not found"}, 404)
+        if row.get("source") == "lead":
+            # the business we emailed opened the demo made in its name: worth knowing now
+            now, slug = self.clock(), row["slug"]
+            if now - self._trial_views.get(slug, -TRIAL_VIEW_NOTICE_SECONDS) >= TRIAL_VIEW_NOTICE_SECONDS:
+                self._trial_views[slug] = now
+                await self._tell("view", row)
+        return self._json(trials_mod.public(row))
 
     async def hit(self, request: web.Request) -> web.Response:
         if self.visits is None:

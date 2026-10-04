@@ -26,7 +26,8 @@ import web  # noqa: E402
 
 API = os.environ.get("PAGES_API_ORIGIN", "https://worker-production-42fb.up.railway.app").rstrip("/")
 BOT = os.environ.get("PAGES_BOT_LINK", "https://t.me/emilyhanbot")
-PAGES = {"site.html": "index.html", "demo.html": "demo.html", "video.html": "video.html"}
+PAGES = {"site.html": "index.html", "demo.html": "demo.html", "video.html": "video.html",
+         "trial.html": "trial.html", "trial-shop.html": "t.html"}
 
 
 class _NoService:
@@ -42,7 +43,8 @@ def static_copy(html: str) -> str:
                 .replace('href="/fonts/', 'href="fonts/')
                 .replace('src="/widget.js"', f'src="{API}/widget.js"')
                 .replace('href="/demo"', 'href="demo.html"')
-                .replace('href="/"', 'href="./"'))
+                .replace('href="/"', 'href="./"')
+                .replace('var API = "";', f'var API = "{API}";'))
 
 
 SITE = os.environ.get("PAGES_SITE_URL", "https://mingchengli465-coder.github.io/Claude-agent").rstrip("/")
@@ -50,7 +52,7 @@ SITE = os.environ.get("PAGES_SITE_URL", "https://mingchengli465-coder.github.io/
 
 def write_sitemap(out: Path) -> None:
     """sitemap.xml and robots.txt, so search engines find the guides."""
-    pages = ["", "demo.html", "video.html", "guides/"] + [f"demo-{kind}.html" for kind in demos.DEMOS] + [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html"))
+    pages = ["", "demo.html", "video.html", "trial.html", "guides/"] + [f"demo-{kind}.html" for kind in demos.DEMOS] + [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html"))
                                              if p.name != "index.html"]
     urls = "".join(f"  <url><loc>{SITE}/{p}</loc></url>\n" for p in pages)
     (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n'

@@ -43,6 +43,7 @@ import messenger as messenger_mod
 import demos as demos_mod
 import leadfinder
 import outreach as outreach_mod
+import trials as trials_mod
 import visits as visits_mod
 import web
 import xhs
@@ -1144,6 +1145,8 @@ def schedule_visits_report(application: Application) -> None:
 
 # --- cold emails, sent from the owner's Gmail ---------------------------------------------
 leads_db: outreach_mod.Leads | None = None
+# free trials and the personal demo made for each business we email (trials.py)
+trials_db: trials_mod.Trials | None = None
 MAIL_WEBHOOK_URL = os.environ.get("MAIL_WEBHOOK_URL", "").strip()
 MAIL_SETUP_TEXT = (
     "📧 让我用你的 Gmail 自动发邮件，只要设置一次（5 分钟，要开 VPN）：\n\n"
@@ -1302,6 +1305,7 @@ async def send_emails(message, emails: list[str], batch: bool = False, followup:
             if done or failed_in_a_row:
                 await asyncio.sleep(gap)
             html, image = "", None
+            lead = with_personal_demo(lead)
             try:
                 image = await asyncio.to_thread(outreach_mod.mockup_png, lead, mockup_cache())
             except Exception:  # noqa: BLE001 - the letter still goes, with its link
@@ -1411,6 +1415,20 @@ async def send_mail_setup_once(bot) -> None:
 
 
 RETRY_SECONDS = float(os.environ.get("OUTREACH_RETRY_SECONDS", "30"))
+
+
+def with_personal_demo(lead: dict) -> dict:
+    """The lead with "personal": the link to a working demo in its own name (made once, kept)."""
+    from mockup import kind_of
+    kind = kind_of(lead)
+    if trials_db is None or not kind or lead.get("kind") == "agency":
+        return lead
+    try:
+        row = trials_db.for_lead(lead, kind)
+    except Exception:  # noqa: BLE001 - the letter still goes, with the demo of its kind
+        logger.exception("专属示范没做出来（%s）", lead.get("email"))
+        return lead
+    return {**lead, "personal": outreach_mod.TRIAL_PAGE.format(slug=row["slug"])}
 
 
 def mockup_cache() -> Path | None:
@@ -1571,7 +1589,7 @@ async def email_replies_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def draft_reply(lead: dict, subject: str, text: str) -> str:
     """Vincent's answer to a business's reply, written by the same model as the owner's chat."""
-    messages = outreach_mod.reply_messages(lead, subject, text)
+    messages = outreach_mod.reply_messages(with_personal_demo(lead), subject, text)
     for index, (api, model) in enumerate(chat_attempts()):
         try:
             response = await asyncio.wait_for(api.chat.completions.create(model=model, messages=messages), REQUEST_TIMEOUT)
@@ -1728,6 +1746,28 @@ def build_customer_service(bot) -> cs.CustomerService | None:
     async def notify_demo(text: str) -> int | None:
         # a shop owner trying an industry demo is a warm lead
         return await notify_owner("🧪 有人在试用行业示范页 ·\n" + text)
+
+    # free trials and personal demos (/t/<slug>): each shop's own assistant, built when first used
+    global trials_db
+    try:
+        trials_db = trials_mod.Trials(cs.CS_DB_PATH)
+    except Exception:  # noqa: BLE001 - everything else works without trials
+        logger.exception("试用数据库打不开，免费试用和专属示范停用")
+        trials_db = None
+
+    def trial_service(row: dict) -> cs.CustomerService | None:
+        if responder is None:
+            return None
+        who = (f"🔥 {row['name']}（你发过开发信的店）在跟专属示范聊天 ·\n" if row.get("source") == "lead"
+               else f"🧪 免费试用「{row['name']}」·\n")
+
+        async def notify(text: str) -> int | None:
+            return await notify_owner(who + text)
+
+        return cs.CustomerService(svc.store, trials_mod.catalog_for(row), responder, owner_notify=notify,
+                                  persona=trials_mod.persona_for(row))
+
+    svc.trials, svc.trial_service = trials_db, trial_service
 
     # the industry demos (/demo-bnb, /demo-florist…): each pretend shop answers from its own sample list
     svc.demo_services = {
@@ -1913,8 +1953,21 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
     except Exception:  # noqa: BLE001 - chat still works without the agent's websites
         logger.exception("网站仓库打不开，助理不能建网站")
         site_store = None
+    async def on_trial(event: str, row: dict) -> None:
+        link = f"{public_base_url()}/t/{row['slug']}"
+        if event == "new":
+            label = demos_mod.DEMOS.get(row["kind"], {}).get("label_zh", "")
+            info = f"填了 {len(row['info'])} 字的资料" if row["info"] else "没填资料，先用示范资料"
+            await tell_owner(f"🎉 有人做了免费试用：{row['name']}（{label}）\n联系方式：{row['contact'] or '没留'}\n"
+                             f"{info}\n{link}")
+        elif event == "view":
+            await tell_owner(f"👀 {row['name']} 打开了你给他们做的专属示范！（{row['lead_email']}）\n"
+                             f"现在是跟进的好时机。\n{link}")
+
     chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb,
-                       sites=site_store, demos=getattr(service, "demo_services", {}))
+                       sites=site_store, demos=getattr(service, "demo_services", {}),
+                       trials=getattr(service, "trials", None), trial_service=getattr(service, "trial_service", None),
+                       on_trial=on_trial)
     try:
         await chat.start()
     except OSError:
