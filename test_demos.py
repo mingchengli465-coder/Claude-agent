@@ -87,6 +87,14 @@ async def main():
     assert "Claude-agent/?from=email" in body, "a business of unknown kind gets the site"
     print("PASS each email links to the demo shop of the business's own kind")
 
+    # the model that drafts an answer to a reply knows the business, the first email and only real facts
+    msgs = om.reply_messages({"email": "info@vive.hk", "name": "Vive Cake Boutique", "region": "hk"},
+                             "Re: hello", "多少錢？")
+    assert msgs[0]["role"] == "system" and "US$70" in msgs[0]["content"] and "demo-bakery.html" in msgs[0]["content"]
+    assert "Traditional Chinese" in msgs[0]["content"] and "Never invent" in msgs[0]["content"]
+    assert "Vive Cake Boutique" in msgs[1]["content"] and "多少錢？" in msgs[1]["content"] and "你好" in msgs[1]["content"]
+    print("PASS the reply drafter gets the business, the first email and only real facts")
+
 asyncio.run(main())
 
 # the bot builds one assistant per demo, on the same model as the owner's

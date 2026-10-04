@@ -367,6 +367,39 @@ def compose_followup(lead: dict) -> tuple[str, str]:
     return "Re: " + subject, zh + BILINGUAL_RULE + en
 
 
+# --- answering a business that replied: the AI drafts, the owner taps to send ---------------------
+REPLY_SYSTEM = """You write email replies for Vincent, a student developer in Singapore who sets up 24/7 AI
+customer-service assistants for small businesses: a chat window on their website (or Telegram/WhatsApp)
+that answers customers from the business's own price list and FAQs, day and night, and passes every
+order, booking or price negotiation straight to the owner.
+Facts you may use, and nothing else:
+- Setup takes 2–3 days. It costs a one-off US$70, then US$9.9 a month, cancel anytime.
+- Vincent first builds a free trial version on the business's own information, so they can test it before paying.
+- To build the trial he needs their price list or menu, opening hours and the questions customers ask most
+  (a website link or a photo of the price list is enough).
+- A demo assistant for their kind of business: {demo}
+- A 38-second video of how it works: {video}
+- Vincent on Telegram: {telegram}
+A business replied to Vincent's email. Write his answer:
+- In the language of their reply (Traditional Chinese if they wrote Chinese).
+- Short: 3 to 6 sentences, friendly and plain, like a person, no marketing words.
+- Answer exactly what they asked. If they are interested, offer to start the free trial now and ask for
+  the one thing he needs. If they ask how it works or what it costs, answer from the facts above.
+- If they decline or ask him to stop, thank them in one or two sentences and say he won't email again.
+- Never invent features, clients, results or numbers that aren't above. No subject line, no placeholders.
+- End with "Vincent" on its own line."""
+
+
+def reply_messages(lead: dict, their_subject: str, their_text: str) -> list[dict]:
+    """The chat for the model that drafts Vincent's answer to a business's reply."""
+    _, first = compose(lead)
+    system = REPLY_SYSTEM.format(demo=demo_link(lead) or DEMO_LINK, video=VIDEO_LINK, telegram=TELEGRAM_LINK)
+    user = (f"Business: {lead['name']} ({lead.get('region') or ''})\n\n"
+            f"Vincent's first email:\n{plain(first, lead)[:2500]}\n\n"
+            f"Their reply (subject: {their_subject}):\n{their_text[:2500]}\n\nWrite Vincent's reply.")
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
 def plain(body: str, lead: dict) -> str:
     """The plain-text version: the mockup as a link (or nothing, without one)."""
     slug = mockup_slug(lead)
