@@ -828,7 +828,9 @@ class CustomerService:
         key = self.store.lookup_owner_message(owner_message_id)
         if key is None:
             return None
-        send = self.senders.get(key[0])
+        # "web-t-*" stands for every channel that starts with "web-t-" (one per free trial)
+        send = self.senders.get(key[0]) or next(
+            (s for c, s in self.senders.items() if c.endswith("*") and key[0].startswith(c[:-1])), None)
         if send is None:
             raise RuntimeError(f"没有注册 {key[0]} 渠道，发不出去")
         await send(key[1], text)

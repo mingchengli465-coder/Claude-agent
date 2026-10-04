@@ -118,6 +118,12 @@ ZH_PRICE = {"sg": "正式搭建一次性 US$70 起，之後每月 US$9.9。",
 DEMO_LINK = os.environ.get("OUTREACH_DEMO_LINK", "https://mingchengli465-coder.github.io/Claude-agent/demo.html?from=email")
 # The industry demo matching the business (demos.py): a pretend shop of the same kind to chat with
 DEMO_PAGE = os.environ.get("OUTREACH_DEMO_PAGE", "https://mingchengli465-coder.github.io/Claude-agent/demo-{kind}.html?from=email")
+# A working demo in the business's own name (trials.py), sample prices until they give theirs.
+# bot.py makes it and puts its link on the lead as "personal"; the letters then point there.
+TRIAL_PAGE = os.environ.get("OUTREACH_TRIAL_PAGE", "https://mingchengli465-coder.github.io/Claude-agent/t.html?s={slug}&from=email")
+PERSONAL_EN = "I also set up a working demo in {name}'s name, with sample prices for now, that you can chat with: {url}"
+PERSONAL_ZH = "我用「{name}」的名字先做了一個能直接聊天的示範版（價格先用示範資料）：{url}"
+PERSONAL_EN_ASIA = "I've already set up a working demo in {name}'s name (with sample prices for now) that you can chat with: {url}"
 
 
 def demo_link(lead: dict) -> str:
@@ -232,7 +238,7 @@ INTL_BODY = """{greeting}
 
 {mockup}
 
-It answers from your own information ({facts}), takes down every enquiry, and sends it straight to you to confirm. You can chat with a demo one for a {kindword} here: {demo}
+It answers from your own information ({facts}), takes down every enquiry, and sends it straight to you to confirm. {demo_line}
 
 I'm Vincent, a student developer in Singapore, and I set these up for small businesses. I'd be happy to build you a free trial version first, so you can see how it handles real questions. If you decide to keep it, it's a one-off {price}, cancel anytime.
 
@@ -285,7 +291,11 @@ def _intl_parts(lead: dict) -> tuple[str, str]:
             "facts": INTL_FACTS.get(cat, INTL_FACTS["bnb"]), "video": VIDEO_LINK.replace("from=email", "from=uk"),
             "link": SITE_LINK.replace("from=email", "from=uk"), "mockup": MOCKUP_MARK,
             "price": INTL_PRICE.get(lead.get("region") or "", "US$70, then US$9.9 a month"),
-            "demo": demo_link(lead).replace("from=email", "from=uk"), "kindword": INTL_KINDWORD.get(cat, "small business")}
+            "kindword": INTL_KINDWORD.get(cat, "small business")}
+    personal = lead.get("personal")
+    fill["demo_line"] = (PERSONAL_EN.format(name=lead["name"], url=personal) if personal else
+                         f"You can chat with a demo one for a {fill['kindword']} here: "
+                         + demo_link(lead).replace("from=email", "from=uk"))
     return INTL_SUBJECT.format(**fill), INTL_BODY.format(**fill)
 
 
@@ -330,7 +340,7 @@ Just bringing this back to the top of your inbox in case it got buried. Here's t
 
 {mockup}
 
-If a 24/7 assistant that answers from your own information and passes every enquiry to you would help, I'm happy to set up a free trial on your site this week, with no obligation.
+If a 24/7 assistant that answers from your own information and passes every enquiry to you would help, I'm happy to set up a free trial on your site this week, with no obligation.{personal}
 
 Best,
 Vincent
@@ -343,12 +353,16 @@ FOLLOWUP_ZH = """{name}你好，
 
 {mockup}
 
-如果一個按你們自己的資料 24 小時回覆、並把每個查詢轉給你們的 AI 客服有幫助，我很樂意這星期先免費幫你們做一個試用版，不用任何承諾。
+如果一個按你們自己的資料 24 小時回覆、並把每個查詢轉給你們的 AI 客服有幫助，我很樂意這星期先免費幫你們做一個試用版，不用任何承諾。{personal}
 
 Vincent
 Telegram：{telegram}
 
 P.S. 如果暫時不需要，回覆「不用了」就可以，我不會再打擾你們。"""
+
+
+def _followup_link(lead: dict) -> str:
+    return lead["personal"].replace("from=email", "from=followup")
 
 
 def compose_followup(lead: dict) -> tuple[str, str]:
@@ -357,11 +371,15 @@ def compose_followup(lead: dict) -> tuple[str, str]:
     host = (lead.get("host") or "").strip()
     en = FOLLOWUP_EN.format(greeting=f"Hi {host}," if host else ("Hello," if is_intl(lead) else f"Hi {lead['name']} team,"),
                             name=lead["name"], mockup=MOCKUP_MARK,
-                            link=SITE_LINK.replace("from=email", "from=followup"))
+                            link=SITE_LINK.replace("from=email", "from=followup"),
+                            personal=f"\n\nThe demo I made in your name is still here to try: {_followup_link(lead)}"
+                            if lead.get("personal") else "")
     if is_intl(lead):
         return "Re: " + subject, en
     zh_name = lead["name"] + (" " if lead["name"][-1:].isascii() else "")
-    zh = FOLLOWUP_ZH.replace("{name}", zh_name, 1).format(mockup=MOCKUP_MARK, telegram=TELEGRAM_LINK)
+    zh = FOLLOWUP_ZH.replace("{name}", zh_name, 1).format(
+        mockup=MOCKUP_MARK, telegram=TELEGRAM_LINK,
+        personal=f"\n\n用你們店名做的示範版還在，隨時可以試：{_followup_link(lead)}" if lead.get("personal") else "")
     # one mockup is enough: the English half refers to it
     en = en.replace(MOCKUP_MARK, "(the mockup is above)")
     return "Re: " + subject, zh + BILINGUAL_RULE + en
@@ -393,7 +411,7 @@ A business replied to Vincent's email. Write his answer:
 def reply_messages(lead: dict, their_subject: str, their_text: str) -> list[dict]:
     """The chat for the model that drafts Vincent's answer to a business's reply."""
     _, first = compose(lead)
-    system = REPLY_SYSTEM.format(demo=demo_link(lead) or DEMO_LINK, video=VIDEO_LINK, telegram=TELEGRAM_LINK)
+    system = REPLY_SYSTEM.format(demo=lead.get("personal") or demo_link(lead) or DEMO_LINK, video=VIDEO_LINK, telegram=TELEGRAM_LINK)
     user = (f"Business: {lead['name']} ({lead.get('region') or ''})\n\n"
             f"Vincent's first email:\n{plain(first, lead)[:2500]}\n\n"
             f"Their reply (subject: {their_subject}):\n{their_text[:2500]}\n\nWrite Vincent's reply.")
@@ -471,6 +489,10 @@ def compose(lead: dict) -> tuple[str, str]:
     first_en = lead.get("first") if lead.get("lang") != "zh" else ""
     en = EN_BODY.format(first=first_en or EN_FIRST, price=EN_PRICE.get(region, EN_PRICE["sg"]), **fill)
     subject = ZH_SUBJECT.replace("{name}", zh_name).format(**fill) + " | " + EN_SUBJECT.format(**fill)
+    if lead.get("personal"):
+        zh = zh.replace(f"可以先到我的網站試試看：{fill['link']}", PERSONAL_ZH.format(name=lead["name"], url=lead["personal"]))
+        en = en.replace(f"You can try the one on my own site: {fill['link']}",
+                        PERSONAL_EN_ASIA.format(name=lead["name"], url=lead["personal"]))
     return subject, zh + BILINGUAL_RULE + en
 
 
