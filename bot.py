@@ -1569,9 +1569,15 @@ async def email_replies_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         lead = leads_db.get(email)
         if lead is None or not leads_db.first_sight(str(reply.get("id")), email):
             continue
+        auto = not reply.get("bounce") and bool(outreach_mod.AUTO_ANSWER.search(
+            f"{reply.get('subject', '')}\n{str(reply.get('text', ''))[:400]}"))
+        no = False
         if reply.get("bounce"):
             leads_db.mark(email, "bounced")
             text = f"⚠️ 发给 {lead['name']}（{email}）的邮件被退回来了，这个邮箱可能不用了。不用管它。"
+        elif auto:
+            # an out-of-office: nobody read it yet, so the follow-up still goes; nothing to answer
+            text = f"🤖 {lead['name']} 回的是自动回复（不在办公室之类的），不用管，我照常跟进。"
         else:
             no = bool(outreach_mod.OPT_OUT.search(reply.get("text", "")[:400]))
             leads_db.mark(email, "optout" if no else "replied")
@@ -1583,7 +1589,7 @@ async def email_replies_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         except TelegramError:
             logger.exception("邮件回复提醒发送失败")
             continue
-        if not reply.get("bounce") and not no:
+        if not reply.get("bounce") and not no and not auto:
             await offer_reply_draft(context.bot, lead, str(reply.get("subject", "")), str(reply.get("text", "")))
 
 
@@ -1610,15 +1616,22 @@ async def offer_reply_draft(bot, lead: dict, subject: str, text: str) -> None:
         return
     token = secrets.token_hex(4)
     resubject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
-    leads_db.set_setting(f"draft:{token}", json.dumps({"email": lead["email"], "subject": resubject, "body": draft},
-                                                       ensure_ascii=False))
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ 发送这封", callback_data=f"reply:{token}:send"),
-                                      InlineKeyboardButton("✖ 我自己回", callback_data=f"reply:{token}:no")]])
+    answered = int(leads_db.setting(f"autoreplied:{lead['email']}") or 0)
+    minutes = outreach_mod.REPLY_AUTO_MINUTES if answered < outreach_mod.REPLY_AUTO_MAX else 0
+    due = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=minutes)).isoformat() if minutes else ""
+    record = {"email": lead["email"], "name": lead["name"], "subject": resubject, "body": draft, "due": due}
+    leads_db.set_setting(f"draft:{token}", json.dumps(record, ensure_ascii=False))
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ 现在就发", callback_data=f"reply:{token}:send"),
+                                      InlineKeyboardButton("✖ 别发，我自己回", callback_data=f"reply:{token}:no")]])
+    when = (f"{minutes} 分钟后自动从你的 Gmail 发出，你什么都不用做" if minutes
+            else f"你们已经来回 {answered} 封了，这封等你点 ✅ 再发")
     sent = await bot.send_message(
         chat_id=int(OWNER_CHAT_ID), reply_markup=keyboard, disable_web_page_preview=True,
-        text=f"✍️ 我帮你写好了给 {lead['name']} 的回信（点 ✅ 就从你的 Gmail 发出；想改的话，直接回复这条消息，"
-             f"发你改好的内容，我就发你的版本）：\n\n{draft}")
+        text=f"✍️ 我帮你写好了给 {lead['name']} 的回信，{when}。想改的话，直接回复这条消息发你的版本，"
+             f"我就发你的：\n\n{draft}")
     leads_db.set_setting(f"draftmsg:{sent.message_id}", token)
+    record["msg"] = sent.message_id
+    leads_db.set_setting(f"draft:{token}", json.dumps(record, ensure_ascii=False))
 
 
 async def _send_draft(token: str, body: str | None = None) -> str:
@@ -1632,7 +1645,49 @@ async def _send_draft(token: str, body: str | None = None) -> str:
     except outreach_mod.MailError as exc:
         return f"⚠️ 没发出去：{exc}\n过一会儿再点一次，或者去 Gmail 直接回复。"
     leads_db.set_setting(f"draft:{token}", "")
+    key = f"autoreplied:{draft['email']}"
+    leads_db.set_setting(key, str(int(leads_db.setting(key) or 0) + 1))
     return f"✅ 已经从你的 Gmail 回复 {draft['email']}。"
+
+
+async def reply_auto_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Drafted answers whose time has come go out by themselves; one that won't send is retried
+    a few times, then left to the owner."""
+    if leads_db is None or mailer() is None or not OWNER_CHAT_ID:
+        return
+    now = dt.datetime.now(dt.timezone.utc)
+    for key, raw in leads_db.settings_like("draft:"):
+        try:
+            draft = json.loads(raw)
+            due = dt.datetime.fromisoformat(draft.get("due") or "")
+        except ValueError:
+            continue  # waiting for the owner's ✅
+        if due > now:
+            continue
+        token = key.split(":", 1)[1]
+        result = await _send_draft(token)
+        name = draft.get("name") or draft["email"]
+        if result.startswith("✅"):
+            text = f"✅ 已经自动回复 {name}（{draft['email']}）。他们再回信我会接着告诉你。"
+            if draft.get("msg"):
+                try:
+                    await context.bot.edit_message_reply_markup(chat_id=int(OWNER_CHAT_ID), message_id=draft["msg"],
+                                                                reply_markup=None)
+                except TelegramError:
+                    pass
+        else:
+            tries = int(draft.get("tries", 0)) + 1
+            if tries < 3:
+                draft.update(tries=tries, due=(now + dt.timedelta(minutes=15)).isoformat())
+                leads_db.set_setting(key, json.dumps(draft, ensure_ascii=False))
+                continue
+            draft["due"] = ""
+            leads_db.set_setting(key, json.dumps(draft, ensure_ascii=False))
+            text = f"⚠️ 给 {name} 的回信自动发了三次都没发出去：{result}\n点那条消息上的 ✅ 再试，或者去 Gmail 回复。"
+        try:
+            await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text)
+        except TelegramError:
+            logger.exception("自动回信的通知没发出去")
 
 
 async def reply_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1694,7 +1749,9 @@ def schedule_outreach(application: Application) -> None:
         logger.error("OUTREACH_TIME=%r 无法解析，每天的邮件不会自动问你", outreach_mod.SEND_TIME)
     else:
         application.job_queue.run_daily(outreach_daily_job, time=when, name="outreach-daily")
-    application.job_queue.run_repeating(email_replies_job, interval=1800, first=120, name="email-replies")
+    # every 10 minutes, so a business that answers hears back within the half hour, by itself
+    application.job_queue.run_repeating(email_replies_job, interval=600, first=120, name="email-replies")
+    application.job_queue.run_repeating(reply_auto_job, interval=60, first=90, name="reply-auto")
     application.job_queue.run_repeating(batch_job, interval=300, first=60, name="outreach-batch")
     application.job_queue.run_repeating(intl_daily_job, interval=900, first=180, name="outreach-intl")
     application.job_queue.run_repeating(followup_job, interval=1800, first=600, name="outreach-followup")

@@ -111,7 +111,9 @@ async def mailer_tests():
                  "text": "Hi Vincent, sounds interesting. How does the demo work?"},
                 {"id": "r2", "lead": "shop0@ex.com", "bounce": False, "subject": "Re", "text": "No thanks."},
                 {"id": "r3", "lead": "shop1@ex.com", "bounce": True, "subject": "Delivery Status Notification",
-                 "text": "Address not found"}]}
+                 "text": "Address not found"},
+                {"id": "r4", "lead": "away@ex.com", "bounce": False, "subject": "Automatic reply: Quick idea",
+                 "text": "I'm out of the office until Monday."}]}
         key = str(len(results)); results[key] = out
         if req.get("action") == "ping" and not bounced:
             # now and then Apps Script sends a POST back to an /exec address: it must be POSTed again
@@ -156,6 +158,7 @@ async def mailer_tests():
 
         class Bot:
             async def send_message(self, **k): told.append(k); return Msg()
+            async def edit_message_reply_markup(self, **k): edits.append("markup-off")
 
         class Msg:
             def __init__(self, text=""): self.text, self.chat_id, self.message_id, self.reply_to_message = text, 424242, 77, None
@@ -178,6 +181,8 @@ async def mailer_tests():
         bot.leads_db = om.Leads(os.path.join(tempfile.mkdtemp(), "cs.sqlite3"))
         bot.leads_db.set_setting("secret", "s3cret")
         bot.leads_db.add(leads + [{"email": "broken@ex.com", "name": "Broken"}, {"email": "broken2@ex.com", "name": "Broken2"}] + many[:2])
+        bot.leads_db.add([{"email": "away@ex.com", "name": "Away Shop"}])
+        bot.leads_db.mark("away@ex.com", "sent")
         ctx = types.SimpleNamespace(bot=Bot())
 
         # not connected yet: /mail shows the steps and the script
@@ -249,11 +254,13 @@ async def mailer_tests():
         await bot.email_replies_job(ctx)
         await bot.email_replies_job(ctx)
         texts = [t["text"] for t in told]
-        assert len(texts) == 4, texts
+        assert len(texts) == 5, texts
         assert "Whyzee Bakery 回你邮件了" in texts[0] and "demo work" in texts[0]
-        assert "我帮你写好了给 Whyzee Bakery 的回信" in texts[1] and "free trial" in texts[1]
+        assert "我帮你写好了给 Whyzee Bakery 的回信，10 分钟后自动从你的 Gmail 发出" in texts[1] and "free trial" in texts[1]
         assert drafted == [("Whyzee Bakery", "Re: Quick idea", "Hi Vincent, sounds interesting. How does the demo work?")]
         assert "不需要" in texts[2] and "退回来了" in texts[3]
+        assert "自动回复" in texts[4] and len(drafted) == 1, "an out-of-office isn't answered"
+        assert bot.leads_db.get("away@ex.com")["status"] == "sent", "its follow-up still goes"
         print("PASS a business that answers gets a drafted reply; no-thanks and bounces don't")
 
         # ✅ sends the draft from Gmail, in reply; only once
@@ -272,8 +279,36 @@ async def mailer_tests():
         mine = Msg("It's US$70 to set up. Vincent"); mine.reply_to_message = types.SimpleNamespace(message_id=77)
         assert await bot.send_owner_version(types.SimpleNamespace(effective_message=mine))
         assert sent[-1]["body"] == "It's US$70 to set up. Vincent" and len(sent) == before + 2
-        bot.draft_reply = real_draft
         print("PASS the owner's own words, sent as a reply to the draft, go instead")
+
+        # nobody taps: the draft goes out by itself once its time comes
+        told.clear()
+        await bot.offer_reply_draft(Bot(), bot.leads_db.get("info@whyzee.com.sg"), "Re: Quick idea", "Can you do Fridays?")
+        token = [k for k, v in bot.leads_db.settings_like("draft:")][0].split(":")[1]
+        await bot.reply_auto_job(ctx)
+        assert len(sent) == before + 2, "not before its time"
+        d = json.loads(bot.leads_db.setting(f"draft:{token}"))
+        d["due"] = "2000-01-01T00:00:00+00:00"
+        bot.leads_db.set_setting(f"draft:{token}", json.dumps(d))
+        await bot.reply_auto_job(ctx)
+        assert len(sent) == before + 3 and sent[-1]["to"] == "info@whyzee.com.sg" and "price list" in sent[-1]["body"]
+        assert "已经自动回复 Whyzee Bakery" in told[-1]["text"]
+        await bot.reply_auto_job(ctx)
+        assert len(sent) == before + 3, "only once"
+        print("PASS a drafted reply goes out by itself, once, with nobody tapping")
+
+        # after a few answers to the same business, the owner takes over
+        bot.leads_db.set_setting("autoreplied:info@whyzee.com.sg", str(om.REPLY_AUTO_MAX))
+        told.clear()
+        await bot.offer_reply_draft(Bot(), bot.leads_db.get("info@whyzee.com.sg"), "Re: Quick idea", "More?")
+        assert "这封等你点 ✅ 再发" in told[-1]["text"]
+        tok = [k for k, v in bot.leads_db.settings_like("draft:")][0]
+        d = json.loads(bot.leads_db.setting(tok)); assert d["due"] == ""
+        await bot.reply_auto_job(ctx)
+        assert len(sent) == before + 3
+        bot.leads_db.set_setting(tok, "")
+        bot.draft_reply = real_draft
+        print("PASS after a few rounds with one business, the next answer waits for the owner")
         assert [bot.leads_db.get(e)["status"] for e in ("info@whyzee.com.sg", "shop0@ex.com", "shop1@ex.com")] \
             == ["replied", "optout", "bounced"]
         print("PASS replies, no-thanks and bounces reach the owner once each")
@@ -281,7 +316,7 @@ async def mailer_tests():
         # /outreach shows the numbers
         told.clear()
         await bot.outreach_command(Update("/outreach"), ctx)
-        assert "已发 5" in told[0]["text"] and "发不出去 1" in told[0]["text"] and "有回复 1" in told[0]["text"], told[0]["text"]
+        assert "已发 6" in told[0]["text"] and "发不出去 1" in told[0]["text"] and "有回复 1" in told[0]["text"], told[0]["text"]
 
         # auto mode: the batch goes out without a tap, and /outreach_stop stops it
         bot.leads_db.add([{"email": f"auto{i}@ex.com", "name": f"Auto {i}"} for i in range(3)])
@@ -317,10 +352,10 @@ from telegram.ext import Application
 app = Application.builder().token("123:fake").build()
 bot.schedule_outreach(app)
 names = sorted(j.name for j in app.job_queue.jobs())
-assert names == ["email-replies", "find-leads", "find-leads-now", "outreach-batch", "outreach-daily", "outreach-followup", "outreach-intl"], names
+assert names == ["email-replies", "find-leads", "find-leads-now", "outreach-batch", "outreach-daily", "outreach-followup", "outreach-intl", "reply-auto"], names
 daily = [j for j in app.job_queue.jobs() if j.name == "outreach-daily"][0]
 fields = {f.name: str(f) for f in daily.job.trigger.fields}
 assert fields["hour"] == "10" and str(daily.job.trigger.timezone) == "Asia/Singapore"
-print("PASS every day at 10:00 Singapore time the owner is asked; replies are checked every 30 minutes")
+print("PASS every day at 10:00 Singapore time the owner is asked; replies are checked every 10 minutes")
 
 print("\nALL OUTREACH TESTS PASSED")
