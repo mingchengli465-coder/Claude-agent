@@ -364,6 +364,8 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             return
         if await connect_mailer(update):
             return
+        if await send_owner_version(update):
+            return
         await chat(update, context)
         return
     if customer_mode_for(update):
@@ -1556,12 +1558,94 @@ async def email_replies_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             no = bool(outreach_mod.OPT_OUT.search(reply.get("text", "")[:400]))
             leads_db.mark(email, "optout" if no else "replied")
             head = (f"🙅 {lead['name']} 回复说不需要，不会再发给他们了。" if no
-                    else f"📬 {lead['name']} 回你邮件了！去 Gmail 回复他们（要我帮你写就截图给 Claude）：")
+                    else f"📬 {lead['name']} 回你邮件了！")
             text = f"{head}\n\n标题：{reply.get('subject', '')}\n\n{str(reply.get('text', ''))[:1500]}"
         try:
             await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text, disable_web_page_preview=True)
         except TelegramError:
             logger.exception("邮件回复提醒发送失败")
+            continue
+        if not reply.get("bounce") and not no:
+            await offer_reply_draft(context.bot, lead, str(reply.get("subject", "")), str(reply.get("text", "")))
+
+
+async def draft_reply(lead: dict, subject: str, text: str) -> str:
+    """Vincent's answer to a business's reply, written by the same model as the owner's chat."""
+    messages = outreach_mod.reply_messages(lead, subject, text)
+    for index, (api, model) in enumerate(chat_attempts()):
+        try:
+            response = await asyncio.wait_for(api.chat.completions.create(model=model, messages=messages), REQUEST_TIMEOUT)
+            draft = (response.choices[0].message.content or "").strip() if response.choices else ""
+            if draft:
+                return draft
+        except Exception as exc:  # noqa: BLE001 - the next model, or no draft
+            logger.warning("%s 写回信失败：%s", model, exc)
+    return ""
+
+
+async def offer_reply_draft(bot, lead: dict, subject: str, text: str) -> None:
+    """Show the owner a ready answer: ✅ sends it from their Gmail; replying to it with their own
+    words sends those instead."""
+    draft = await draft_reply(lead, subject, text)
+    if not draft:
+        await bot.send_message(chat_id=int(OWNER_CHAT_ID), text="（这次没能帮你写好回信，去 Gmail 回复他们吧。）")
+        return
+    token = secrets.token_hex(4)
+    resubject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+    leads_db.set_setting(f"draft:{token}", json.dumps({"email": lead["email"], "subject": resubject, "body": draft},
+                                                       ensure_ascii=False))
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ 发送这封", callback_data=f"reply:{token}:send"),
+                                      InlineKeyboardButton("✖ 我自己回", callback_data=f"reply:{token}:no")]])
+    sent = await bot.send_message(
+        chat_id=int(OWNER_CHAT_ID), reply_markup=keyboard, disable_web_page_preview=True,
+        text=f"✍️ 我帮你写好了给 {lead['name']} 的回信（点 ✅ 就从你的 Gmail 发出；想改的话，直接回复这条消息，"
+             f"发你改好的内容，我就发你的版本）：\n\n{draft}")
+    leads_db.set_setting(f"draftmsg:{sent.message_id}", token)
+
+
+async def _send_draft(token: str, body: str | None = None) -> str:
+    raw = leads_db.setting(f"draft:{token}") if leads_db is not None else ""
+    box = mailer()
+    if not raw or box is None:
+        return "这封已经处理过了。"
+    draft = json.loads(raw)
+    try:
+        await box.send(draft["email"], draft["subject"], body or draft["body"])
+    except outreach_mod.MailError as exc:
+        return f"⚠️ 没发出去：{exc}\n过一会儿再点一次，或者去 Gmail 直接回复。"
+    leads_db.set_setting(f"draft:{token}", "")
+    return f"✅ 已经从你的 Gmail 回复 {draft['email']}。"
+
+
+async def reply_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    _, token, action = (query.data or "::").split(":", 2)
+    if not is_owner(query.message.chat_id) or leads_db is None:
+        await query.answer("这条不是给你的", show_alert=True)
+        return
+    await query.answer()
+    if action != "send":
+        leads_db.set_setting(f"draft:{token}", "")
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_text("好，你自己在 Gmail 回复他们。")
+        return
+    result = await _send_draft(token)
+    if result.startswith("✅"):
+        await query.edit_message_reply_markup(reply_markup=None)
+    await query.message.reply_text(result)
+
+
+async def send_owner_version(update: Update) -> bool:
+    """The owner replied to a draft with their own words: send those."""
+    message = update.effective_message
+    original = message.reply_to_message if message is not None else None
+    if leads_db is None or original is None or not message.text:
+        return False
+    token = leads_db.setting(f"draftmsg:{original.message_id}")
+    if not token or not leads_db.setting(f"draft:{token}"):
+        return False
+    await message.reply_text(await _send_draft(token, message.text.strip()))
+    return True
 
 
 def start_outreach() -> None:
@@ -1904,6 +1988,7 @@ def main() -> None:
     application.add_handler(CommandHandler("outreach", outreach_command))
     application.add_handler(CommandHandler("outreach_stop", outreach_stop_command))
     application.add_handler(CallbackQueryHandler(mail_button, pattern=r"^mail:"))
+    application.add_handler(CallbackQueryHandler(reply_button, pattern=r"^reply:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, route_text))
     application.add_handler(MessageHandler(filters.ATTACHMENT & ~filters.COMMAND, route_media))
     application.add_error_handler(on_error)

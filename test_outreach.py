@@ -158,7 +158,7 @@ async def mailer_tests():
             async def send_message(self, **k): told.append(k); return Msg()
 
         class Msg:
-            def __init__(self, text=""): self.text, self.chat_id = text, 424242
+            def __init__(self, text=""): self.text, self.chat_id, self.message_id, self.reply_to_message = text, 424242, 77, None
             async def reply_text(self, text, **k): told.append({"text": text, **k})
             async def edit_text(self, text, **k): edits.append(text)
 
@@ -206,6 +206,7 @@ async def mailer_tests():
             def __init__(self, data, chat=424242):
                 self.data, self.message = data, Msg(); self.message.chat_id = chat; self.alerts = []
             async def answer(self, text=None, show_alert=False): self.alerts.append(text)
+            async def edit_message_reply_markup(self, **k): edits.append("markup-off")
             async def edit_message_text(self, text, **k): edits.append(text)
 
         q = Query(go, chat=999)
@@ -240,12 +241,39 @@ async def mailer_tests():
         for email in ("shop0@ex.com", "shop1@ex.com"):
             bot.leads_db.mark(email, "sent")
         told.clear()
+        drafted = []
+        async def fake_draft(lead, subject, text):
+            drafted.append((lead["name"], subject, text))
+            return "Hi! Happy to set up a free trial. Could you send me your price list?\n\nVincent"
+        real_draft, bot.draft_reply = bot.draft_reply, fake_draft
         await bot.email_replies_job(ctx)
         await bot.email_replies_job(ctx)
         texts = [t["text"] for t in told]
-        assert len(texts) == 3, texts
+        assert len(texts) == 4, texts
         assert "Whyzee Bakery 回你邮件了" in texts[0] and "demo work" in texts[0]
-        assert "不需要" in texts[1] and "退回来了" in texts[2]
+        assert "我帮你写好了给 Whyzee Bakery 的回信" in texts[1] and "free trial" in texts[1]
+        assert drafted == [("Whyzee Bakery", "Re: Quick idea", "Hi Vincent, sounds interesting. How does the demo work?")]
+        assert "不需要" in texts[2] and "退回来了" in texts[3]
+        print("PASS a business that answers gets a drafted reply; no-thanks and bounces don't")
+
+        # ✅ sends the draft from Gmail, in reply; only once
+        send_btn, _ = [b.callback_data for b in told[1]["reply_markup"].inline_keyboard[0]]
+        before = len(sent)
+        q = Query(send_btn)
+        await bot.reply_button(types.SimpleNamespace(callback_query=q), ctx)
+        assert sent[-1]["to"] == "info@whyzee.com.sg" and sent[-1]["subject"] == "Re: Quick idea"
+        assert "price list" in sent[-1]["body"] and len(sent) == before + 1 and "已经从你的 Gmail 回复" in told[-1]["text"]
+        await bot.reply_button(types.SimpleNamespace(callback_query=Query(send_btn)), ctx)
+        assert len(sent) == before + 1 and "处理过了" in told[-1]["text"]
+        print("PASS ✅ sends the drafted reply once, from the owner's Gmail")
+
+        # replying to a draft with their own words sends those instead
+        await bot.offer_reply_draft(Bot(), bot.leads_db.get("info@whyzee.com.sg"), "Re: Quick idea", "And the price?")
+        mine = Msg("It's US$70 to set up. Vincent"); mine.reply_to_message = types.SimpleNamespace(message_id=77)
+        assert await bot.send_owner_version(types.SimpleNamespace(effective_message=mine))
+        assert sent[-1]["body"] == "It's US$70 to set up. Vincent" and len(sent) == before + 2
+        bot.draft_reply = real_draft
+        print("PASS the owner's own words, sent as a reply to the draft, go instead")
         assert [bot.leads_db.get(e)["status"] for e in ("info@whyzee.com.sg", "shop0@ex.com", "shop1@ex.com")] \
             == ["replied", "optout", "bounced"]
         print("PASS replies, no-thanks and bounces reach the owner once each")
