@@ -77,6 +77,7 @@ AUTO_ANSWER = re.compile(r"out of (the )?office|automatic reply|auto-?reply|auto
 # for at most this many answers to one business; after that the owner takes over.
 REPLY_AUTO_MINUTES = int(os.environ.get("OUTREACH_REPLY_AUTO_MINUTES", "10"))
 REPLY_AUTO_MAX = int(os.environ.get("OUTREACH_REPLY_AUTO_MAX", "4"))
+EMAIL_ADDRESS = re.compile(r"^[\w.+'-]+@[\w-]+(\.[\w-]+)+$")
 OPT_OUT = re.compile(r"no thanks|not interested|unsubscribe|remove me|stop email|不用了|不需要|唔使|唔需要", re.I)
 
 EN_SUBJECT = "Quick idea for {name}'s customer enquiries"
@@ -482,9 +483,50 @@ A business replied to Vincent's email. Write his answer:
 - End with "Vincent" on its own line."""
 
 
+# --- a shop that made its own free trial and left its email: how to use it, and how to go live -----
+TRIAL_MAIL_SUBJECT = "Your AI assistant for {name} is ready | {name} 的 AI 客服做好了"
+TRIAL_MAIL_BODY = """Hi,
+
+Your free AI assistant for {name} is ready, and it stays online: {link}
+
+Ask it what your customers usually ask. To put it on your website, paste this one line just before </body> (Wix, Squarespace and WordPress all work):
+
+{embed}
+
+During the trial, the bookings and enquiries it takes come to me and I pass them on. When you're happy with it, I'll make it official: it alerts you directly (by email, WhatsApp or Telegram), I fine-tune it to your prices and rules, and it's a one-off US$70, then US$9.9 a month, cancel anytime.
+
+Any questions, just reply to this email.
+
+Vincent
+
+———— 繁體中文 ————
+
+你好，
+
+{name} 的免費 AI 客服已經做好了，一直都在線上：{link}
+
+可以像客人一樣問問它。想放進你的網站，把上面那一行代碼貼到網站的 </body> 前面就可以（Wix、Squarespace、WordPress 都行）。
+
+試用期間，它接到的預約和查詢會先通知我，我再轉給你。滿意的話我幫你正式上線：直接通知你本人（Email、WhatsApp 或 Telegram），按你的價目和規定再調好，一次性 US$70，之後每月 US$9.9，隨時可停。
+
+有任何問題，直接回覆這封郵件就好。
+
+Vincent"""
+
+
+def compose_trial(name: str, link: str, embed: str) -> tuple[str, str]:
+    return (TRIAL_MAIL_SUBJECT.format(name=name),
+            TRIAL_MAIL_BODY.format(name=name, link=link, embed=embed))
+
+
 def reply_messages(lead: dict, their_subject: str, their_text: str) -> list[dict]:
     """The chat for the model that drafts Vincent's answer to a business's reply."""
-    _, first = compose(lead)
+    if lead.get("kind") == "trial":
+        # someone who made a free trial on the site: the first email was its how-to (link kept in "site")
+        _, first = compose_trial(lead["name"], lead.get("site") or "", "(one line of code)")
+        lead = {**lead, "personal": lead.get("site") or ""}
+    else:
+        _, first = compose(lead)
     system = REPLY_SYSTEM.format(demo=lead.get("personal") or demo_link(lead) or DEMO_LINK, video=VIDEO_LINK, telegram=TELEGRAM_LINK)
     user = (f"Business: {lead['name']} ({lead.get('region') or ''})\n\n"
             f"Vincent's first email:\n{plain(first, lead)[:2500]}\n\n"
@@ -585,7 +627,7 @@ def parse_leads(raw: str) -> list[dict]:
 
 
 # the daily HK/SG/MY batch (and its limit) leaves the English-market countries alone
-ASIA = "COALESCE(region, '') NOT IN ('uk', 'ie', 'au', 'nz', 'ca', 'us')"
+ASIA = "COALESCE(region, '') NOT IN ('uk', 'ie', 'au', 'nz', 'ca', 'us', 'trial')"
 
 
 # errors from Gmail or the network rather than from the address: worth another try later
@@ -743,7 +785,7 @@ class Leads:
         with self._db() as db:
             return [dict(r) for r in db.execute(
                 "SELECT * FROM leads WHERE status='sent' AND sent_at <= ? AND followed_at IS NULL "
-                "AND COALESCE(kind, '') != 'agency' ORDER BY sent_at LIMIT ?", (before, limit))]
+                "AND COALESCE(kind, '') NOT IN ('agency', 'trial') ORDER BY sent_at LIMIT ?", (before, limit))]
 
     def mark_followed(self, email: str) -> None:
         with self._db() as db:

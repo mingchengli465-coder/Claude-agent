@@ -1665,6 +1665,46 @@ async def _send_draft(token: str, body: str | None = None) -> str:
     return f"✅ 已经从你的 Gmail 回复 {draft['email']}。"
 
 
+TRIAL_MAIL_MINUTES = int(os.environ.get("TRIAL_MAIL_MINUTES", "30"))
+
+
+async def trial_mail_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """A shop that made a free trial and left its email gets how to use it and how to go live; its
+    answer then comes back like any business's (email_replies_job), drafted and sent by itself."""
+    box = mailer()
+    if leads_db is None or box is None or not OWNER_CHAT_ID:
+        return
+    now = dt.datetime.now(dt.timezone.utc)
+    for key, raw in leads_db.settings_like("trialmail:"):
+        try:
+            item = json.loads(raw)
+            if dt.datetime.fromisoformat(item["due"]) > now:
+                continue
+        except (ValueError, KeyError):
+            leads_db.set_setting(key, "")
+            continue
+        leads_db.set_setting(key, "")
+        if leads_db.get(item["email"]) is not None:
+            continue  # already on the list (we emailed them, or they made one before)
+        link = outreach_mod.TRIAL_PAGE.format(slug=item["slug"]).replace("from=email", "from=trial")
+        embed = (f'<script src="{public_base_url()}/widget.js" data-demo="t-{item["slug"]}" '
+                 f'data-title="{item["name"]}" defer></script>')
+        subject, body = outreach_mod.compose_trial(item["name"], link, embed)
+        try:
+            await box.send(item["email"], subject, body)
+        except outreach_mod.MailError as exc:
+            logger.warning("试用说明邮件没发出去（%s）：%s", item["email"], exc)
+            continue
+        leads_db.add([{"email": item["email"], "name": item["name"], "region": "trial", "kind": "trial", "site": link}])
+        leads_db.mark(item["email"], "sent")
+        try:
+            await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), disable_web_page_preview=True,
+                                           text=f"📧 已经给做了免费试用的 {item['name']}（{item['email']}）发了使用说明和正式上线的价格。"
+                                                "他们回信的话，我照常帮你回。")
+        except TelegramError:
+            logger.exception("试用说明的通知没发出去")
+
+
 async def reply_auto_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Drafted answers whose time has come go out by themselves; one that won't send is retried
     a few times, then left to the owner."""
@@ -1767,6 +1807,7 @@ def schedule_outreach(application: Application) -> None:
     # every 10 minutes, so a business that answers hears back within the half hour, by itself
     application.job_queue.run_repeating(email_replies_job, interval=600, first=120, name="email-replies")
     application.job_queue.run_repeating(reply_auto_job, interval=60, first=90, name="reply-auto")
+    application.job_queue.run_repeating(trial_mail_job, interval=300, first=150, name="trial-mail")
     application.job_queue.run_repeating(batch_job, interval=300, first=60, name="outreach-batch")
     application.job_queue.run_repeating(intl_daily_job, interval=900, first=180, name="outreach-intl")
     application.job_queue.run_repeating(followup_job, interval=1800, first=600, name="outreach-followup")
@@ -2028,6 +2069,12 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
     async def on_trial(event: str, row: dict) -> None:
         link = f"{public_base_url()}/t/{row['slug']}"
         if event == "new":
+            contact = (row.get("contact") or "").strip().lower()
+            if leads_db is not None and outreach_mod.EMAIL_ADDRESS.match(contact):
+                # they left an email: the how-to (and how to go live) follows in half an hour
+                due = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=TRIAL_MAIL_MINUTES)).isoformat()
+                leads_db.set_setting(f"trialmail:{row['slug']}", json.dumps(
+                    {"due": due, "email": contact, "name": row["name"], "slug": row["slug"]}, ensure_ascii=False))
             label = demos_mod.DEMOS.get(row["kind"], {}).get("label_zh", "")
             info = f"填了 {len(row['info'])} 字的资料" if row["info"] else "没填资料，先用示范资料"
             await tell_owner(f"🎉 有人做了免费试用：{row['name']}（{label}）\n联系方式：{row['contact'] or '没留'}\n"
