@@ -8,15 +8,21 @@ businesses that publish an email are kept: no chains (anything with a brand), no
 
 A whole country at once is too heavy for the public Overpass servers (they time out), so each
 search covers one town and its surroundings; the town changes from day to day.
+
+Few shops put their email on the map, but many put their website: for those, the email is read
+from the shop's own homepage or contact page (mailto links, plain text, Cloudflare-hidden ones).
 """
 
 from __future__ import annotations
 
+import asyncio
+import html as _html
 import logging
 import math
 import os
 import random
 import re
+from urllib.parse import urljoin, urlparse
 
 from aiohttp import ClientSession, ClientTimeout
 
@@ -49,21 +55,34 @@ TOWNS = {
 }
 # what each kind of business is tagged as on the map
 TAGS = {
-    "bnb": [("tourism", "guest_house")],
+    "bnb": [("tourism", "guest_house"), ("tourism", "hotel"), ("tourism", "chalet"), ("tourism", "apartment")],
     "florist": [("shop", "florist")],
-    "bakery": [("shop", "pastry"), ("shop", "bakery")],
-    "beauty": [("shop", "beauty")],
+    "bakery": [("shop", "pastry"), ("shop", "bakery"), ("shop", "confectionery")],
+    "beauty": [("shop", "beauty"), ("shop", "hairdresser"), ("shop", "massage")],
     "groomer": [("shop", "pet_grooming")],
+    "tutor": [("amenity", "prep_school")],
 }
-PLURAL = {"bnb": "B&Bs", "florist": "florists", "bakery": "cake shops and bakeries", "beauty": "beauty studios",
-          "groomer": "dog groomers"}
+PLURAL = {"bnb": "places to stay", "florist": "florists", "bakery": "cake shops and bakeries",
+          "beauty": "beauty and hair salons", "groomer": "dog groomers", "tutor": "tuition centres"}
+# shops with only a website: how many to look up per town, and how many at once
+SITE_LOOKUPS = int(os.environ.get("LEADS_SITE_LOOKUPS", "60"))
+SITE_PARALLEL = 6
+# seconds to wait after a map server says "too many requests", and between towns (bot.py)
+BUSY_WAIT = float(os.environ.get("LEADS_BUSY_WAIT", "30"))
+PAUSE = float(os.environ.get("LEADS_PAUSE", "15"))
 EMAIL = re.compile(r"^[\w.+'-]+@[\w-]+(\.[\w-]+)+$")
 # addresses that belong to a platform, not the business
-NOT_THEIRS = ("booking.com", "airbnb", "example.", "wix.com", "sentry.", "facebook.com", "noreply", "no-reply")
+NOT_THEIRS = ("booking.com", "airbnb", "example.", "wix.com", "wixpress", "sentry", "facebook.com", "noreply", "no-reply",
+              "domain.com", "email.com", "yourname", "yourdomain", "godaddy", "squarespace", "wordpress", "@sentry",
+              "privacy", "gdpr", "abuse@", "webmaster@", "postmaster@")
+# the free mailboxes small shops often use instead of their own domain
+FREE_MAIL = ("gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "hotmail.co.uk", "live.com", "live.co.uk",
+             "yahoo.com", "yahoo.co.uk", "icloud.com", "me.com", "btinternet.com", "btconnect.com", "aol.com",
+             "bigpond.com", "bigpond.net.au", "xtra.co.nz", "eircom.net", "sky.com", "talktalk.net", "virginmedia.com")
 
 
 def query(lat: float, lon: float, radius: int) -> str:
-    """Every kind of business we write to, with an email, around one town."""
+    """Every kind of business we write to around one town (with an email or a website; pick() sorts them)."""
     # a box around the town: much lighter for the servers than "around"
     dlat, dlon = radius / 111_320, radius / (111_320 * max(0.2, math.cos(math.radians(lat))))
     near = f"({lat - dlat:.4f},{lon - dlon:.4f},{lat + dlat:.4f},{lon + dlon:.4f})"
@@ -72,41 +91,164 @@ def query(lat: float, lon: float, radius: int) -> str:
     for pairs in TAGS.values():
         for k, v in pairs:
             by_key.setdefault(k, []).append(v)
-    parts = "".join(f'nwr["{k}"~"^({"|".join(values)})$"]["{key}"]{near};' for k, values in by_key.items()
-                    for key in ("email", "contact:email"))
-    return f"[out:json][timeout:40];({parts});out tags 600;"
+    parts = "".join(f'nwr["{k}"~"^({"|".join(values)})$"]["name"]{near};' for k, values in by_key.items())
+    return f"[out:json][timeout:60];({parts});out tags 3000;"
 
 
 def kind_of(tags: dict) -> str:
     return next((kind for kind, pairs in TAGS.items() if any(tags.get(k) == v for k, v in pairs)), "")
 
 
+def usable(email: str) -> bool:
+    return bool(EMAIL.match(email)) and not any(bad in email for bad in NOT_THEIRS) and len(email) <= 80
+
+
+def _lead(tags: dict, kind: str, region: str, email: str) -> dict:
+    name = tags["name"].strip()
+    city = next((tags[k] for k in ("addr:city", "addr:town", "addr:village", "addr:suburb", "addr:place")
+                 if tags.get(k)), "").strip()
+    site = (tags.get("website") or tags.get("contact:website") or "").strip()
+    where = city or COUNTRY_NAME[region]
+    return {"email": email, "name": name[:60], "region": region, "lang": "en", "kind": "shop",
+            "cat": kind, "city": city[:40], "site": site[:80],
+            "first": f"I came across {name} on the map while looking at {PLURAL[kind]} in {where}."}
+
+
+def _independent(el: dict) -> tuple[dict, str]:
+    """The element's tags and kind, or ({}, "") for a chain, a closed shop or another kind of business."""
+    tags = el.get("tags") or {}
+    kind = kind_of(tags)
+    if not kind or not (tags.get("name") or "").strip():
+        return {}, ""
+    if any(k in tags for k in ("brand", "brand:wikidata", "franchise", "disused:shop", "end_date")):
+        return {}, ""
+    if tags.get("opening_hours") == "closed":
+        return {}, ""
+    return tags, kind
+
+
 def pick(elements: list[dict], region: str) -> list[dict]:
-    """The independent, open businesses with a usable email, as leads."""
+    """The independent, open businesses with a usable email on the map, as leads."""
     found, seen = [], set()
     for el in elements:
-        tags = el.get("tags") or {}
-        kind = kind_of(tags)
-        if not kind:
-            continue
-        name = (tags.get("name") or "").strip()
-        if not name or any(k in tags for k in ("brand", "brand:wikidata", "franchise", "disused:shop", "end_date")):
-            continue
-        if tags.get("opening_hours") == "closed":
-            continue
-        raw = tags.get("email") or tags.get("contact:email") or ""
+        tags, kind = _independent(el)
+        raw = (tags.get("email") or tags.get("contact:email") or "") if kind else ""
         email = raw.split(";")[0].strip().removeprefix("mailto:").lower()
-        if not EMAIL.match(email) or any(bad in email for bad in NOT_THEIRS) or email in seen:
+        if not kind or not usable(email) or email in seen:
             continue
         seen.add(email)
-        city = next((tags[k] for k in ("addr:city", "addr:town", "addr:village", "addr:suburb", "addr:place")
-                     if tags.get(k)), "").strip()
-        site = (tags.get("website") or tags.get("contact:website") or "").strip()
-        where = city or COUNTRY_NAME[region]
-        found.append({"email": email, "name": name[:60], "region": region, "lang": "en", "kind": "shop",
-                      "cat": kind, "city": city[:40], "site": site[:80],
-                      "first": f"I came across {name} on the map while looking at {PLURAL[kind]} in {where}."})
+        found.append(_lead(tags, kind, region, email))
     return found
+
+
+def with_site(elements: list[dict]) -> list[tuple[dict, str, str]]:
+    """The independent businesses with a website but no email on the map: (tags, kind, url)."""
+    out, seen = [], set()
+    for el in elements:
+        tags, kind = _independent(el)
+        if not kind or tags.get("email") or tags.get("contact:email"):
+            continue
+        url = (tags.get("website") or tags.get("contact:website") or "").split(";")[0].strip()
+        if not url:
+            continue
+        url = url if url.startswith("http") else "http://" + url
+        host = urlparse(url).netloc.lower().removeprefix("www.")
+        # a page on a booking site or social network isn't the shop's own website
+        if not host or host in seen or any(p in host for p in ("facebook.", "instagram.", "booking.com", "airbnb.",
+                                                                "tripadvisor.", "google.", "linktr.ee", "yell.com")):
+            continue
+        seen.add(host)
+        out.append((tags, kind, url))
+    return out
+
+
+_MAILTO = re.compile(r"mailto:([^\"'?>\s]+)", re.I)
+_TEXT_EMAIL = re.compile(r"[\w.+'-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}", re.I)
+_CFEMAIL = re.compile(r'data-cfemail="([0-9a-f]+)"', re.I)
+_CONTACT_LINK = re.compile(r'href="([^"#]*contact[^"#]*)"', re.I)
+_IMAGE = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+
+
+def cf_decode(hexed: str) -> str:
+    """Cloudflare's hidden email: the first byte is the key, every other byte is XORed with it."""
+    try:
+        key = int(hexed[:2], 16)
+        return "".join(chr(int(hexed[i:i + 2], 16) ^ key) for i in range(2, len(hexed), 2))
+    except ValueError:
+        return ""
+
+
+def emails_in(page: str) -> list[str]:
+    """Every address on a page, mailto links and hidden ones first."""
+    found = [_html.unescape(m).strip() for m in _MAILTO.findall(page)]
+    found += [cf_decode(h) for h in _CFEMAIL.findall(page)]
+    found += _TEXT_EMAIL.findall(_html.unescape(page))
+    out = []
+    for email in found:
+        email = email.lower().strip(".")
+        if usable(email) and not email.endswith(_IMAGE) and email not in out:
+            out.append(email)
+    return out
+
+
+def best_email(emails: list[str], site: str) -> str:
+    """The shop's own address: on its own domain, else a free mailbox it uses; nothing from elsewhere."""
+    host = urlparse(site).netloc.lower().removeprefix("www.")
+    own = [e for e in emails if host and (e.split("@")[1] == host or host.endswith("." + e.split("@")[1])
+                                          or e.split("@")[1].endswith("." + host))]
+    pool = own or [e for e in emails if e.split("@")[1] in FREE_MAIL]
+    # info@ / hello@ / bookings@ before a person's own address
+    pool.sort(key=lambda e: 0 if e.split("@")[0] in ("info", "hello", "enquiries", "enquiry", "bookings", "booking",
+                                                    "contact", "stay", "reservations", "office", "admin") else 1)
+    return pool[0] if pool else ""
+
+
+async def _page(session: ClientSession, url: str) -> str:
+    try:
+        async with session.get(url, timeout=ClientTimeout(total=12), allow_redirects=True) as r:
+            if r.status != 200 or "html" not in r.headers.get("Content-Type", "html"):
+                return ""
+            return (await r.content.read(600_000)).decode("utf-8", "replace")
+    except Exception:  # noqa: BLE001 - a site that's down just has no email for us
+        return ""
+
+
+async def site_email(session: ClientSession, url: str) -> str:
+    """The email a shop shows on its homepage, or else on its contact page."""
+    home = await _page(session, url)
+    if not home:
+        return ""
+    email = best_email(emails_in(home), url)
+    if email:
+        return email
+    tried = set()
+    links = [urljoin(url, h) for h in _CONTACT_LINK.findall(home)][:2] + [urljoin(url, "/contact"), urljoin(url, "/contact-us")]
+    for link in links:
+        if urlparse(link).netloc != urlparse(url).netloc or link in tried or len(tried) >= 2:
+            continue
+        tried.add(link)
+        email = best_email(emails_in(await _page(session, link)), url)
+        if email:
+            return email
+    return ""
+
+
+async def from_sites(session: ClientSession, shops: list[tuple[dict, str, str]], region: str) -> list[dict]:
+    """Leads for the shops whose email is on their own website."""
+    gate = asyncio.Semaphore(SITE_PARALLEL)
+
+    async def one(tags, kind, url):
+        async with gate:
+            email = await site_email(session, url)
+        return _lead(tags, kind, region, email) if email else None
+
+    found = await asyncio.gather(*(one(*shop) for shop in shops))
+    out, seen = [], set()
+    for lead in found:
+        if lead and lead["email"] not in seen:
+            seen.add(lead["email"])
+            out.append(lead)
+    return out
 
 
 def town_for(region: str, day: int, attempt: int = 0) -> tuple:
@@ -114,25 +256,38 @@ def town_for(region: str, day: int, attempt: int = 0) -> tuple:
     return towns[(day * 7 + attempt * 3 + len(region)) % len(towns)]
 
 
-async def find(region: str, day: int, attempt: int = 0, session: ClientSession | None = None) -> list[dict]:
+async def find(region: str, day: int, attempt: int = 0, session: ClientSession | None = None,
+               skip: set[str] | None = None) -> list[dict]:
     """Ask the map about one town (a different one each day); the first Overpass server that
-    answers wins."""
+    answers wins. Shops with only a website get their email from it. `skip`: names (lowercase)
+    already on the list, not looked up again."""
     _, lat, lon, radius = town_for(region, day, attempt)
+    skip = skip or set()
     own = session is None
     session = session or ClientSession(timeout=ClientTimeout(total=120),
-                                       headers={"User-Agent": "vinc-leads/1.0 (small-business outreach)"})
+                                       headers={"User-Agent": "Mozilla/5.0 (compatible; vinc-leads/1.1)"})
     try:
         for url in OVERPASS:
             try:
                 async with session.post(url, data={"data": query(lat, lon, radius)}) as r:
                     if r.status != 200:
                         logger.warning("地图查询 %s 返回 %s", url, r.status)
+                        if r.status == 429:
+                            await asyncio.sleep(BUSY_WAIT)  # too many requests: give it a moment
                         continue
                     data = await r.json(content_type=None)
             except Exception as exc:  # noqa: BLE001 - try the next server
                 logger.warning("地图查询 %s 失败：%s", url, exc)
                 continue
-            leads = pick(data.get("elements") or [], region)
+            elements = data.get("elements") or []
+            leads = [lead for lead in pick(elements, region) if lead["name"].lower() not in skip]
+            have = {lead["name"].lower() for lead in leads} | skip
+            shops = [s for s in with_site(elements) if s[0]["name"].strip()[:60].lower() not in have]
+            random.shuffle(shops)
+            more = await from_sites(session, shops[:SITE_LOOKUPS], region)
+            logger.info("地图 %s：地图上有邮箱 %d 家，从 %d 个网站里找到 %d 个邮箱", town_for(region, day, attempt)[0],
+                        len(leads), min(len(shops), SITE_LOOKUPS), len(more))
+            leads += more
             random.shuffle(leads)
             return leads
         return []

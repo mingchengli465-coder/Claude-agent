@@ -1508,8 +1508,9 @@ async def find_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         for attempt in range(4):  # four towns at most a day, to be kind to the free map servers
             if need <= 0:
                 break
-            fresh = [lead for lead in await leadfinder.find(region, day, attempt)
+            fresh = [lead for lead in await leadfinder.find(region, day, attempt, skip=names)
                      if lead["email"] not in emails and lead["name"].lower() not in names][:need]
+            await asyncio.sleep(leadfinder.PAUSE)
             if fresh:
                 leads_db.add(fresh)
                 emails |= {lead["email"] for lead in fresh}
