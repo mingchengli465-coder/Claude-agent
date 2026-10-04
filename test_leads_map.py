@@ -95,12 +95,14 @@ async def websites():
         return web.Response(text='<a href="/contact-us">Contact</a> Welcome!', content_type="text/html")
 
     async def contact(request):
+        assert request.headers["User-Agent"] == leadfinder.SITE_AGENT
         return web.Response(text="Write to jo.hair@gmail.com any time", content_type="text/html")
 
     async def nothing(request):
         return web.Response(text="No email here", content_type="text/html")
 
     async def overpass_ok(request):
+        assert request.headers["User-Agent"] == leadfinder.MAP_AGENT, "map servers refuse browser-like names"
         return web.json_response({"elements": ELEMENTS + [
             {"tags": {"name": "Hair By Jo", "shop": "hairdresser", "website": str(server.make_url("/jo")), "addr:city": "Perth"}},
             {"tags": {"name": "Quiet Salon", "shop": "beauty", "website": str(server.make_url("/quiet"))}},

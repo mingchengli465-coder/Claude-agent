@@ -70,6 +70,10 @@ SITE_PARALLEL = 6
 # seconds to wait after a map server says "too many requests", and between towns (bot.py)
 BUSY_WAIT = float(os.environ.get("LEADS_BUSY_WAIT", "30"))
 PAUSE = float(os.environ.get("LEADS_PAUSE", "15"))
+# The map servers want a program to say who it is (a browser-like name gets 406); websites get a
+# browser-like one, as some refuse anything else.
+MAP_AGENT = "vinc-leads/1.1 (+https://mingchengli465-coder.github.io/Claude-agent/)"
+SITE_AGENT = "Mozilla/5.0 (compatible; vinc-leads/1.1; +https://mingchengli465-coder.github.io/Claude-agent/)"
 EMAIL = re.compile(r"^[\w.+'-]+@[\w-]+(\.[\w-]+)+$")
 # addresses that belong to a platform, not the business
 NOT_THEIRS = ("booking.com", "airbnb", "example.", "wix.com", "wixpress", "sentry", "facebook.com", "noreply", "no-reply",
@@ -265,11 +269,12 @@ async def find(region: str, day: int, attempt: int = 0, session: ClientSession |
     skip = skip or set()
     own = session is None
     session = session or ClientSession(timeout=ClientTimeout(total=120),
-                                       headers={"User-Agent": "Mozilla/5.0 (compatible; vinc-leads/1.1)"})
+                                       headers={"User-Agent": SITE_AGENT})
     try:
         for url in OVERPASS:
             try:
-                async with session.post(url, data={"data": query(lat, lon, radius)}) as r:
+                async with session.post(url, data={"data": query(lat, lon, radius)},
+                                        headers={"User-Agent": MAP_AGENT}) as r:
                     if r.status != 200:
                         logger.warning("地图查询 %s 返回 %s", url, r.status)
                         if r.status == 429:
