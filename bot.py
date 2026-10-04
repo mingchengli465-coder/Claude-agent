@@ -40,6 +40,7 @@ import tweet as tweet_mod
 import agent as agent_mod
 import bluesky
 import messenger as messenger_mod
+import demos as demos_mod
 import leadfinder
 import outreach as outreach_mod
 import visits as visits_mod
@@ -1639,6 +1640,16 @@ def build_customer_service(bot) -> cs.CustomerService | None:
 
     svc = cs.CustomerService(cs.Store(), catalog, responder, owner_notify=notify_owner)
     svc.register_channel("telegram", send_telegram)
+
+    async def notify_demo(text: str) -> int | None:
+        # a shop owner trying an industry demo is a warm lead
+        return await notify_owner("🧪 有人在试用行业示范页 ·\n" + text)
+
+    # the industry demos (/demo-bnb, /demo-florist…): each pretend shop answers from its own sample list
+    svc.demo_services = {
+        kind: cs.CustomerService(svc.store, d["catalog"], responder, owner_notify=notify_demo,
+                                 persona=demos_mod.DEMO_PERSONA.format(name=d["name"]))
+        for kind, d in demos_mod.DEMOS.items()} if responder is not None else {}
     logger.info("客服模式已启用：AI %s，本人 chat %s",
                 f"开（{model}）" if responder else "关（只转人工）", OWNER_CHAT_ID)
     return svc
@@ -1819,7 +1830,7 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
         logger.exception("网站仓库打不开，助理不能建网站")
         site_store = None
     chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb,
-                       sites=site_store)
+                       sites=site_store, demos=getattr(service, "demo_services", {}))
     try:
         await chat.start()
     except OSError:

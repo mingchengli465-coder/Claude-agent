@@ -9,6 +9,7 @@
  *   data-welcome="你好～"        开场白
  *   data-open="true"            打开页面就展开窗口
  *   data-lang="zh-TW"           语言（不写就跟网页 / 浏览器）：简体、繁體、English
+ *   data-demo="bnb"             行业示范：由示范店的 AI 回答（demos.py）
  */
 (function () {
   "use strict";
@@ -87,6 +88,8 @@
     return id;
   }
   var visitor = visitorId();
+  // data-demo="bnb": the industry demo's pretend shop answers instead of the owner's own assistant
+  var demoParam = /^[a-z]{2,20}$/.test(cfg.demo || "") ? "&d=" + cfg.demo : "";
 
   // The owner's own pages (data-track) count one page view; ?me=<token> marks
   // this browser as the owner's, so their own visits stay out of the numbers.
@@ -206,7 +209,7 @@
   }
 
   function poll() {
-    return api("/api/messages?v=" + encodeURIComponent(visitor) + "&after=" + cursor).then(function (data) {
+    return api("/api/messages?v=" + encodeURIComponent(visitor) + "&after=" + cursor + demoParam).then(function (data) {
       var first = !loaded;
       loaded = true;
       (data.messages || []).forEach(function (m) {
@@ -256,7 +259,7 @@
     api("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ v: visitor, text: text.slice(0, 1000), lang: langTag })
+      body: JSON.stringify({ v: visitor, text: text.slice(0, 1000), lang: langTag, demo: cfg.demo || "" })
     }).then(function (data) {
       if (data.__status === 429) add("err", T.slow);
       else if (data.__status >= 400) add("err", T.error);
