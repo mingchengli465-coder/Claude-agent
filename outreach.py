@@ -70,6 +70,13 @@ MOCKUP_URL = os.environ.get("OUTREACH_MOCKUP_URL", "https://worker-production-42
 # English-speaking countries searched and emailed every working day: how many a day each
 INTL_MIX = parse_mix(os.environ.get("OUTREACH_INTL_MIX", "uk:5,au:4,ie:2,nz:2"))
 INTL_HOURS = (dt.time(9, 30), dt.time(16, 0))
+# Out-of-office and other automatic answers: told to the owner, never answered.
+AUTO_ANSWER = re.compile(r"out of (the )?office|automatic reply|auto-?reply|autoreply|away from (the )?office|"
+                         r"on (annual )?leave|currently away|delivery status notification|自动回复|自動回覆|休假中", re.I)
+# The drafted answer to a business goes out by itself this many minutes later (0: only with ✅),
+# for at most this many answers to one business; after that the owner takes over.
+REPLY_AUTO_MINUTES = int(os.environ.get("OUTREACH_REPLY_AUTO_MINUTES", "10"))
+REPLY_AUTO_MAX = int(os.environ.get("OUTREACH_REPLY_AUTO_MAX", "4"))
 OPT_OUT = re.compile(r"no thanks|not interested|unsubscribe|remove me|stop email|不用了|不需要|唔使|唔需要", re.I)
 
 EN_SUBJECT = "Quick idea for {name}'s customer enquiries"
@@ -556,6 +563,13 @@ class Leads:
     def set_setting(self, key: str, value: str) -> None:
         with self._db() as db:
             db.execute("INSERT OR REPLACE INTO outreach_settings VALUES (?, ?)", (key, value))
+
+    def settings_like(self, prefix: str) -> list[tuple[str, str]]:
+        """Every non-empty setting whose key starts with `prefix`."""
+        with self._db() as db:
+            rows = db.execute("SELECT key, value FROM outreach_settings WHERE substr(key, 1, ?) = ? AND value != ''",
+                              (len(prefix), prefix)).fetchall()
+        return [(r["key"], r["value"]) for r in rows]
 
     def secret(self) -> str:
         value = self.setting("secret")
