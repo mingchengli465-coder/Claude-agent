@@ -5,7 +5,8 @@ import asyncio, base64, datetime as dt, io, os, sys, tempfile, types
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.update({"TELEGRAM_BOT_TOKEN": "123:fake", "OPENROUTER_API_KEY": "sk-test", "OWNER_CHAT_ID": "424242",
-                   "OUTREACH_GAP_SECONDS": "0", "OUTREACH_BATCH_GAP_SECONDS": "0"})
+                   "OUTREACH_GAP_SECONDS": "0", "OUTREACH_BATCH_GAP_SECONDS": "0",
+                   "LEADS_PAUSE": "0", "LEADS_BUSY_WAIT": "0"})
 from aiohttp import web
 from aiohttp.test_utils import TestServer
 from PIL import Image
@@ -17,8 +18,8 @@ import bot
 
 # --- reading the map -------------------------------------------------------------------------
 q = leadfinder.query(-31.95, 115.86, 25000)
-assert '["shop"~"^(florist|pastry|bakery|beauty|pet_grooming)$"]["email"](-32.1746,115.5953,-31.7254,116.1247)' in q
-assert '["tourism"~"^(guest_house)$"]["contact:email"]' in q and q.count("nwr[") == 4
+assert '["shop"~"^(florist|pastry|bakery|confectionery|beauty|hairdresser|massage|pet_grooming)$"]["name"](-32.1746,115.5953,-31.7254,116.1247)' in q
+assert '["tourism"~"^(guest_house|hotel|chalet|apartment)$"]["name"]' in q and q.count("nwr[") == 3
 assert leadfinder.town_for("au", 10) != leadfinder.town_for("au", 11), "a different town each day"
 assert leadfinder.town_for("au", 10, 0) != leadfinder.town_for("au", 10, 1)
 ELEMENTS = [
@@ -64,6 +65,65 @@ async def overpass():
 
 asyncio.run(overpass())
 print("PASS when one map server is down the next one answers")
+
+# --- shops with only a website: their email is read from it ----------------------------------
+key = 0x5a
+hidden = "%02x" % key + "".join("%02x" % (ord(c) ^ key) for c in "stay@hidden.co.uk")
+assert leadfinder.cf_decode(hidden) == "stay@hidden.co.uk"
+page = ('<a href="mailto:Bookings@RoseCottage.co.uk?subject=Hi">Email</a> logo@2x.png x@sentry.io '
+        f'<span class="__cf_email__" data-cfemail="{hidden}">[email&#160;protected]</span> owner@gmail.com someone@agency.com')
+found = leadfinder.emails_in(page)
+assert found[:2] == ["bookings@rosecottage.co.uk", "stay@hidden.co.uk"] and "logo@2x.png" not in found and "x@sentry.io" not in found
+assert leadfinder.best_email(found, "https://www.rosecottage.co.uk/") == "bookings@rosecottage.co.uk"
+assert leadfinder.best_email(["owner@gmail.com", "someone@agency.com"], "https://rose.uk") == "owner@gmail.com", "a free mailbox it uses"
+assert leadfinder.best_email(["someone@agency.com"], "https://rose.uk") == "", "not the web designer's address"
+assert leadfinder.best_email(["jo@rose.uk", "info@rose.uk"], "https://rose.uk") == "info@rose.uk"
+SITES = [
+    {"tags": {"name": "Hair By Jo", "shop": "hairdresser", "website": "hairbyjo.example.uk", "addr:city": "Leeds"}},
+    {"tags": {"name": "On Facebook", "shop": "florist", "website": "https://facebook.com/onfb"}},
+    {"tags": {"name": "Chain Cuts", "shop": "hairdresser", "website": "https://chain.uk", "brand": "Chain"}},
+    {"tags": {"name": "Has Email", "shop": "florist", "email": "a@b.uk", "website": "https://b.uk"}},
+    {"tags": {"name": "Tutor Hub", "amenity": "prep_school", "contact:website": "https://tutorhub.uk"}},
+]
+shops = leadfinder.with_site(SITES)
+assert [(t["name"], k, u) for t, k, u in shops] == [("Hair By Jo", "beauty", "http://hairbyjo.example.uk"),
+                                                     ("Tutor Hub", "tutor", "https://tutorhub.uk")]
+
+
+async def websites():
+    async def home(request):
+        return web.Response(text='<a href="/contact-us">Contact</a> Welcome!', content_type="text/html")
+
+    async def contact(request):
+        return web.Response(text="Write to jo.hair@gmail.com any time", content_type="text/html")
+
+    async def nothing(request):
+        return web.Response(text="No email here", content_type="text/html")
+
+    async def overpass_ok(request):
+        return web.json_response({"elements": ELEMENTS + [
+            {"tags": {"name": "Hair By Jo", "shop": "hairdresser", "website": str(server.make_url("/jo")), "addr:city": "Perth"}},
+            {"tags": {"name": "Quiet Salon", "shop": "beauty", "website": str(server.make_url("/quiet"))}},
+            {"tags": {"name": "Known Salon", "shop": "beauty", "website": str(server.make_url("/known"))}}]})
+
+    seen = []
+    app = web.Application()
+    app.router.add_get("/jo", home)
+    app.router.add_get("/contact-us", contact)
+    app.router.add_get("/quiet", nothing)
+    app.router.add_get("/known", lambda r: seen.append("known") or nothing(r))
+    app.router.add_post("/map", overpass_ok)
+    async with TestServer(app) as server:
+        leadfinder.OVERPASS = [str(server.make_url("/map"))]
+        leads = await leadfinder.find("au", 3, skip={"known salon"})
+    by_email = {lead["email"]: lead for lead in leads}
+    assert sorted(by_email) == ["first@two.au", "hello@rosiescakes.com.au", "jo.hair@gmail.com"], by_email
+    jo = by_email["jo.hair@gmail.com"]
+    assert jo["name"] == "Hair By Jo" and jo["cat"] == "beauty" and jo["city"] == "Perth" and "beauty and hair salons in Perth" in jo["first"]
+    assert not seen, "a business already on the list isn't looked up again"
+
+asyncio.run(websites())
+print("PASS shops with only a website: their email is read from their homepage or contact page")
 
 # --- the mockup ------------------------------------------------------------------------------
 assert mockup.kind_of({"name": "Happy Oven"}) == "" and mockup.kind_of({"name": "Butter Cake Studio"}) == "bakery"
@@ -148,7 +208,8 @@ async def main():
         ctx = types.SimpleNamespace(bot=Bot())
 
         asked = []
-        async def fake_find(region, day, attempt=0):
+        async def fake_find(region, day, attempt=0, skip=None):
+            assert "already known" in skip
             asked.append((region, attempt))
             kind = "bnb"
             return [{**rosie, "region": region, "email": f"{region}-{attempt}-{i}@ex.com", "name": f"{region} {attempt} {i}",

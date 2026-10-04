@@ -36,7 +36,7 @@
       owner: "本人",
       open: "打开聊天",
       close: "关闭",
-      powered: "AI 客服由 vinc的ai铺子 搭建"
+      powered: "AI 客服由 vinc 搭建 · 免费给你的店做一个"
     },
     hant: {
       title: "AI 客服",
@@ -49,7 +49,7 @@
       owner: "本人",
       open: "開啟聊天",
       close: "關閉",
-      powered: "AI 客服由 vinc的ai鋪子 搭建"
+      powered: "AI 客服由 vinc 搭建 · 免費給你的店做一個"
     },
     en: {
       title: "AI Assistant",
@@ -62,7 +62,7 @@
       owner: "Owner",
       open: "Open chat",
       close: "Close",
-      powered: "AI assistant built by vinc's AI shop"
+      powered: "AI assistant by vinc · get one free for your business"
     }
   };
   // "zh-TW", "zh-HK", "zh-Hant" -> Traditional; other Chinese -> Simplified; the rest -> English.
@@ -174,7 +174,8 @@
     if (welcomeBubble && !cfg.welcome) welcomeBubble.lastChild.nodeValue = T.welcome;
   }
   label();
-  foot.href = base + "/";
+  // every chat window on a shop's site is also a way for other shops to find the free trial
+  foot.href = base + "/trial?from=widget";
 
   var seen = {}, cursor = 0, loaded = false, busy = false, unread = 0, pollTimer = null, hasHistory = false;
 
