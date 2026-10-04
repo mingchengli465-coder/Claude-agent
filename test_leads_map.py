@@ -115,9 +115,12 @@ async def websites():
     app.router.add_get("/quiet", nothing)
     app.router.add_get("/known", lambda r: seen.append("known") or nothing(r))
     app.router.add_post("/map", overpass_ok)
+    import sitetext
+    real_public, sitetext._public, sitetext.PORTS = sitetext._public, (lambda host: host == "127.0.0.1"), None
     async with TestServer(app) as server:
         leadfinder.OVERPASS = [str(server.make_url("/map"))]
         leads = await leadfinder.find("au", 3, skip={"known salon"})
+    sitetext._public, sitetext.PORTS = real_public, (None, 80, 443)
     by_email = {lead["email"]: lead for lead in leads}
     assert sorted(by_email) == ["first@two.au", "hello@rosiescakes.com.au", "jo.hair@gmail.com"], by_email
     jo = by_email["jo.hair@gmail.com"]

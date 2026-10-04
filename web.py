@@ -4,7 +4,8 @@
     GET  /demo        a demo page to send merchants (the chat window is on it)
     GET  /demo-<kind> an industry demo: a pretend B&B, florist… whose own assistant answers (demos.py)
     GET  /trial       a free trial: a shop fills in its information and gets its own assistant (trials.py)
-    POST /api/trial   make one -> {slug}; GET /api/trial/<slug> what its page shows
+    POST /api/trial   make one -> {slug} (from what they typed, or read from their website's url);
+                      GET /api/trial/<slug> what its page shows
     GET  /t/<slug>    a shop's own assistant: a free trial, or the personal demo a cold email links to
     GET  /video       the 38-second intro video (media/), linked from the cold emails
     GET  /mockups/<x>.png  a business's mockup from a cold email (web_static/mockups, or drawn ones on the volume)
@@ -32,10 +33,11 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
-from aiohttp import web
+from aiohttp import ClientSession, ClientTimeout, web
 
 import customer_service as cs
 import demos as demos_mod
+import sitetext
 import trials as trials_mod
 import visits as visits_mod
 
@@ -497,13 +499,23 @@ class WebChat:
         if not isinstance(data, dict):
             return self._json({"error": "bad request"}, 400)
         field = lambda key, n: str(data.get(key) or "").strip()[:n]  # noqa: E731
-        name, info = field("name", 80), field("info", trials_mod.MAX_INFO)
-        if len(name) < 2:
+        name, info, url = field("name", 80), field("info", trials_mod.MAX_INFO), field("url", 300)
+        site = sitetext.normalise(url) if url and not info else ""
+        if url and not info and not site:
+            return self._json({"error": "url"}, 400)
+        if len(name) < 2 and not site:
             return self._json({"error": "name"}, 400)
         now, ip = self.clock(), self._ip(request)
         if not self.ip_trials.allow(ip, now) or not self.all_trials.allow("all", now):
             return self._json({"error": "slow down"}, 429)
-        row = self.trials.create(name, field("kind", 20), info, field("contact", 120))
+        if site:
+            # "paste your website": the assistant answers from what the site says
+            async with ClientSession(timeout=ClientTimeout(total=45)) as session:
+                title, info = await sitetext.read_site(session, site)
+            if not info:
+                return self._json({"error": "site"}, 422)
+            name = name if len(name) >= 2 else title or (sitetext.urlparse(site).hostname or "").removeprefix("www.")
+        row = self.trials.create(name, field("kind", 20), info, field("contact", 120), site=site)
         await self._tell("new", row)
         return self._json({"slug": row["slug"]})
 

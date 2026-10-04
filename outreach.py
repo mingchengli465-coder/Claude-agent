@@ -131,6 +131,10 @@ TRIAL_PAGE = os.environ.get("OUTREACH_TRIAL_PAGE", "https://mingchengli465-coder
 PERSONAL_EN = "I also set up a working demo in {name}'s name, with sample prices for now, that you can chat with: {url}"
 PERSONAL_ZH = "我用「{name}」的名字先做了一個能直接聊天的示範版（價格先用示範資料）：{url}"
 PERSONAL_EN_ASIA = "I've already set up a working demo in {name}'s name (with sample prices for now) that you can chat with: {url}"
+# …and when the demo has read the business's own website (sitetext.py)
+PERSONAL_READ_EN = "I also set up a working demo for {name} that has already read your website, so you can ask it what your customers ask: {url}"
+PERSONAL_READ_ZH = "我已經讓 AI 先讀了「{name}」的網站，做好一個能直接聊天的示範版，你可以像客人一樣問問它：{url}"
+PERSONAL_READ_EN_ASIA = "I've already set up a working demo for {name} that has read your website, so you can ask it what your customers ask: {url}"
 
 
 def demo_link(lead: dict) -> str:
@@ -284,13 +288,69 @@ def mockup_slug(lead: dict) -> str:
     from mockup import kind_of
     if lead.get("mockup"):
         return lead["mockup"]
-    if lead.get("kind") == "agency" or not kind_of(lead):
+    if lead.get("kind") == "agency":
+        # a designer's mockup shows the client's site we found them through
+        if not lead.get("client") or not kind_of(lead):
+            return ""
+        return "a-" + hashlib.sha1(lead["email"].lower().encode()).hexdigest()[:12]
+    if not kind_of(lead):
         return ""
     return "m-" + hashlib.sha1(lead["email"].lower().encode()).hexdigest()[:12]
 
 
+# Web designers found through a client's site ("Website by …", leadfinder.py): a partnership offer
+# about that client, with a mockup of the client's site and a demo built from it.
+INTL_AGENCY_SUBJECT = "{client}'s website + a 24/7 assistant (a partnership idea)"
+INTL_AGENCY_BODY = """{greeting}
+
+{first}
+
+I'm Vincent, a student developer in Singapore. I set up AI assistants for small businesses like {client}: a chat window on their website that answers customers 24/7 from the business's own information and passes every booking or order straight to the owner. Here's a quick mockup of how it could look on {client}'s site:
+
+{mockup}
+
+{demo_line}
+
+Would a simple partnership interest you? You offer it to your clients as an add-on, I do the setup and the upkeep, and you keep 30% of every setup fee (it's US$70 one-off, then US$9.9 a month for the client). The clients stay yours, I won't contact them separately, and I can deliver it under your name.
+
+Here's a 38-second video of how it works: {video}
+
+If you like, I'll set up a free trial for {client} or any other client first, so you can show it to them.
+
+Best,
+Vincent
+{link}
+
+P.S. If this isn't for you, just reply "no thanks" and I won't email again."""
+AGENCY_DEMO_EN = "I also made a working demo for {client}, built from its website, that you could show them: {url}"
+AGENCY_DEMO_SAMPLE_EN = "I also made a working demo in {client}'s name (with sample prices for now) that you could show them: {url}"
+AGENCY_DEMO_ZH = "我也用{client}的網站做了一個能直接聊天的示範版，你們可以拿給客戶看：{url}"
+AGENCY_DEMO_SAMPLE_ZH = "我也用{client}的名字做了一個能直接聊天的示範版（價格先用示範資料），你們可以拿給客戶看：{url}"
+
+
+def _agency_demo(lead: dict, zh: bool = False) -> str:
+    if zh:
+        line = AGENCY_DEMO_ZH if lead.get("personal_read") else AGENCY_DEMO_SAMPLE_ZH
+    else:
+        line = AGENCY_DEMO_EN if lead.get("personal_read") else AGENCY_DEMO_SAMPLE_EN
+    return line.format(client=lead["client"], url=lead["personal"])
+
+
+def _intl_agency_parts(lead: dict) -> tuple[str, str]:
+    host = (lead.get("host") or "").strip()
+    personal = lead.get("personal")
+    fill = {"client": lead["client"], "first": lead.get("first") or f"I came across {lead['client']}'s website and saw that you built it.",
+            "greeting": f"Hi {host}," if host else f"Hi {lead['name']} team,", "mockup": MOCKUP_MARK,
+            "video": VIDEO_LINK.replace("from=email", "from=agency"), "link": SITE_LINK.replace("from=email", "from=agency"),
+            "demo_line": _agency_demo(lead) if personal else
+            "You can chat with a working demo here: " + (demo_link({**lead, "kind": "shop"}) or DEMO_LINK)}
+    return INTL_AGENCY_SUBJECT.format(**fill), INTL_AGENCY_BODY.format(**fill)
+
+
 def _intl_parts(lead: dict) -> tuple[str, str]:
     from mockup import kind_of
+    if lead.get("kind") == "agency" and lead.get("client"):
+        return _intl_agency_parts(lead)
     cat = kind_of(lead) or "bnb"
     host = (lead.get("host") or "").strip()
     fill = {"name": lead["name"], "first": lead.get("first") or f"I came across {lead['name']} online.",
@@ -300,7 +360,8 @@ def _intl_parts(lead: dict) -> tuple[str, str]:
             "price": INTL_PRICE.get(lead.get("region") or "", "US$70, then US$9.9 a month"),
             "kindword": INTL_KINDWORD.get(cat, "small business")}
     personal = lead.get("personal")
-    fill["demo_line"] = (PERSONAL_EN.format(name=lead["name"], url=personal) if personal else
+    fill["demo_line"] = ((PERSONAL_READ_EN if lead.get("personal_read") else PERSONAL_EN).format(name=lead["name"], url=personal)
+                         if personal else
                          f"You can chat with a demo one for a {fill['kindword']} here: "
                          + demo_link(lead).replace("from=email", "from=uk"))
     return INTL_SUBJECT.format(**fill), INTL_BODY.format(**fill)
@@ -317,13 +378,15 @@ def mockup_png(lead: dict, cache: Path | None = None) -> bytes | None:
     if lead.get("mockup") or cache is None:
         return None  # a named mockup that isn't there is not redrawn
     import mockup
-    png = mockup.render(lead)
+    png = mockup.render({**lead, "name": lead["client"], "kind": "shop", "host": ""} if lead.get("kind") == "agency" else lead)
     cache.mkdir(parents=True, exist_ok=True)
     (cache / f"{slug}.png").write_bytes(png)
     return png
 
 
 MOCKUP_INTRO = "我為 {name} 做了一張示意圖：AI 客服放在你們網站上的樣子 / A quick mockup of {name}'s website with the AI assistant on it:"
+MOCKUP_INTRO_AGENCY = ("我用你們做的 {name} 網站畫了一張示意圖：加上 AI 客服的樣子 / "
+                       "A quick mockup of {name}'s website (which you built) with the AI assistant on it:")
 
 
 def compose_html(lead: dict) -> str:
@@ -333,7 +396,9 @@ def compose_html(lead: dict) -> str:
         _, body = _intl_parts(lead)
     else:
         _, body = compose(lead)
-        body = MOCKUP_INTRO.format(name=lead["name"]) + "\n\n" + MOCKUP_MARK + "\n\n" + body
+        intro = MOCKUP_INTRO_AGENCY.format(name=lead["client"]) if lead.get("kind") == "agency" and lead.get("client") \
+            else MOCKUP_INTRO.format(name=lead["name"])
+        body = intro + "\n\n" + MOCKUP_MARK + "\n\n" + body
     return to_html(body, lead)
 
 
@@ -402,6 +467,8 @@ Facts you may use, and nothing else:
 - Vincent first builds a free trial version on the business's own information, so they can test it before paying.
 - To build the trial he needs their price list or menu, opening hours and the questions customers ask most
   (a website link or a photo of the price list is enough).
+- Web designers and agencies can partner: they offer it to their clients as an add-on, Vincent does the setup
+  and upkeep, and they keep 30% of every setup fee. The clients stay theirs; he can deliver under their name.
 - A demo assistant for their kind of business: {demo}
 - A 38-second video of how it works: {video}
 - Vincent on Telegram: {telegram}
@@ -437,7 +504,7 @@ def to_html(body: str, lead: dict) -> str:
     paras = []
     for para in body.split("\n\n"):
         if para == MOCKUP_MARK:
-            alt = _html.escape(f"Mockup of {lead['name']}'s website with a 24/7 assistant", quote=True)
+            alt = _html.escape(f"Mockup of {lead.get('client') or lead['name']}'s website with a 24/7 assistant", quote=True)
             paras.append(f'<p><img src="cid:mockup" width="560" alt="{alt}" '
                          'style="width:100%;max-width:560px;height:auto;border:1px solid #e5e5ea;border-radius:12px"></p>')
             continue
@@ -490,6 +557,9 @@ def compose(lead: dict) -> tuple[str, str]:
         zh = AGENCY_ZH_BODY.replace("{name}", zh_name, 1).format(first=lead.get("first_zh") or AGENCY_ZH_FIRST, **fill)
         en = AGENCY_EN_BODY.format(first=lead.get("first") or AGENCY_EN_FIRST, **fill)
         subject = AGENCY_ZH_SUBJECT.format(**fill) + " | " + AGENCY_EN_SUBJECT
+        if lead.get("personal") and lead.get("client"):
+            zh = zh.replace(f"做好的示範可以看這裡：{DEMO_LINK}", _agency_demo(lead, zh=True))
+            en = en.replace(f"Here's a finished demo: {DEMO_LINK}", _agency_demo(lead))
         return subject, zh + BILINGUAL_RULE + en
     zh = ZH_BODY.replace("{name}", zh_name, 1).format(first=lead.get("first_zh") or ZH_FIRST, price=ZH_PRICE.get(region, ZH_PRICE["sg"]), **fill)
     # leads written in Chinese only carry a Chinese first line; English gets the general one
@@ -497,9 +567,11 @@ def compose(lead: dict) -> tuple[str, str]:
     en = EN_BODY.format(first=first_en or EN_FIRST, price=EN_PRICE.get(region, EN_PRICE["sg"]), **fill)
     subject = ZH_SUBJECT.replace("{name}", zh_name).format(**fill) + " | " + EN_SUBJECT.format(**fill)
     if lead.get("personal"):
-        zh = zh.replace(f"可以先到我的網站試試看：{fill['link']}", PERSONAL_ZH.format(name=lead["name"], url=lead["personal"]))
+        read = lead.get("personal_read")
+        zh = zh.replace(f"可以先到我的網站試試看：{fill['link']}",
+                        (PERSONAL_READ_ZH if read else PERSONAL_ZH).format(name=lead["name"], url=lead["personal"]))
         en = en.replace(f"You can try the one on my own site: {fill['link']}",
-                        PERSONAL_EN_ASIA.format(name=lead["name"], url=lead["personal"]))
+                        (PERSONAL_READ_EN_ASIA if read else PERSONAL_EN_ASIA).format(name=lead["name"], url=lead["personal"]))
     return subject, zh + BILINGUAL_RULE + en
 
 
@@ -545,7 +617,7 @@ class Leads:
             columns = [r[1] for r in db.execute("PRAGMA table_info(leads)")]
             if "first_zh" not in columns:
                 db.execute("ALTER TABLE leads ADD COLUMN first_zh TEXT")
-            for column in ("kind", "batch", "mockup", "cat", "host", "city", "site", "followed_at"):
+            for column in ("kind", "batch", "mockup", "cat", "host", "city", "site", "followed_at", "client", "client_site"):
                 if column not in columns:
                     db.execute(f"ALTER TABLE leads ADD COLUMN {column} TEXT")
 
@@ -582,7 +654,8 @@ class Leads:
     def add(self, leads: list[dict]) -> int:
         """New businesses are added; ones already known keep their status. Businesses not yet
         emailed take the latest wording (name, first lines), so a fixed list applies before sending."""
-        fields = ("name", "region", "lang", "first", "first_zh", "kind", "batch", "mockup", "cat", "host", "city", "site")
+        fields = ("name", "region", "lang", "first", "first_zh", "kind", "batch", "mockup", "cat", "host", "city", "site",
+                  "client", "client_site")
         default = {"region": "sg", "lang": "en", "kind": "shop"}
         rows = [(l["email"].strip().lower(),) + tuple(str(l.get(f, default.get(f, ""))) for f in fields) for l in leads]
         with self._db() as db:

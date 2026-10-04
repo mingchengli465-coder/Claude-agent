@@ -11,6 +11,10 @@ search covers one town and its surroundings; the town changes from day to day.
 
 Few shops put their email on the map, but many put their website: for those, the email is read
 from the shop's own homepage or contact page (mailto links, plain text, Cloudflare-hidden ones).
+
+Those homepages often credit their web designer ("Website by Studio North"). Designers who build
+sites for small shops are the best partners there are: each one can offer the assistant to all of
+their clients. They become leads of their own (kind "agency"), with the client we found them through.
 """
 
 from __future__ import annotations
@@ -25,6 +29,8 @@ import re
 from urllib.parse import urljoin, urlparse
 
 from aiohttp import ClientSession, ClientTimeout
+
+import sitetext
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +79,9 @@ PAUSE = float(os.environ.get("LEADS_PAUSE", "15"))
 # The map servers want a program to say who it is (a browser-like name gets 406); websites get a
 # browser-like one, as some refuse anything else.
 MAP_AGENT = "vinc-leads/1.1 (+https://mingchengli465-coder.github.io/Claude-agent/)"
-SITE_AGENT = "Mozilla/5.0 (compatible; vinc-leads/1.1; +https://mingchengli465-coder.github.io/Claude-agent/)"
+SITE_AGENT = sitetext.AGENT
+# web designers credited on the shops' sites, looked up per town
+AGENCY_LOOKUPS = int(os.environ.get("LEADS_AGENCY_LOOKUPS", "10"))
 EMAIL = re.compile(r"^[\w.+'-]+@[\w-]+(\.[\w-]+)+$")
 # addresses that belong to a platform, not the business
 NOT_THEIRS = ("booking.com", "airbnb", "example.", "wix.com", "wixpress", "sentry", "facebook.com", "noreply", "no-reply",
@@ -208,23 +216,23 @@ def best_email(emails: list[str], site: str) -> str:
 
 
 async def _page(session: ClientSession, url: str) -> str:
-    try:
-        async with session.get(url, timeout=ClientTimeout(total=12), allow_redirects=True) as r:
-            if r.status != 200 or "html" not in r.headers.get("Content-Type", "html"):
-                return ""
-            return (await r.content.read(600_000)).decode("utf-8", "replace")
-    except Exception:  # noqa: BLE001 - a site that's down just has no email for us
-        return ""
+    return (await sitetext.fetch(session, url))[1]
 
 
 async def site_email(session: ClientSession, url: str) -> str:
-    """The email a shop shows on its homepage, or else on its contact page."""
+    return (await site_info(session, url))[0]
+
+
+async def site_info(session: ClientSession, url: str) -> tuple[str, list[tuple[str, str]]]:
+    """The email a business shows on its homepage (or else on its contact page), and the web
+    designers its homepage credits."""
     home = await _page(session, url)
     if not home:
-        return ""
+        return "", []
+    found = sitetext.credits(home, url)
     email = best_email(emails_in(home), url)
     if email:
-        return email
+        return email, found
     tried = set()
     links = [urljoin(url, h) for h in _CONTACT_LINK.findall(home)][:2] + [urljoin(url, "/contact"), urljoin(url, "/contact-us")]
     for link in links:
@@ -233,18 +241,24 @@ async def site_email(session: ClientSession, url: str) -> str:
         tried.add(link)
         email = best_email(emails_in(await _page(session, link)), url)
         if email:
-            return email
-    return ""
+            return email, found
+    return "", found
 
 
-async def from_sites(session: ClientSession, shops: list[tuple[dict, str, str]], region: str) -> list[dict]:
-    """Leads for the shops whose email is on their own website."""
+async def from_sites(session: ClientSession, shops: list[tuple[dict, str, str]], region: str,
+                     credited: list | None = None) -> list[dict]:
+    """Leads for the shops whose email is on their own website. The web designers their homepages
+    credit are added to `credited` as (designer url, designer name, the shop)."""
     gate = asyncio.Semaphore(SITE_PARALLEL)
 
     async def one(tags, kind, url):
         async with gate:
-            email = await site_email(session, url)
-        return _lead(tags, kind, region, email) if email else None
+            email, found = await site_info(session, url)
+        shop = _lead(tags, kind, region, email)
+        shop["site"] = url[:80]
+        if credited is not None:
+            credited.extend((home, name, shop) for home, name in found)
+        return shop if email else None
 
     found = await asyncio.gather(*(one(*shop) for shop in shops))
     out, seen = [], set()
@@ -253,6 +267,33 @@ async def from_sites(session: ClientSession, shops: list[tuple[dict, str, str]],
             seen.add(lead["email"])
             out.append(lead)
     return out
+
+
+def agency_lead(email: str, home: str, name: str, shop: dict, region: str) -> dict:
+    client, where = shop["name"], f" in {shop['city']}" if shop.get("city") else ""
+    return {"email": email, "name": name[:60], "region": region, "lang": "en", "kind": "agency",
+            "cat": shop["cat"], "city": shop.get("city", ""), "site": home[:80],
+            "client": client, "client_site": shop.get("site", ""),
+            "first": f"I came across {client}'s website{where} and saw that you built it. It's a lovely site, and it gave me an idea.",
+            "first_zh": f"我看到{client}的網站是你們做的，做得很好，所以想跟你們聊一個合作的想法。"}
+
+
+async def agencies(session: ClientSession, credited: list, region: str, skip: set[str] | None = None) -> list[dict]:
+    """The web designers credited on shops' sites who show an email on their own site, one lead each."""
+    skip, by_home = skip or set(), {}
+    for home, name, shop in credited:
+        if name.lower() not in skip and home not in by_home:
+            by_home[home] = (name, shop)
+    picked = list(by_home.items())[:AGENCY_LOOKUPS]
+    gate = asyncio.Semaphore(SITE_PARALLEL)
+
+    async def one(home, name, shop):
+        async with gate:
+            email = await site_email(session, home)
+        return agency_lead(email, home, name, shop, region) if email else None
+
+    found = await asyncio.gather(*(one(home, name, shop) for home, (name, shop) in picked))
+    return [lead for lead in found if lead]
 
 
 def town_for(region: str, day: int, attempt: int = 0) -> tuple:
@@ -289,10 +330,13 @@ async def find(region: str, day: int, attempt: int = 0, session: ClientSession |
             have = {lead["name"].lower() for lead in leads} | skip
             shops = [s for s in with_site(elements) if s[0]["name"].strip()[:60].lower() not in have]
             random.shuffle(shops)
-            more = await from_sites(session, shops[:SITE_LOOKUPS], region)
-            logger.info("地图 %s：地图上有邮箱 %d 家，从 %d 个网站里找到 %d 个邮箱", town_for(region, day, attempt)[0],
-                        len(leads), min(len(shops), SITE_LOOKUPS), len(more))
-            leads += more
+            credited: list = []
+            more = await from_sites(session, shops[:SITE_LOOKUPS], region, credited)
+            designers = await agencies(session, credited, region, skip)
+            logger.info("地图 %s：地图上有邮箱 %d 家，从 %d 个网站里找到 %d 个邮箱，还有 %d 家做网站的公司",
+                        town_for(region, day, attempt)[0], len(leads), min(len(shops), SITE_LOOKUPS), len(more),
+                        len(designers))
+            leads += more + designers
             random.shuffle(leads)
             return leads
         return []
