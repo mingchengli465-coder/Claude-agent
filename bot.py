@@ -43,6 +43,7 @@ import messenger as messenger_mod
 import demos as demos_mod
 import leadfinder
 import outreach as outreach_mod
+import sitetext
 import trials as trials_mod
 import visits as visits_mod
 import web
@@ -1305,7 +1306,7 @@ async def send_emails(message, emails: list[str], batch: bool = False, followup:
             if done or failed_in_a_row:
                 await asyncio.sleep(gap)
             html, image = "", None
-            lead = with_personal_demo(lead)
+            lead = await with_personal_demo(lead)
             try:
                 image = await asyncio.to_thread(outreach_mod.mockup_png, lead, mockup_cache())
             except Exception:  # noqa: BLE001 - the letter still goes, with its link
@@ -1417,18 +1418,31 @@ async def send_mail_setup_once(bot) -> None:
 RETRY_SECONDS = float(os.environ.get("OUTREACH_RETRY_SECONDS", "30"))
 
 
-def with_personal_demo(lead: dict) -> dict:
-    """The lead with "personal": the link to a working demo in its own name (made once, kept)."""
+async def with_personal_demo(lead: dict) -> dict:
+    """The lead with "personal": the link to a working demo in its own name, made once and kept.
+    The demo reads the business's website first when it has one ("personal_read"). A web designer's
+    demo is for the client we found them through."""
     from mockup import kind_of
+    from aiohttp import ClientSession, ClientTimeout
     kind = kind_of(lead)
-    if trials_db is None or not kind or lead.get("kind") == "agency":
+    agency = lead.get("kind") == "agency"
+    if trials_db is None or not kind or (agency and not lead.get("client")):
         return lead
+    name = lead["client"] if agency else lead["name"]
+    site = sitetext.normalise((lead.get("client_site") if agency else lead.get("site")) or "")
     try:
-        row = trials_db.for_lead(lead, kind)
+        row = trials_db.existing(lead["email"])
+        if row is None:
+            info = ""
+            if site:
+                async with ClientSession(timeout=ClientTimeout(total=45)) as session:
+                    _, info = await sitetext.read_site(session, site)
+            row = trials_db.for_lead({**lead, "name": name}, kind, info, site if info else "")
     except Exception:  # noqa: BLE001 - the letter still goes, with the demo of its kind
         logger.exception("专属示范没做出来（%s）", lead.get("email"))
         return lead
-    return {**lead, "personal": outreach_mod.TRIAL_PAGE.format(slug=row["slug"])}
+    return {**lead, "personal": outreach_mod.TRIAL_PAGE.format(slug=row["slug"]),
+            "personal_read": bool(row.get("info") and row.get("site"))}
 
 
 def mockup_cache() -> Path | None:
@@ -1596,7 +1610,7 @@ async def email_replies_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def draft_reply(lead: dict, subject: str, text: str) -> str:
     """Vincent's answer to a business's reply, written by the same model as the owner's chat."""
-    messages = outreach_mod.reply_messages(with_personal_demo(lead), subject, text)
+    messages = outreach_mod.reply_messages(await with_personal_demo(lead), subject, text)
     for index, (api, model) in enumerate(chat_attempts()):
         try:
             response = await asyncio.wait_for(api.chat.completions.create(model=model, messages=messages), REQUEST_TIMEOUT)
@@ -2019,8 +2033,12 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
             await tell_owner(f"🎉 有人做了免费试用：{row['name']}（{label}）\n联系方式：{row['contact'] or '没留'}\n"
                              f"{info}\n{link}")
         elif event == "view":
-            await tell_owner(f"👀 {row['name']} 打开了你给他们做的专属示范！（{row['lead_email']}）\n"
-                             f"现在是跟进的好时机。\n{link}")
+            lead = leads_db.get(row["lead_email"]) if leads_db is not None else None
+            if lead and lead.get("kind") == "agency":
+                who = f"做网站的公司 {lead['name']} 打开了你用他们客户「{row['name']}」的网站做的示范！"
+            else:
+                who = f"{row['name']} 打开了你给他们做的专属示范！"
+            await tell_owner(f"👀 {who}（{row['lead_email']}）\n现在是跟进的好时机。\n{link}")
 
     chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb,
                        sites=site_store, demos=getattr(service, "demo_services", {}),

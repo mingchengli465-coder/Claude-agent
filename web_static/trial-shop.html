@@ -52,6 +52,11 @@
   .embed p { margin: 0 0 12px; color: var(--muted); font-size: 15px; line-height: 1.55; }
   pre { margin: 0; background: var(--soft); border-radius: 14px; padding: 16px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
   .copy { margin-top: 10px; font: inherit; font-size: 14px; border: 0; cursor: pointer; padding: 10px 16px; border-radius: 999px; background: var(--fg); color: var(--bg); }
+  .share { margin-top: 40px; max-width: 760px; }
+  .share h2 { font-size: 20px; margin: 0 0 8px; }
+  .share p { margin: 0 0 12px; color: var(--muted); font-size: 15px; line-height: 1.55; }
+  .share .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .share a, .share button { font: inherit; font-size: 15px; border: 0; cursor: pointer; padding: 11px 18px; border-radius: 999px; background: var(--soft); color: var(--fg); }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -65,6 +70,7 @@
   <h1><b id="name"></b> 的 24 小時 AI 客服<span>A 24/7 assistant for <b id="name-en"></b></span></h1>
   <p class="lead">像客人一樣問它問題，看它怎麼回答。客人要訂、要下單的時候，它會把查詢轉給老闆。<br>Ask it anything a customer would. When someone wants to book or order, it passes the enquiry on to the owner.</p>
   <div class="note" id="sample" hidden>這是用「<b class="nm"></b>」的名字做的示範版，價格和規定先用同類型店的示範資料。想換成你自己的資料？<a id="own" href="#">貼上你的價目表，幾秒鐘就好 →</a><br>This demo was made in <b class="nm"></b>'s name, with sample prices for now. <a id="own-en" href="#">Put in your own information →</a></div>
+  <div class="note" id="read" hidden>📖 這個 AI 客服已經讀過 <b id="site"></b> 上的內容，會按網站上寫的回答；網站上沒寫的，它不會亂答，會記下客人的需求轉給老闆。<br>This assistant has read <b class="site"></b> and answers from it. What the site doesn't say, it won't make up: it takes the customer's details for the owner.</div>
   <div class="note" id="fresh" hidden>✅ 做好了！把這個頁面的網址存起來，隨時回來試。<br>Done! Bookmark this page to come back any time.</div>
   <div class="ask">
     <h2>點一個問題試試 · Tap a question</h2>
@@ -75,6 +81,15 @@
     <p>把這一行貼到網站的 &lt;/body&gt; 前面（Wix、Squarespace、WordPress 都可以）。試用期間，客人的預約會先通知我們，我們再轉給你；正式版直接通知你本人。<br>Paste this line before &lt;/body&gt; on your site (Wix, Squarespace and WordPress all work). During the trial, bookings come to us and we pass them on; the full version notifies you directly.</p>
     <pre id="code"></pre>
     <button class="copy" type="button" id="copy">複製代碼 · Copy</button>
+  </div>
+  <div class="share">
+    <h2>認識其他開店的朋友？· Know another shop owner?</h2>
+    <p>傳給他們，他們貼上自己的網址，幾秒鐘也能免費做一個。<br>Send them the link: they paste their own website and get one free in seconds.</p>
+    <div class="row">
+      <a id="share-wa" target="_blank" rel="noopener">WhatsApp</a>
+      <a id="share-tg" target="_blank" rel="noopener">Telegram</a>
+      <button type="button" id="share-copy">複製連結 · Copy link</button>
+    </div>
   </div>
   <div class="cta">
     <a class="btn primary" href="{{OWNER_TG}}" target="_blank" rel="noopener" style="display: {{OWNER_TG_DISPLAY}}">正式上線 <small>Make it official · US$70</small></a>
@@ -101,6 +116,12 @@
         $("sample").hidden = false;
         $("own").href = $("own-en").href = (API ? "trial.html" : "/trial") + "?name=" + encodeURIComponent(shop.name) + "&kind=" + shop.kind;
       }
+      if (shop.site) {
+        var host = shop.site.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+        $("site").textContent = host;
+        [].forEach.call(document.querySelectorAll(".site"), function (el) { el.textContent = host; });
+        $("read").hidden = false;
+      }
       if (q.get("new")) $("fresh").hidden = false;
       var chips = $("chips");
       shop.questions.forEach(function (text) {
@@ -113,6 +134,14 @@
       $("code").textContent = tag;
       $("copy").onclick = function () {
         navigator.clipboard && navigator.clipboard.writeText(tag).then(function () { $("copy").textContent = "已複製 ✓ Copied"; });
+      };
+      // passing it on: other shop owners land on the free trial
+      var trialUrl = new URL(API ? "trial.html" : "/trial", location.href).href + "?from=share";
+      var pitch = "我剛免費做了一個 24 小時回覆客人的 AI 客服，貼上自己店的網址幾秒就好，你的店也可以試試 / I made a free 24/7 AI assistant for my shop in seconds, try it for yours: ";
+      $("share-wa").href = "https://wa.me/?text=" + encodeURIComponent(pitch + trialUrl);
+      $("share-tg").href = "https://t.me/share/url?url=" + encodeURIComponent(trialUrl) + "&text=" + encodeURIComponent(pitch);
+      $("share-copy").onclick = function () {
+        navigator.clipboard && navigator.clipboard.writeText(trialUrl).then(function () { $("share-copy").textContent = "已複製 ✓ Copied"; });
       };
       var w = document.createElement("script");
       w.src = base + "/widget.js"; w.defer = true;

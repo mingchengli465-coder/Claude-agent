@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>免費試用 AI 客服 · {{TITLE}}</title>
-<meta name="description" content="把你店的價目表貼進來，幾秒鐘就有一個按你自己資料回覆客人的 AI 客服，免費試用。Paste your price list and get your own 24/7 AI assistant in seconds, free.">
+<title>免費 AI 客服：貼上網址自動生成 · Free AI chatbot from your website · {{TITLE}}</title>
+<meta name="description" content="貼上你店的網址或價目表，幾秒鐘就有一個按你自己資料回覆客人的 24 小時 AI 客服，免費試用。Paste your website address and get a free 24/7 AI chatbot that answers from your own site, in seconds.">
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23000'/%3E%3Ctext x='32' y='46' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='40' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3C/svg%3E">
 <style>
@@ -64,11 +64,12 @@
 <main>
   <div class="kick">免費試用 · Free trial</div>
   <h1>幾秒鐘，做一個你店自己的 AI 客服<span>Your own 24/7 assistant, in seconds</span></h1>
-  <p class="lead">貼上你的價目表、營業時間和常見問題，它馬上就按你的資料回覆客人。試用完全免費，不用信用卡；滿意的話，一行代碼就能放進你的網站。<br>Paste your prices, opening hours and common questions, and it answers customers from them straight away. Free, no card needed; one line of code puts it on your website.</p>
+  <p class="lead">有網站的話，貼上網址就好：AI 會先讀完你的網站，再按上面寫的回覆客人。沒有網站就貼上價目表和營業時間。完全免費，不用信用卡；滿意的話，一行代碼就能放進你的網站。<br>Have a website? Just paste its address: the AI reads it and answers your customers from it. No website? Paste your prices and hours instead. Free, no card needed; one line of code puts it on your site.</p>
   <form id="trial" novalidate>
-    <label>店名 · Business name<input name="name" maxlength="80" required autocomplete="organization" placeholder="例如 Rose Cottage B&amp;B"></label>
+    <label>你的網站 · Your website<small>貼上網址，AI 自動讀你的價目、服務和常見問題。沒有網站可以留空。<br>The AI reads your prices, services and FAQs from it. Leave empty if you don't have one.</small><input name="url" type="url" inputmode="url" maxlength="300" autocomplete="url" placeholder="https://www.yourshop.com"></label>
+    <label>店名 · Business name<input name="name" maxlength="80" autocomplete="organization" placeholder="例如 Rose Cottage B&amp;B"></label>
     <label>行業 · Type of business<select name="kind">{{TRIAL_KINDS}}</select></label>
-    <label>你的資料 · Your information<small>價目表、營業時間、地址、怎麼預約、常見問題… 寫得越清楚，回答越準。留空的話先用示範資料。<br>Prices, hours, address, how to book, FAQs… Leave it empty to start with sample information.</small>
+    <label>沒有網站？貼上你的資料 · No website? Your information<small>價目表、營業時間、地址、怎麼預約、常見問題… 寫得越清楚，回答越準。都留空的話先用示範資料。<br>Prices, hours, address, how to book, FAQs… Leave everything empty to start with sample information.</small>
       <textarea name="info" maxlength="6000" placeholder="例如：&#10;雙人房 US$120／晚，含早餐&#10;入住 3pm–8pm，退房 10:30am&#10;可以帶小狗，每晚 US$15&#10;訂房先付一晚訂金"></textarea></label>
     <label>聯絡方式（可選）· Your email or WhatsApp (optional)<small>有客人要預約時，我們會通知你；正式版直接通知你本人。<br>So we can pass on bookings; the full version notifies you directly.</small><input name="contact" maxlength="120" autocomplete="email"></label>
     <div class="err" id="err" role="alert"></div>
@@ -81,21 +82,27 @@
   var API = "";
   var form = document.getElementById("trial"), err = document.getElementById("err"), go = document.getElementById("go");
   var q = new URLSearchParams(location.search);
-  if (q.get("name")) form.name.value = q.get("name");
+  if (q.get("name")) form.elements.name.value = q.get("name");
+  if (q.get("url")) form.url.value = q.get("url");
   if (q.get("kind")) form.kind.value = q.get("kind");
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     err.textContent = "";
-    if (form.elements.name.value.trim().length < 2) { err.textContent = "請填店名 · Please enter the business name"; return; }
+    var url = form.url.value.trim(), info = form.info.value.trim();
+    if (form.elements.name.value.trim().length < 2 && !(url && !info)) { err.textContent = "請填店名或網站 · Please enter the business name or website"; return; }
     go.disabled = true;
+    if (url && !info) go.firstChild.nodeValue = "正在讀你的網站… ";
     fetch(API + "/api/trial", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: form.elements.name.value, kind: form.kind.value, info: form.info.value, contact: form.contact.value }) })
+      body: JSON.stringify({ name: form.elements.name.value, kind: form.kind.value, info: info, url: url, contact: form.contact.value }) })
       .then(function (r) { return r.json().then(function (d) { return [r.status, d]; }); })
       .then(function (res) {
         if (res[1].slug) { location.href = API ? "t.html?s=" + res[1].slug + "&new=1" : "/t/" + res[1].slug + "?new=1"; return; }
-        err.textContent = res[0] === 429 ? "今天做得太多了，晚點再試 · Too many for now, please try later" : "出了點問題，請再試一次 · Something went wrong, please try again";
-        go.disabled = false;
-      }).catch(function () { err.textContent = "網路有點問題 · Connection problem"; go.disabled = false; });
+        err.textContent = res[0] === 429 ? "今天做得太多了，晚點再試 · Too many for now, please try later"
+          : res[1].error === "site" ? "讀不到這個網站，請直接把資料貼在下面 · Couldn't read that website, please paste your information below"
+          : res[1].error === "url" ? "網址不太對，請再檢查一下 · That address doesn't look right"
+          : "出了點問題，請再試一次 · Something went wrong, please try again";
+        go.disabled = false; go.firstChild.nodeValue = "做我的 AI 客服 ";
+      }).catch(function () { err.textContent = "網路有點問題 · Connection problem"; go.disabled = false; go.firstChild.nodeValue = "做我的 AI 客服 "; });
   });
 })();
 </script>

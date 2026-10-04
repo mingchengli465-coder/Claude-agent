@@ -152,11 +152,11 @@ svc = bot.build_customer_service(FakeTelegram())
 assert bot.trials_db is not None and svc.trials is bot.trials_db
 built = svc.trial_service(bot.trials_db.create("Paws Up", "groomer"))
 assert "Paws Up" in built.system and "cockapoo" in built.system.lower() and built.store is svc.store
-withdemo = bot.with_personal_demo({"email": "a@florist.uk", "name": "Lily Florist", "region": "uk"})
+withdemo = asyncio.run(bot.with_personal_demo({"email": "a@florist.uk", "name": "Lily Florist", "region": "uk"}))
 assert withdemo["personal"].startswith("https://mingchengli465-coder.github.io/Claude-agent/t.html?s=lily-florist-")
 assert bot.trials_db.get(withdemo["personal"].split("s=")[1].split("&")[0])["kind"] == "florist"
-assert "personal" not in bot.with_personal_demo({"email": "a@x.sg", "name": "Pixel Studio", "kind": "agency"})
-assert "personal" not in bot.with_personal_demo({"email": "a@x.sg", "name": "Happy Oven"}), "unknown kind: none"
+assert "personal" not in asyncio.run(bot.with_personal_demo({"email": "a@x.sg", "name": "Pixel Studio", "kind": "agency"}))
+assert "personal" not in asyncio.run(bot.with_personal_demo({"email": "a@x.sg", "name": "Happy Oven"})), "unknown kind: none"
 print("PASS the bot makes a personal demo for each shop it emails and builds each trial's assistant")
 
 # ---- the published site -------------------------------------------------------------------------
