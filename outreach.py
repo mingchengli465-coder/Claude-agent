@@ -303,6 +303,63 @@ def compose_html(lead: dict) -> str:
     else:
         _, body = compose(lead)
         body = MOCKUP_INTRO.format(name=lead["name"]) + "\n\n" + MOCKUP_MARK + "\n\n" + body
+    return to_html(body, lead)
+
+
+# --- the one follow-up, five days later, to businesses that haven't answered ----------------------
+FOLLOWUP_DAYS = int(os.environ.get("OUTREACH_FOLLOWUP_DAYS", "5"))
+# Apps Script lets a free Gmail account email 100 people a day; stay under it, follow-ups included
+SEND_CAP_24H = int(os.environ.get("OUTREACH_SEND_CAP", "95"))
+FOLLOWUP_EN = """{greeting}
+
+Just bringing this back to the top of your inbox in case it got buried. Here's the mockup I made for {name} again:
+
+{mockup}
+
+If a 24/7 assistant that answers from your own information and passes every enquiry to you would help, I'm happy to set up a free trial on your site this week, with no obligation.
+
+Best,
+Vincent
+{link}
+
+P.S. If it's not for you, just reply "no thanks" and I won't email again."""
+FOLLOWUP_ZH = """{name}你好，
+
+上次的郵件可能被其他訊息蓋過了，再附上一次我為你們做的示意圖：
+
+{mockup}
+
+如果一個按你們自己的資料 24 小時回覆、並把每個查詢轉給你們的 AI 客服有幫助，我很樂意這星期先免費幫你們做一個試用版，不用任何承諾。
+
+Vincent
+Telegram：{telegram}
+
+P.S. 如果暫時不需要，回覆「不用了」就可以，我不會再打擾你們。"""
+
+
+def compose_followup(lead: dict) -> tuple[str, str]:
+    """"Re:" the first email's subject; the body carries MOCKUP_MARK where the mockup goes."""
+    subject, _ = compose(lead)
+    host = (lead.get("host") or "").strip()
+    en = FOLLOWUP_EN.format(greeting=f"Hi {host}," if host else ("Hello," if is_intl(lead) else f"Hi {lead['name']} team,"),
+                            name=lead["name"], mockup=MOCKUP_MARK,
+                            link=SITE_LINK.replace("from=email", "from=followup"))
+    if is_intl(lead):
+        return "Re: " + subject, en
+    zh_name = lead["name"] + (" " if lead["name"][-1:].isascii() else "")
+    zh = FOLLOWUP_ZH.replace("{name}", zh_name, 1).format(mockup=MOCKUP_MARK, telegram=TELEGRAM_LINK)
+    # one mockup is enough: the English half refers to it
+    en = en.replace(MOCKUP_MARK, "(the mockup is above)")
+    return "Re: " + subject, zh + BILINGUAL_RULE + en
+
+
+def plain(body: str, lead: dict) -> str:
+    """The plain-text version: the mockup as a link (or nothing, without one)."""
+    slug = mockup_slug(lead)
+    return body.replace(MOCKUP_MARK, f"(mockup: {MOCKUP_URL.format(slug=slug)})" if slug else "").replace("\n\n\n\n", "\n\n")
+
+
+def to_html(body: str, lead: dict) -> str:
     import html as _html
     link = re.compile(r"(https://\S+)")
     paras = []
@@ -322,6 +379,13 @@ def daily_window(region: str, now: dt.datetime | None = None) -> bool:
     """The everyday English-market emails: weekday mornings, recipient's clock (replies come best then)."""
     local = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo(REGION_TZ[region]))
     return local.weekday() < 5 and INTL_HOURS[0] <= local.time() <= INTL_HOURS[1]
+
+
+def followup_window(lead: dict, now: dt.datetime | None = None) -> bool:
+    """Follow-ups go in the recipient's weekday afternoon (13:00–16:30), after the day's first emails."""
+    tz = REGION_TZ.get(lead.get("region") or "", TIMEZONE)
+    local = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo(tz))
+    return local.weekday() < 5 and dt.time(13, 0) <= local.time() <= dt.time(16, 30)
 
 
 def in_work_hours(lead: dict, now: dt.datetime | None = None) -> bool:
@@ -403,7 +467,7 @@ class Leads:
             columns = [r[1] for r in db.execute("PRAGMA table_info(leads)")]
             if "first_zh" not in columns:
                 db.execute("ALTER TABLE leads ADD COLUMN first_zh TEXT")
-            for column in ("kind", "batch", "mockup", "cat", "host", "city", "site"):
+            for column in ("kind", "batch", "mockup", "cat", "host", "city", "site", "followed_at"):
                 if column not in columns:
                     db.execute(f"ALTER TABLE leads ADD COLUMN {column} TEXT")
 
@@ -513,6 +577,27 @@ class Leads:
         with self._db() as db:
             return db.execute("UPDATE leads SET status='new', note='' WHERE status='failed' AND "
                               "(note LIKE ? OR note LIKE ?)", (f"%{TRANSIENT[0]}%", f"%{TRANSIENT[1]}%")).rowcount
+
+    def followup_due(self, now: dt.datetime | None = None, limit: int = 100) -> list[dict]:
+        """Emailed FOLLOWUP_DAYS ago or more, no answer, not followed up yet (agencies aren't chased)."""
+        now = now or dt.datetime.now(dt.timezone.utc)
+        before = (now - dt.timedelta(days=FOLLOWUP_DAYS)).isoformat()
+        with self._db() as db:
+            return [dict(r) for r in db.execute(
+                "SELECT * FROM leads WHERE status='sent' AND sent_at <= ? AND followed_at IS NULL "
+                "AND COALESCE(kind, '') != 'agency' ORDER BY sent_at LIMIT ?", (before, limit))]
+
+    def mark_followed(self, email: str) -> None:
+        with self._db() as db:
+            db.execute("UPDATE leads SET followed_at=? WHERE email=?",
+                       (dt.datetime.now(dt.timezone.utc).isoformat(), email.lower()))
+
+    def sent_last_24h(self, now: dt.datetime | None = None) -> int:
+        """Every email that left in the last 24 hours, first ones and follow-ups."""
+        since = ((now or dt.datetime.now(dt.timezone.utc)) - dt.timedelta(hours=24)).isoformat()
+        with self._db() as db:
+            return db.execute("SELECT (SELECT COUNT(*) FROM leads WHERE sent_at >= ?) + "
+                              "(SELECT COUNT(*) FROM leads WHERE followed_at >= ?)", (since, since)).fetchone()[0]
 
     def batch_waiting(self) -> list[dict]:
         """Leads in a batch (see OUTREACH_LEADS) not emailed yet."""

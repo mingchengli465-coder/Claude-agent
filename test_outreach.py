@@ -285,7 +285,7 @@ from telegram.ext import Application
 app = Application.builder().token("123:fake").build()
 bot.schedule_outreach(app)
 names = sorted(j.name for j in app.job_queue.jobs())
-assert names == ["email-replies", "find-leads", "find-leads-now", "outreach-batch", "outreach-daily", "outreach-intl"], names
+assert names == ["email-replies", "find-leads", "find-leads-now", "outreach-batch", "outreach-daily", "outreach-followup", "outreach-intl"], names
 daily = [j for j in app.job_queue.jobs() if j.name == "outreach-daily"][0]
 fields = {f.name: str(f) for f in daily.job.trigger.fields}
 assert fields["hour"] == "10" and str(daily.job.trigger.timezone) == "Asia/Singapore"

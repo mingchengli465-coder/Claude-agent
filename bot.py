@@ -1271,13 +1271,13 @@ async def mail_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     start_sending(query.message, emails)
 
 
-def start_sending(message, emails: list[str], batch: bool = False) -> None:
-    task = asyncio.get_running_loop().create_task(send_emails(message, emails, batch))
+def start_sending(message, emails: list[str], batch: bool = False, followup: bool = False) -> None:
+    task = asyncio.get_running_loop().create_task(send_emails(message, emails, batch, followup))
     fb_setup_tasks.add(task)
     task.add_done_callback(fb_setup_tasks.discard)
 
 
-async def send_emails(message, emails: list[str], batch: bool = False) -> None:
+async def send_emails(message, emails: list[str], batch: bool = False, followup: bool = False) -> None:
     """Send one by one, a gap between each. A batch (the English-market list with mockups) is outside
     the daily limit but keeps to the recipients' working hours."""
     box, done, problem, failed_in_a_row = mailer(), [], "", 0
@@ -1288,24 +1288,28 @@ async def send_emails(message, emails: list[str], batch: bool = False) -> None:
                 problem = "你让我停了，剩下的没发。发 /outreach 可以重新开始。"
                 break
             lead = leads_db.get(email)
-            if lead is None or lead["status"] != "new":
+            if lead is None or lead["status"] != ("sent" if followup else "new") or (followup and lead.get("followed_at")):
                 continue
             if not batch and leads_db.room_today() <= 0:
                 problem = f"今天已经发满 {outreach_mod.DAILY_LIMIT} 封，剩下的明天发。"
                 break
-            if batch and not outreach_mod.in_work_hours(lead):
+            if batch and not (outreach_mod.followup_window(lead) if followup else outreach_mod.in_work_hours(lead)):
                 problem = "对方那边已经下班了，剩下的等他们明天上班（当地 8:30）我接着发。"
                 break
             if done or failed_in_a_row:
                 await asyncio.sleep(gap)
-            subject, body = outreach_mod.compose(lead)
             html, image = "", None
             try:
                 image = await asyncio.to_thread(outreach_mod.mockup_png, lead, mockup_cache())
             except Exception:  # noqa: BLE001 - the letter still goes, with its link
                 logger.exception("设计图没画出来（%s）", email)
-            if image:
-                html = outreach_mod.compose_html(lead)
+            if followup:
+                subject, marked = outreach_mod.compose_followup(lead)
+                body = outreach_mod.plain(marked, lead)
+                html = outreach_mod.to_html(marked, lead) if image else ""
+            else:
+                subject, body = outreach_mod.compose(lead)
+                html = outreach_mod.compose_html(lead) if image else ""
             try:
                 try:
                     await box.send(email, subject, body, html=html, image=image)
@@ -1330,18 +1334,26 @@ async def send_emails(message, emails: list[str], batch: bool = False) -> None:
                     # twice in a row is Gmail or the script, not one bad address: keep the rest for later
                     problem = f"发到 {lead['name']} 时又出错了，后面的先停了：{exc}"
                     break
-                leads_db.mark(email, "failed", str(exc)[:200])
+                if followup:
+                    leads_db.mark_followed(email)  # the address refuses: no second try
+                else:
+                    leads_db.mark(email, "failed", str(exc)[:200])
                 done.append(f"⚠️ {lead['name']} 发不出去（{exc}）")
                 continue
             failed_in_a_row = 0
-            leads_db.mark(email, "sent")
-            logger.info("邮件已发给 %s（%s）%s", lead["name"], lead.get("region"), "，带设计图" if image else "")
+            if followup:
+                leads_db.mark_followed(email)
+            else:
+                leads_db.mark(email, "sent")
+            logger.info("%s已发给 %s（%s）%s", "跟进邮件" if followup else "邮件", lead["name"], lead.get("region"),
+                        "，带设计图" if image else "")
             done.append(f"✅ {lead['name']}")
     finally:
         if batch:
             leads_db.set_setting("batch_running", "")
     ok = sum(line.startswith("✅") for line in done)
-    text = f"📧 发好了 {ok} 封：\n" + "\n".join(done) if done else "📧 这次一封都没发出去。"
+    kind = "跟进邮件" if followup else ""
+    text = f"📧 {kind}发好了 {ok} 封：\n" + "\n".join(done) if done else f"📧 这次{kind}一封都没发出去。"
     if problem:
         text += f"\n\n⚠️ {problem}"
     text += "\n\n有人回复我会马上告诉你。"
@@ -1441,6 +1453,23 @@ async def intl_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id=int(OWNER_CHAT_ID), disable_web_page_preview=True,
         text=f"🌍 现在是他们那边上班时间，发今天的 {len(due)} 封（每封都带为这家店画的设计图）：\n\n{lines}\n\n想停就发 /outreach_stop。")
     start_sending(note, [lead["email"] for lead in due], batch=True)
+
+
+async def followup_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Five days on, one short follow-up to those who haven't answered, in their weekday afternoon,
+    as many as the day's Gmail allowance still has room for."""
+    if leads_db is None or not OWNER_CHAT_ID or leads_db.setting("stopped") or leads_db.setting("batch_running"):
+        return
+    room = outreach_mod.SEND_CAP_24H - leads_db.sent_last_24h()
+    due = [lead for lead in leads_db.followup_due() if outreach_mod.followup_window(lead)][:max(0, room)]
+    if not due or await _image_mailer(context) is None:
+        return
+    leads_db.set_setting("batch_running", "1")
+    lines = "\n".join(f"{i}. {lead['name']} · {lead['email']}" for i, lead in enumerate(due, 1))
+    note = await context.bot.send_message(
+        chat_id=int(OWNER_CHAT_ID), disable_web_page_preview=True,
+        text=f"🔁 这 {len(due)} 家 5 天前发过、还没回，发一封简短的跟进（附同一张设计图，只跟进这一次）：\n\n{lines}")
+    start_sending(note, [lead["email"] for lead in due], batch=True, followup=True)
 
 
 async def find_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1565,6 +1594,7 @@ def schedule_outreach(application: Application) -> None:
     application.job_queue.run_repeating(email_replies_job, interval=1800, first=120, name="email-replies")
     application.job_queue.run_repeating(batch_job, interval=300, first=60, name="outreach-batch")
     application.job_queue.run_repeating(intl_daily_job, interval=900, first=180, name="outreach-intl")
+    application.job_queue.run_repeating(followup_job, interval=1800, first=600, name="outreach-followup")
     # every 4 hours: the free map servers are often busy, and a full list makes this a no-op
     application.job_queue.run_repeating(find_leads_job, interval=4 * 3600, first=4 * 3600, name="find-leads")
     application.job_queue.run_once(find_leads_job, when=120, name="find-leads-now")
