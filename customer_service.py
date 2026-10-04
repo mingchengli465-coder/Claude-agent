@@ -249,8 +249,8 @@ DECISION_SCHEMA = {
 }
 
 
-def build_system_prompt(catalog: str) -> str:
-    return SYSTEM_TEMPLATE.format(placeholder=PLACEHOLDER, catalog=catalog, persona=CS_PERSONA)
+def build_system_prompt(catalog: str, persona: str = "") -> str:
+    return SYSTEM_TEMPLATE.format(placeholder=PLACEHOLDER, catalog=catalog, persona=persona or CS_PERSONA)
 
 
 class ClaudeResponder:
@@ -614,9 +614,10 @@ class CustomerService:
         owner_notify: OwnerNotify | None = None,
         rate_limiter: RateLimiter | None = None,
         clock: Callable[[], float] = time.time,
+        persona: str = "",
     ):
         self.store = store
-        self.system = build_system_prompt(catalog)
+        self.system = build_system_prompt(catalog, persona)
         self.responder = responder
         self.owner_notify = owner_notify
         self.rate = rate_limiter or RateLimiter()

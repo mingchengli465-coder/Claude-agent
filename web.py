@@ -2,6 +2,7 @@
 
     GET  /            the owner's own site: services, prices, and the chat window
     GET  /demo        a demo page to send merchants (the chat window is on it)
+    GET  /demo-<kind> an industry demo: a pretend B&B, florist… whose own assistant answers (demos.py)
     GET  /video       the 38-second intro video (media/), linked from the cold emails
     GET  /mockups/<x>.png  a business's mockup from a cold email (web_static/mockups, or drawn ones on the volume)
     GET  /widget.js   the chat window itself; one <script> tag embeds it in any site
@@ -31,6 +32,7 @@ from pathlib import Path
 from aiohttp import web
 
 import customer_service as cs
+import demos as demos_mod
 import visits as visits_mod
 
 logger = logging.getLogger(__name__)
@@ -144,10 +146,27 @@ def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
     return links
 
 
+
+def demo_fill(body: str, kind: str) -> str:
+    """The industry demo page for one kind of business."""
+    d = demos_mod.DEMOS[kind]
+    esc = lambda t: html.escape(t, quote=True)  # noqa: E731
+    questions = "".join(f'<button class="chip" type="button" onclick="window.aiChatAsk && aiChatAsk(this.textContent)">{esc(q)}</button>'
+                        for q in d["questions"])
+    others = "".join(f'<a href="demo-{k}">{esc(o["label_zh"])} · {esc(o["label"])}</a>'
+                     for k, o in demos_mod.DEMOS.items() if k != kind)
+    return (body.replace("{{DEMO_KIND}}", kind).replace("{{DEMO_NAME}}", esc(d["name"]))
+                .replace("{{DEMO_LABEL_ZH}}", esc(d["label_zh"])).replace("{{DEMO_LABEL_LOWER}}", esc(d["label"].lower()))
+                .replace("{{DEMO_LABEL}}", esc(d["label"])).replace("{{DEMO_WHERE}}", esc(d["where"]))
+                .replace("{{DEMO_QUESTIONS}}", questions).replace("{{DEMO_OTHERS}}", others))
+
 class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
-                 clock=time.time, visits: visits_mod.Visits | None = None, messenger=None, sites=None):
+                 clock=time.time, visits: visits_mod.Visits | None = None, messenger=None, sites=None,
+                 demos: dict | None = None):
         self.service = service
+        # industry demos: kind -> its own CustomerService (demos.py), chats kept under "web-<kind>"
+        self.demos = demos or {}
         self.sites = sites
         self.visits = visits
         self.messenger = messenger
@@ -161,6 +180,11 @@ class WebChat:
         # Owner replies are stored by deliver_owner_reply; the widget polls them out.
         if service is not None:
             service.register_channel(CHANNEL, self._send)
+            # an owner reply to a demo visitor's notice comes through the main service
+            for kind in self.demos:
+                service.register_channel(f"{CHANNEL}-{kind}", self._send)
+        for kind, demo in self.demos.items():
+            demo.register_channel(f"{CHANNEL}-{kind}", self._send)
 
     async def _send(self, chat_id: str, text: str) -> None:
         return None
@@ -177,6 +201,7 @@ class WebChat:
             return app
         app.router.add_get("/", self.site)
         app.router.add_get("/demo", self.page)
+        app.router.add_get("/demo-{kind}", self.demo_page)
         app.router.add_get("/video", self.video)
         app.router.add_get("/media/{name}", self.media)
         app.router.add_get("/mockups/{name}", self.mockup)
@@ -215,6 +240,12 @@ class WebChat:
 
     async def page(self, request: web.Request) -> web.Response:
         return self._render("demo.html")
+
+    async def demo_page(self, request: web.Request) -> web.Response:
+        kind = request.match_info["kind"]
+        if kind not in demos_mod.DEMOS:
+            raise web.HTTPNotFound()
+        return self._render("demo-industry.html", demo=kind)
 
     async def video(self, request: web.Request) -> web.Response:
         return self._render("video.html")
@@ -263,8 +294,10 @@ class WebChat:
     async def privacy(self, request: web.Request) -> web.Response:
         return self._render("privacy.html")
 
-    def _render(self, name: str) -> web.Response:
+    def _render(self, name: str, demo: str = "") -> web.Response:
         body = (_STATIC / name).read_text(encoding="utf-8")
+        if demo:
+            body = demo_fill(body, demo)
         contact = html.escape(self.contact_link, quote=True)
         telegram, wechat = owner_contacts()
         links = owner_links()
@@ -337,21 +370,25 @@ class WebChat:
         text = str(data.get("text") or "").strip()
         if not _VISITOR.match(visitor) or not text:
             return self._json({"error": "bad request"}, 400)
+        demo = str(data.get("demo") or "")
+        service, channel = self._service_for(demo)
+        if service is None:
+            return self._json({"error": "bad request"}, 400)
         text = text[:MAX_TEXT]
         now, ip = self.clock(), self._ip(request)
         if not self.ip_messages.allow(ip, now):
             return self._json({"error": "slow down"}, 429)
-        store = self.service.store
-        if store.customer(CHANNEL, visitor) is None and not self.ip_visitors.allow(ip, now):
+        store = service.store
+        if store.customer(channel, visitor) is None and not self.ip_visitors.allow(ip, now):
             return self._json({"error": "slow down"}, 429)
 
         lang = str(data.get("lang") or "").lower()
-        latest = store.messages_after(CHANNEL, visitor, 0, 1)
+        latest = store.messages_after(channel, visitor, 0, 1)
         before = latest[-1]["id"] if latest else 0
         try:
-            reply = await self.service.handle(cs.Inbound(
-                channel=CHANNEL, chat_id=visitor, text=text,
-                display_name=f"网页访客 {visitor[:4]}",
+            reply = await service.handle(cs.Inbound(
+                channel=channel, chat_id=visitor, text=text,
+                display_name=f"{'示范页' if demo else '网页'}访客 {visitor[:4]}",
                 lang="zh" if lang.startswith("zh") else "en" if lang else "",
             ))
         except Exception:  # noqa: BLE001 - the visitor gets an error, the bot keeps running
@@ -361,7 +398,7 @@ class WebChat:
         # when it polls. (A rate-limit warning isn't stored and has none.)
         reply_id = None
         if reply is not None:
-            for row in store.messages_after(CHANNEL, visitor, before):
+            for row in store.messages_after(channel, visitor, before):
                 if row["role"] == "assistant" and row["text"] == reply:
                     reply_id = row["id"]
         return self._json({"reply": reply, "reply_id": reply_id})
@@ -374,10 +411,19 @@ class WebChat:
             after = max(0, int(request.query.get("after", "0")))
         except ValueError:
             after = 0
-        rows = self.service.store.messages_after(CHANNEL, visitor, after)
+        service, channel = self._service_for(request.query.get("d", ""))
+        if service is None:
+            return self._json({"error": "bad request"}, 400)
+        rows = service.store.messages_after(channel, visitor, after)
         return self._json({"messages": [
             {"id": r["id"], "role": r["role"], "text": r["text"], "ts": r["ts"]} for r in rows
         ]})
+
+    def _service_for(self, demo: str):
+        """The owner's own assistant, or an industry demo's (None for an unknown demo)."""
+        if not demo:
+            return self.service, CHANNEL
+        return self.demos.get(demo), f"{CHANNEL}-{demo}"
 
     async def hit(self, request: web.Request) -> web.Response:
         if self.visits is None:

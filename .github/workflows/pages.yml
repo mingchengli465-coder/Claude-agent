@@ -12,6 +12,7 @@ on:
       - "media/vinc-intro-poster.jpg"
       - "products.yaml"
       - "web.py"
+      - "demos.py"
       - "tools/build_pages.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:

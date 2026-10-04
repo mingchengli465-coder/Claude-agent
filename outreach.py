@@ -116,6 +116,16 @@ ZH_PRICE = {"sg": "正式搭建一次性 US$70 起，之後每月 US$9.9。",
             "hk": "正式搭建一次性 US$70（約 HK$550）起，之後每月 US$9.9（約 HK$78）。"}
 # Web design studios get a partnership offer instead: they refer clients, I build, they earn 30%.
 DEMO_LINK = os.environ.get("OUTREACH_DEMO_LINK", "https://mingchengli465-coder.github.io/Claude-agent/demo.html?from=email")
+# The industry demo matching the business (demos.py): a pretend shop of the same kind to chat with
+DEMO_PAGE = os.environ.get("OUTREACH_DEMO_PAGE", "https://mingchengli465-coder.github.io/Claude-agent/demo-{kind}.html?from=email")
+
+
+def demo_link(lead: dict) -> str:
+    from mockup import kind_of
+    kind = kind_of(lead)
+    return DEMO_PAGE.format(kind=kind) if kind and lead.get("kind") != "agency" else ""
+
+
 # A 38-second video page, linked rather than attached: attachments from a new sender land in spam.
 VIDEO_LINK = os.environ.get("OUTREACH_VIDEO_LINK", "https://mingchengli465-coder.github.io/Claude-agent/video.html?from=email")
 AGENCY_ZH_SUBJECT = "合作提案：讓 {name} 的網站客戶多一個 AI 客服"
@@ -222,7 +232,7 @@ INTL_BODY = """{greeting}
 
 {mockup}
 
-It answers from your own information ({facts}), takes down every enquiry, and sends it straight to you to confirm.
+It answers from your own information ({facts}), takes down every enquiry, and sends it straight to you to confirm. You can chat with a demo one for a {kindword} here: {demo}
 
 I'm Vincent, a student developer in Singapore, and I set these up for small businesses. I'd be happy to build you a free trial version first, so you can see how it handles real questions. If you decide to keep it, it's a one-off {price}, cancel anytime.
 
@@ -244,6 +254,8 @@ INTL_PROBLEM = {
     "beauty": "Clients often message late in the evening to ask about treatments and book a time, and by morning some have booked elsewhere.",
     "groomer": "Owners often message in the evening about prices and free slots, and by morning some have booked elsewhere.",
 }
+INTL_KINDWORD = {"bnb": "B&B", "florist": "florist", "tutor": "tuition centre", "bakery": "cake shop",
+                 "beauty": "beauty studio", "groomer": "dog groomer"}
 INTL_FACTS = {"bnb": "rooms, prices, house rules", "florist": "flowers, prices, delivery areas",
               "tutor": "courses, fees, timetables", "bakery": "cakes, flavours, prices, lead times",
               "beauty": "treatments, prices, opening hours", "groomer": "services, prices, opening hours"}
@@ -272,7 +284,8 @@ def _intl_parts(lead: dict) -> tuple[str, str]:
             "greeting": f"Hi {host}," if host else "Hello,", "problem": INTL_PROBLEM.get(cat, INTL_PROBLEM["bnb"]),
             "facts": INTL_FACTS.get(cat, INTL_FACTS["bnb"]), "video": VIDEO_LINK.replace("from=email", "from=uk"),
             "link": SITE_LINK.replace("from=email", "from=uk"), "mockup": MOCKUP_MARK,
-            "price": INTL_PRICE.get(lead.get("region") or "", "US$70, then US$9.9 a month")}
+            "price": INTL_PRICE.get(lead.get("region") or "", "US$70, then US$9.9 a month"),
+            "demo": demo_link(lead).replace("from=email", "from=uk"), "kindword": INTL_KINDWORD.get(cat, "small business")}
     return INTL_SUBJECT.format(**fill), INTL_BODY.format(**fill)
 
 
@@ -409,7 +422,9 @@ def compose(lead: dict) -> tuple[str, str]:
         subject, body = _intl_parts(lead)
         slug = mockup_slug(lead)
         return subject, body.replace(MOCKUP_MARK, f"(mockup: {MOCKUP_URL.format(slug=slug)})" if slug else "").replace("\n\n\n\n", "\n\n")
-    fill = {"name": lead["name"], "link": SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL, "demo": DEMO_LINK, "video": VIDEO_LINK}
+    # "try it on my site" goes to the demo shop of their own kind when there is one
+    fill = {"name": lead["name"], "link": demo_link(lead) or SITE_LINK, "telegram": TELEGRAM_LINK, "email": REPLY_EMAIL,
+            "demo": DEMO_LINK, "video": VIDEO_LINK}
     region = lead.get("region") or "sg"
     # "Monice Bakes 你好" but "思思蛋糕你好": a space only after a Latin name
     zh_name = lead["name"] + (" " if lead["name"][-1:].isascii() else "")

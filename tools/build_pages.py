@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import demos  # noqa: E402
 import web  # noqa: E402
 
 API = os.environ.get("PAGES_API_ORIGIN", "https://worker-production-42fb.up.railway.app").rstrip("/")
@@ -49,7 +50,7 @@ SITE = os.environ.get("PAGES_SITE_URL", "https://mingchengli465-coder.github.io/
 
 def write_sitemap(out: Path) -> None:
     """sitemap.xml and robots.txt, so search engines find the guides."""
-    pages = ["", "demo.html", "video.html", "guides/"] + [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html"))
+    pages = ["", "demo.html", "video.html", "guides/"] + [f"demo-{kind}.html" for kind in demos.DEMOS] + [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html"))
                                              if p.name != "index.html"]
     urls = "".join(f"  <url><loc>{SITE}/{p}</loc></url>\n" for p in pages)
     (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -66,6 +67,9 @@ def build(out: Path) -> None:
     for source, target in PAGES.items():
         html = chat._render(source).text
         (out / target).write_text(static_copy(html), encoding="utf-8")
+    for kind in demos.DEMOS:
+        html = chat._render("demo-industry.html", demo=kind).text
+        (out / f"demo-{kind}.html").write_text(static_copy(html), encoding="utf-8")
     (out / "guides").mkdir()
     for guide in sorted((ROOT / "web_static" / "guides").glob("*.html")):
         html = chat._render(f"guides/{guide.name}").text
