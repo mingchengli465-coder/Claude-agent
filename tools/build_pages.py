@@ -27,7 +27,9 @@ import web  # noqa: E402
 API = os.environ.get("PAGES_API_ORIGIN", "https://worker-production-42fb.up.railway.app").rstrip("/")
 BOT = os.environ.get("PAGES_BOT_LINK", "https://t.me/emilyhanbot")
 PAGES = {"site.html": "index.html", "demo.html": "demo.html", "video.html": "video.html",
-         "trial.html": "trial.html", "trial-shop.html": "t.html"}
+         "trial.html": "trial.html", "trial-shop.html": "t.html",
+         # English-only versions, for the English-speaking countries' emails
+         "video-en.html": "video-en.html", "trial-en.html": "trial-en.html", "trial-shop-en.html": "t-en.html"}
 
 
 class _NoService:
@@ -43,6 +45,7 @@ def static_copy(html: str) -> str:
                 .replace('href="/fonts/', 'href="fonts/')
                 .replace('src="/widget.js"', f'src="{API}/widget.js"')
                 .replace('href="/demo"', 'href="demo.html"')
+                .replace('href="/demo?lang=en"', 'href="demo.html?lang=en"')
                 .replace('href="/"', 'href="./"')
                 .replace('var API = "";', f'var API = "{API}";'))
 
@@ -52,8 +55,9 @@ SITE = os.environ.get("PAGES_SITE_URL", "https://mingchengli465-coder.github.io/
 
 def write_sitemap(out: Path) -> None:
     """sitemap.xml and robots.txt, so search engines find the guides."""
-    pages = ["", "demo.html", "video.html", "trial.html", "guides/"] + [f"demo-{kind}.html" for kind in demos.DEMOS] + [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html"))
-                                             if p.name != "index.html"]
+    pages = (["", "demo.html", "video.html", "trial.html", "video-en.html", "trial-en.html", "guides/"]
+             + [f"demo-{kind}.html" for kind in demos.DEMOS] + [f"demo-{kind}-en.html" for kind in demos.DEMOS])
+    pages += [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html")) if p.name != "index.html"]
     urls = "".join(f"  <url><loc>{SITE}/{p}</loc></url>\n" for p in pages)
     (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
                                      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -72,6 +76,8 @@ def build(out: Path) -> None:
     for kind in demos.DEMOS:
         html = chat._render("demo-industry.html", demo=kind).text
         (out / f"demo-{kind}.html").write_text(static_copy(html), encoding="utf-8")
+        html = chat._render("demo-industry-en.html", demo=kind).text
+        (out / f"demo-{kind}-en.html").write_text(static_copy(html), encoding="utf-8")
     (out / "guides").mkdir()
     for guide in sorted((ROOT / "web_static" / "guides").glob("*.html")):
         html = chat._render(f"guides/{guide.name}").text

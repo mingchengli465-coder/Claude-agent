@@ -1412,6 +1412,7 @@
 
   var saved = null;
   try { saved = localStorage.getItem("siteLang"); } catch (e) {}
+  if (/[?&]lang=en\b/.test(location.search)) saved = "en";
   apply(saved || navigator.language);
 
   document.querySelectorAll(".langs button[data-lang]").forEach(function (b) {

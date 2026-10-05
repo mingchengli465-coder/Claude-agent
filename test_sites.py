@@ -168,7 +168,7 @@ async def main():
         bot.trials_db = trials.Trials(TMP / "bot-trials.sqlite3")
         shop = {"email": "stay@rosecottage.test", "name": "Rose Cottage B&B", "region": "uk", "cat": "bnb", "site": base + "/"}
         lead = await bot.with_personal_demo(shop)
-        assert lead["personal_read"] and "t.html?s=rose-cottage-b-b-" in lead["personal"]
+        assert lead["personal_read"] and "t-en.html?s=rose-cottage-b-b-" in lead["personal"]
         row = bot.trials_db.existing("stay@rosecottage.test")
         assert "£95 a night" in row["info"] and row["site"] == base + "/"
         before = len(hits)

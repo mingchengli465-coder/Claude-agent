@@ -123,7 +123,7 @@ _, body = om.compose({**uk, "personal": url})
 assert f"I also set up a working demo in Gale Green Cottage's name, with sample prices for now, that you can chat with: {url}" in body
 assert "demo-bnb.html" not in body
 _, body = om.compose(uk)
-assert "chat with a demo one for a B&B here: https://mingchengli465-coder.github.io/Claude-agent/demo-bnb.html?from=uk" in body
+assert "chat with a demo one for a B&B here: https://mingchengli465-coder.github.io/Claude-agent/demo-bnb-en.html?from=uk" in body
 assert f'<a href="{url.replace("&", "&amp;")}">' in om.compose_html({**uk, "personal": url}), "the HTML letter links it too"
 hk = {"email": "info@vive.hk", "name": "Vive Cake Boutique", "region": "hk", "personal": url}
 _, body = om.compose(hk)
@@ -153,7 +153,7 @@ assert bot.trials_db is not None and svc.trials is bot.trials_db
 built = svc.trial_service(bot.trials_db.create("Paws Up", "groomer"))
 assert "Paws Up" in built.system and "cockapoo" in built.system.lower() and built.store is svc.store
 withdemo = asyncio.run(bot.with_personal_demo({"email": "a@florist.uk", "name": "Lily Florist", "region": "uk"}))
-assert withdemo["personal"].startswith("https://mingchengli465-coder.github.io/Claude-agent/t.html?s=lily-florist-")
+assert withdemo["personal"].startswith("https://mingchengli465-coder.github.io/Claude-agent/t-en.html?s=lily-florist-")
 assert bot.trials_db.get(withdemo["personal"].split("s=")[1].split("&")[0])["kind"] == "florist"
 assert "personal" not in asyncio.run(bot.with_personal_demo({"email": "a@x.sg", "name": "Pixel Studio", "kind": "agency"}))
 assert "personal" not in asyncio.run(bot.with_personal_demo({"email": "a@x.sg", "name": "Happy Oven"})), "unknown kind: none"

@@ -138,10 +138,39 @@ PERSONAL_READ_ZH = "我已經讓 AI 先讀了「{name}」的網站，做好一�
 PERSONAL_READ_EN_ASIA = "I've already set up a working demo for {name} that has read your website, so you can ask it what your customers ask: {url}"
 
 
+# English-speaking countries get the English-only pages; Singapore, Hong Kong and Malaysia the 繁體 + English ones.
+DEMO_PAGE_EN = os.environ.get("OUTREACH_DEMO_PAGE_EN", "https://mingchengli465-coder.github.io/Claude-agent/demo-{kind}-en.html?from=email")
+TRIAL_PAGE_EN = os.environ.get("OUTREACH_TRIAL_PAGE_EN", "https://mingchengli465-coder.github.io/Claude-agent/t-en.html?s={slug}&from=email")
+VIDEO_LINK_EN = os.environ.get("OUTREACH_VIDEO_LINK_EN", "https://mingchengli465-coder.github.io/Claude-agent/video-en.html?from=email")
+
+
+def english_pages(lead: dict) -> bool:
+    return is_intl(lead)
+
+
 def demo_link(lead: dict) -> str:
     from mockup import kind_of
     kind = kind_of(lead)
-    return DEMO_PAGE.format(kind=kind) if kind and lead.get("kind") != "agency" else ""
+    if not kind or lead.get("kind") == "agency":
+        return ""
+    return (DEMO_PAGE_EN if english_pages(lead) else DEMO_PAGE).format(kind=kind)
+
+
+def trial_link(slug: str, lead: dict | None = None, english: bool = False) -> str:
+    """The page of a business's own demo (trials.py): English-only for the English-speaking countries."""
+    return (TRIAL_PAGE_EN if english or (lead and english_pages(lead)) else TRIAL_PAGE).format(slug=slug)
+
+
+def site_link(lead: dict) -> str:
+    return SITE_LINK + ("&lang=en" if english_pages(lead) else "")
+
+
+def general_demo_link(lead: dict) -> str:
+    return DEMO_LINK + ("&lang=en" if english_pages(lead) else "")
+
+
+def video_link(lead: dict) -> str:
+    return VIDEO_LINK_EN if english_pages(lead) else VIDEO_LINK
 
 
 # A 38-second video page, linked rather than attached: attachments from a new sender land in spam.
@@ -342,9 +371,9 @@ def _intl_agency_parts(lead: dict) -> tuple[str, str]:
     personal = lead.get("personal")
     fill = {"client": lead["client"], "first": lead.get("first") or f"I came across {lead['client']}'s website and saw that you built it.",
             "greeting": f"Hi {host}," if host else f"Hi {lead['name']} team,", "mockup": MOCKUP_MARK,
-            "video": VIDEO_LINK.replace("from=email", "from=agency"), "link": SITE_LINK.replace("from=email", "from=agency"),
+            "video": video_link(lead).replace("from=email", "from=agency"), "link": site_link(lead).replace("from=email", "from=agency"),
             "demo_line": _agency_demo(lead) if personal else
-            "You can chat with a working demo here: " + (demo_link({**lead, "kind": "shop"}) or DEMO_LINK)}
+            "You can chat with a working demo here: " + (demo_link({**lead, "kind": "shop"}) or general_demo_link(lead))}
     return INTL_AGENCY_SUBJECT.format(**fill), INTL_AGENCY_BODY.format(**fill)
 
 
@@ -356,8 +385,8 @@ def _intl_parts(lead: dict) -> tuple[str, str]:
     host = (lead.get("host") or "").strip()
     fill = {"name": lead["name"], "first": lead.get("first") or f"I came across {lead['name']} online.",
             "greeting": f"Hi {host}," if host else "Hello,", "problem": INTL_PROBLEM.get(cat, INTL_PROBLEM["bnb"]),
-            "facts": INTL_FACTS.get(cat, INTL_FACTS["bnb"]), "video": VIDEO_LINK.replace("from=email", "from=uk"),
-            "link": SITE_LINK.replace("from=email", "from=uk"), "mockup": MOCKUP_MARK,
+            "facts": INTL_FACTS.get(cat, INTL_FACTS["bnb"]), "video": video_link(lead).replace("from=email", "from=uk"),
+            "link": site_link(lead).replace("from=email", "from=uk"), "mockup": MOCKUP_MARK,
             "price": INTL_PRICE.get(lead.get("region") or "", "US$70, then US$9.9 a month"),
             "kindword": INTL_KINDWORD.get(cat, "small business")}
     personal = lead.get("personal")
@@ -444,7 +473,7 @@ def compose_followup(lead: dict) -> tuple[str, str]:
     host = (lead.get("host") or "").strip()
     en = FOLLOWUP_EN.format(greeting=f"Hi {host}," if host else ("Hello," if is_intl(lead) else f"Hi {lead['name']} team,"),
                             name=lead["name"], mockup=MOCKUP_MARK,
-                            link=SITE_LINK.replace("from=email", "from=followup"),
+                            link=site_link(lead).replace("from=email", "from=followup"),
                             personal=f"\n\nThe demo I made in your name is still here to try: {_followup_link(lead)}"
                             if lead.get("personal") else "")
     if is_intl(lead):
@@ -514,9 +543,13 @@ Vincent
 Vincent"""
 
 
-def compose_trial(name: str, link: str, embed: str) -> tuple[str, str]:
-    return (TRIAL_MAIL_SUBJECT.format(name=name),
-            TRIAL_MAIL_BODY.format(name=name, link=link, embed=embed))
+def compose_trial(name: str, link: str, embed: str, english: bool = False) -> tuple[str, str]:
+    """English + 繁體; English alone for a trial made on the English page."""
+    subject = TRIAL_MAIL_SUBJECT.format(name=name)
+    body = TRIAL_MAIL_BODY.format(name=name, link=link, embed=embed)
+    if english:
+        subject, body = subject.split(" | ")[0], body.split("\n\n———— 繁體中文 ————")[0]
+    return subject, body
 
 
 def reply_messages(lead: dict, their_subject: str, their_text: str) -> list[dict]:
@@ -527,7 +560,8 @@ def reply_messages(lead: dict, their_subject: str, their_text: str) -> list[dict
         lead = {**lead, "personal": lead.get("site") or ""}
     else:
         _, first = compose(lead)
-    system = REPLY_SYSTEM.format(demo=lead.get("personal") or demo_link(lead) or DEMO_LINK, video=VIDEO_LINK, telegram=TELEGRAM_LINK)
+    system = REPLY_SYSTEM.format(demo=lead.get("personal") or demo_link(lead) or general_demo_link(lead),
+                                 video=video_link(lead), telegram=TELEGRAM_LINK)
     user = (f"Business: {lead['name']} ({lead.get('region') or ''})\n\n"
             f"Vincent's first email:\n{plain(first, lead)[:2500]}\n\n"
             f"Their reply (subject: {their_subject}):\n{their_text[:2500]}\n\nWrite Vincent's reply.")
