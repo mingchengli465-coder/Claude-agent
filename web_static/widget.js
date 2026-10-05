@@ -171,11 +171,12 @@
     input.placeholder = T.placeholder;
     sendBtn.textContent = T.send;
     foot.textContent = T.powered;
+    // an English chat window leads to the English free trial
+    foot.href = base + (lang === "en" ? "/trial-en" : "/trial") + "?from=widget";
     if (welcomeBubble && !cfg.welcome) welcomeBubble.lastChild.nodeValue = T.welcome;
   }
   label();
-  // every chat window on a shop's site is also a way for other shops to find the free trial
-  foot.href = base + "/trial?from=widget";
+  // every chat window on a shop's site is also a way for other shops to find the free trial (set in label())
 
   var seen = {}, cursor = 0, loaded = false, busy = false, unread = 0, pollTimer = null, hasHistory = false;
 

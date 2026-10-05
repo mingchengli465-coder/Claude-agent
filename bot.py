@@ -1441,7 +1441,7 @@ async def with_personal_demo(lead: dict) -> dict:
     except Exception:  # noqa: BLE001 - the letter still goes, with the demo of its kind
         logger.exception("专属示范没做出来（%s）", lead.get("email"))
         return lead
-    return {**lead, "personal": outreach_mod.TRIAL_PAGE.format(slug=row["slug"]),
+    return {**lead, "personal": outreach_mod.trial_link(row["slug"], lead),
             "personal_read": bool(row.get("info") and row.get("site"))}
 
 
@@ -1686,10 +1686,11 @@ async def trial_mail_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         leads_db.set_setting(key, "")
         if leads_db.get(item["email"]) is not None:
             continue  # already on the list (we emailed them, or they made one before)
-        link = outreach_mod.TRIAL_PAGE.format(slug=item["slug"]).replace("from=email", "from=trial")
+        english = item.get("lang") == "en"
+        link = outreach_mod.trial_link(item["slug"], english=english).replace("from=email", "from=trial")
         embed = (f'<script src="{public_base_url()}/widget.js" data-demo="t-{item["slug"]}" '
                  f'data-title="{item["name"]}" defer></script>')
-        subject, body = outreach_mod.compose_trial(item["name"], link, embed)
+        subject, body = outreach_mod.compose_trial(item["name"], link, embed, english=english)
         try:
             await box.send(item["email"], subject, body)
         except outreach_mod.MailError as exc:
@@ -2067,14 +2068,15 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
         logger.exception("网站仓库打不开，助理不能建网站")
         site_store = None
     async def on_trial(event: str, row: dict) -> None:
-        link = f"{public_base_url()}/t/{row['slug']}"
+        link = f"{public_base_url()}/t/{row['slug']}" + ("?lang=en" if row.get("lang") == "en" else "")
         if event == "new":
             contact = (row.get("contact") or "").strip().lower()
             if leads_db is not None and outreach_mod.EMAIL_ADDRESS.match(contact):
                 # they left an email: the how-to (and how to go live) follows in half an hour
                 due = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=TRIAL_MAIL_MINUTES)).isoformat()
                 leads_db.set_setting(f"trialmail:{row['slug']}", json.dumps(
-                    {"due": due, "email": contact, "name": row["name"], "slug": row["slug"]}, ensure_ascii=False))
+                    {"due": due, "email": contact, "name": row["name"], "slug": row["slug"],
+                     "lang": row.get("lang", "")}, ensure_ascii=False))
             label = demos_mod.DEMOS.get(row["kind"], {}).get("label_zh", "")
             info = f"填了 {len(row['info'])} 字的资料" if row["info"] else "没填资料，先用示范资料"
             await tell_owner(f"🎉 有人做了免费试用：{row['name']}（{label}）\n联系方式：{row['contact'] or '没留'}\n"

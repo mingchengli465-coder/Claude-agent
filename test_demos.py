@@ -78,7 +78,7 @@ async def main():
     # the emails point at the demo of the business's own kind
     _, body = om.compose({"email": "jill@galegreen.com", "name": "Gale Green Cottage", "region": "uk", "cat": "bnb",
                           "host": "Jill", "mockup": "gale-green"})
-    assert "chat with a demo one for a B&B here: https://mingchengli465-coder.github.io/Claude-agent/demo-bnb.html?from=uk" in body
+    assert "chat with a demo one for a B&B here: https://mingchengli465-coder.github.io/Claude-agent/demo-bnb-en.html?from=uk" in body
     _, body = om.compose({"email": "info@vive.hk", "name": "Vive Cake Boutique", "region": "hk"})
     assert "demo-bakery.html?from=email" in body and "可以先到我的網站試試看：https://mingchengli465-coder.github.io/Claude-agent/demo-bakery.html" in body
     _, body = om.compose({"email": "a@studio.sg", "name": "Pixel Studio", "region": "sg", "kind": "agency"})

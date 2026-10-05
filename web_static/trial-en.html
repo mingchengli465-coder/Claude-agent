@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Free AI chatbot from your website, in seconds · {{TITLE}}</title>
+<meta name="description" content="Paste your website address and get a free 24/7 AI chatbot that answers from your own site, in seconds.">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23000'/%3E%3Ctext x='32' y='46' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='40' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3C/svg%3E">
+<style>
+  :root { --bg: #fff; --fg: #1d1d1f; --muted: #6e6e73; --soft: #f5f5f7; --line: #d2d2d7; --accent: #0071e3;
+          --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #000; --fg: #f5f5f7; --muted: #a1a1a6; --soft: #1d1d1f; --line: #424245; --accent: #2997ff; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  .top { max-width: 1040px; margin: 0 auto; padding: 20px 20px 0; display: flex; justify-content: space-between; align-items: center; }
+  .logo { font-weight: 700; font-size: 22px; letter-spacing: -.04em; }
+  .logo i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .top nav { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 72px; }
+  .kick { font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 12px 0 0; font-size: clamp(32px, 6vw, 56px); line-height: 1.08; letter-spacing: -.03em; font-weight: 700; text-wrap: balance; }
+  h1 span { display: block; color: var(--muted); font-size: .58em; letter-spacing: -.02em; margin-top: 10px; }
+  .lead { margin: 18px 0 0; font-size: 18px; line-height: 1.6; color: var(--muted); max-width: 660px; }
+  .ask { margin-top: 36px; }
+  .ask h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { font: inherit; font-size: 16px; border: 0; cursor: pointer; padding: 12px 18px; border-radius: 999px; background: var(--soft); color: var(--fg); text-align: left; }
+  .chip:hover { background: var(--line); }
+  .chip.go { background: var(--accent); color: #fff; font-weight: 600; }
+  .how { margin-top: 56px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--soft); border-radius: 18px; padding: 22px; }
+  .card b { display: block; font-size: 18px; }
+  .card p { margin: 6px 0 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  .others { margin-top: 56px; font-size: 15px; color: var(--muted); }
+  .others a { display: inline-block; margin: 6px 8px 0 0; padding: 8px 14px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); color: var(--fg); }
+  .cta { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 15px 26px; border-radius: 999px; font-size: 17px; font-weight: 600; }
+  .btn small { font-weight: 500; opacity: .75; font-size: 14px; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.line { box-shadow: inset 0 0 0 1.5px var(--line); }
+  footer { max-width: 1040px; margin: 0 auto; padding: 0 20px 40px; color: var(--muted); font-size: 13px; }
+  @media (max-width: 720px) { .how { grid-template-columns: 1fr; } .top nav a:not(:last-child) { display: none; } }
+  form { margin-top: 32px; max-width: 660px; display: grid; gap: 18px; }
+  label { display: grid; gap: 8px; font-size: 15px; font-weight: 600; }
+  label small { font-weight: 400; color: var(--muted); }
+  input, select, textarea { font: inherit; font-size: 16px; color: var(--fg); background: var(--soft); border: 1px solid transparent; border-radius: 14px; padding: 14px 16px; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { min-height: 220px; resize: vertical; line-height: 1.5; }
+  button.btn { border: 0; cursor: pointer; font-family: inherit; justify-self: start; }
+  button.btn[disabled] { opacity: .6; cursor: default; }
+  .err { color: #e5484d; font-size: 15px; min-height: 1em; }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="logo" href="/">vinc<i></i></a>
+  <nav><a href="video-en">Video</a><a href="guides/">Guides</a><a href="{{OWNER_TG}}" target="_blank" rel="noopener">Telegram</a></nav>
+</header>
+<main>
+  <div class="kick">Free trial</div>
+  <h1>Your own 24/7 AI assistant, in seconds</h1>
+  <p class="lead">Have a website? Just paste its address: the AI reads it and answers your customers from it. No website? Paste your prices and hours instead. Free, no card needed; one line of code puts it on your site.</p>
+  <form id="trial" novalidate>
+    <label>Your website<small>The AI reads your prices, services and FAQs from it. Leave empty if you don't have one.</small><input name="url" type="url" inputmode="url" maxlength="300" autocomplete="url" placeholder="https://www.yourshop.com"></label>
+    <label>Business name<input name="name" maxlength="80" autocomplete="organization" placeholder="e.g. Rose Cottage B&amp;B"></label>
+    <label>Type of business<select name="kind">{{TRIAL_KINDS}}</select></label>
+    <label>No website? Your information<small>Prices, hours, address, how to book, FAQs… Leave everything empty to start with sample information.</small>
+      <textarea name="info" maxlength="6000" placeholder="For example:&#10;Double room US$120 a night, breakfast included&#10;Check-in 3pm–8pm, check-out 10:30am&#10;Small dogs welcome, US$15 a night&#10;One night's deposit to book"></textarea></label>
+    <label>Your email or WhatsApp (optional)<small>So we can pass on bookings; the full version notifies you directly.</small><input name="contact" maxlength="120" autocomplete="email"></label>
+    <div class="err" id="err" role="alert"></div>
+    <button class="btn primary" type="submit" id="go">Make my assistant </button>
+  </form>
+</main>
+<footer>© {{TITLE}} · Your information is only used to answer your customers</footer>
+<script>
+(function () {
+  var API = "";
+  var form = document.getElementById("trial"), err = document.getElementById("err"), go = document.getElementById("go");
+  var q = new URLSearchParams(location.search);
+  if (q.get("name")) form.elements.name.value = q.get("name");
+  if (q.get("url")) form.url.value = q.get("url");
+  if (q.get("kind")) form.kind.value = q.get("kind");
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    err.textContent = "";
+    var url = form.url.value.trim(), info = form.info.value.trim();
+    if (form.elements.name.value.trim().length < 2 && !(url && !info)) { err.textContent = "Please enter the business name or website"; return; }
+    go.disabled = true;
+    if (url && !info) go.firstChild.nodeValue = "Reading your website… ";
+    fetch(API + "/api/trial", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: form.elements.name.value, kind: form.kind.value, info: info, url: url, contact: form.contact.value, lang: "en" }) })
+      .then(function (r) { return r.json().then(function (d) { return [r.status, d]; }); })
+      .then(function (res) {
+        if (res[1].slug) { location.href = API ? "t-en.html?s=" + res[1].slug + "&new=1" : "/t/" + res[1].slug + "?lang=en&new=1"; return; }
+        err.textContent = res[0] === 429 ? "Too many for now, please try again later"
+          : res[1].error === "site" ? "Couldn't read that website, please paste your information below"
+          : res[1].error === "url" ? "That address doesn't look right"
+          : "Something went wrong, please try again";
+        go.disabled = false; go.firstChild.nodeValue = "Make my assistant ";
+      }).catch(function () { err.textContent = "Connection problem, please try again"; go.disabled = false; go.firstChild.nodeValue = "Make my assistant "; });
+  });
+})();
+</script>
+</body>
+</html>

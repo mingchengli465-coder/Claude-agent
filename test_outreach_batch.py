@@ -27,7 +27,7 @@ assert "你好" not in body and "English below" not in body and "{" not in body 
 assert "?from=uk" in body and "US$70 (about £55)" in body
 html = om.compose_html({**UK, "name": "Bob's <B&B>"})
 assert '<img src="cid:mockup"' in html and "Bob&#x27;s &lt;B&amp;B&gt;" in html and "<B&B>" not in html
-assert '<a href="https://mingchengli465-coder.github.io/Claude-agent/video.html?from=uk">' in html
+assert '<a href="https://mingchengli465-coder.github.io/Claude-agent/video-en.html?from=uk">' in html
 assert om.mockup_png(UK)[:8] == b"\x89PNG\r\n\x1a\n"
 assert om.mockup_png({**UK, "mockup": "../bot"}) is None and om.mockup_png({**UK, "mockup": "nope"}) is None
 _, florist = om.compose({**UK, "cat": "florist", "host": ""})

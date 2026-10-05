@@ -51,6 +51,7 @@ WEB_CHAT = os.environ.get("WEB_CHAT", "true").lower() != "false"
 # no owner's homepage, demo page or customer-service chat on that address.
 WEB_SITES_ONLY = os.environ.get("WEB_SITES_ONLY", "false").lower() == "true"
 MAX_TEXT = 1000
+ENGLISH_TITLE = os.environ.get("WEB_ENGLISH_TITLE", "vinc")
 _VISITOR = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 _FAVICON = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='#000'/>"
             "<text x='32' y='46' font-family='Georgia,serif' font-style='italic' font-size='40' fill='white'"
@@ -158,13 +159,14 @@ def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
 
 
 
-def demo_fill(body: str, kind: str) -> str:
-    """The industry demo page for one kind of business."""
+def demo_fill(body: str, kind: str, english: bool = False) -> str:
+    """The industry demo page for one kind of business (English-only: links to the other English ones)."""
     d = demos_mod.DEMOS[kind]
     esc = lambda t: html.escape(t, quote=True)  # noqa: E731
     questions = "".join(f'<button class="chip" type="button" onclick="window.aiChatAsk && aiChatAsk(this.textContent)">{esc(q)}</button>'
                         for q in d["questions"])
-    others = "".join(f'<a href="demo-{k}">{esc(o["label_zh"])} · {esc(o["label"])}</a>'
+    others = "".join(f'<a href="demo-{k}-en">{esc(o["label"])}</a>' if english else
+                     f'<a href="demo-{k}">{esc(o["label_zh"])} · {esc(o["label"])}</a>'
                      for k, o in demos_mod.DEMOS.items() if k != kind)
     return (body.replace("{{DEMO_KIND}}", kind).replace("{{DEMO_NAME}}", esc(d["name"]))
                 .replace("{{DEMO_LABEL_ZH}}", esc(d["label_zh"])).replace("{{DEMO_LABEL_LOWER}}", esc(d["label"].lower()))
@@ -225,7 +227,9 @@ class WebChat:
         app.router.add_get("/demo", self.page)
         app.router.add_get("/demo-{kind}", self.demo_page)
         app.router.add_get("/video", self.video)
+        app.router.add_get("/video-en", self.video_en)
         app.router.add_get("/trial", self.trial_page)
+        app.router.add_get("/trial-en", self.trial_page_en)
         app.router.add_get("/t/{slug}", self.trial_shop)
         app.router.add_post("/api/trial", self.trial_create)
         app.router.add_get("/api/trial/{slug}", self.trial_info)
@@ -269,21 +273,29 @@ class WebChat:
 
     async def demo_page(self, request: web.Request) -> web.Response:
         kind = request.match_info["kind"]
+        english = kind.endswith("-en")  # /demo-bnb-en: the English-only page
+        kind = kind.removesuffix("-en")
         if kind not in demos_mod.DEMOS:
             raise web.HTTPNotFound()
-        return self._render("demo-industry.html", demo=kind)
+        return self._render("demo-industry-en.html" if english else "demo-industry.html", demo=kind)
 
     async def video(self, request: web.Request) -> web.Response:
         return self._render("video.html")
 
+    async def video_en(self, request: web.Request) -> web.Response:
+        return self._render("video-en.html")
+
     async def trial_page(self, request: web.Request) -> web.Response:
         return self._render("trial.html")
+
+    async def trial_page_en(self, request: web.Request) -> web.Response:
+        return self._render("trial-en.html")
 
     async def trial_shop(self, request: web.Request) -> web.Response:
         # the page fetches the shop from /api/trial/<slug> (the same page is on GitHub Pages as t.html)
         if self.trials is None or self.trials.get(request.match_info["slug"]) is None:
             raise web.HTTPNotFound(text="找不到這個示範 / Not found")
-        page = self._render("trial-shop.html")
+        page = self._render("trial-shop-en.html" if request.query.get("lang") == "en" else "trial-shop.html")
         # relative links (video, trial…) from /t/<slug> point at the site's root
         page.text = page.text.replace("<head>", '<head>\n<base href="/">', 1)
         return page
@@ -335,7 +347,7 @@ class WebChat:
     def _render(self, name: str, demo: str = "") -> web.Response:
         body = (_STATIC / name).read_text(encoding="utf-8")
         if demo:
-            body = demo_fill(body, demo)
+            body = demo_fill(body, demo, english=name.endswith("-en.html"))
         contact = html.escape(self.contact_link, quote=True)
         telegram, wechat = owner_contacts()
         links = owner_links()
@@ -346,8 +358,10 @@ class WebChat:
         wechat_html = "".join(
             f'<button type="button" class="wx" data-copy="{w}"><span>{w}</span><small data-i="wxCopy">复制</small></button>'
             for w in (html.escape(w, quote=True) for w in wechat))
-        body = (body.replace("{{TITLE}}", html.escape(self.title))
-                    .replace("{{TITLE_ATTR}}", html.escape(self.title, quote=True))
+        # the English-only pages (for the English-speaking countries) carry no Chinese, the name included
+        title = ENGLISH_TITLE if name.endswith("-en.html") else self.title
+        body = (body.replace("{{TITLE}}", html.escape(title))
+                    .replace("{{TITLE_ATTR}}", html.escape(title, quote=True))
                     .replace("{{CONTACT}}", contact)
                     .replace("{{CONTACT_DISPLAY}}", "" if contact else "none")
                     .replace("{{OWNER_TG}}", html.escape(telegram, quote=True))
@@ -360,6 +374,7 @@ class WebChat:
                     .replace("{{SOCIAL_DISPLAY}}", "" if links else "none")
                     .replace("{{EMAIL}}", html.escape(next((t for l, h, t in links if h.startswith("mailto:")), "")))
                     .replace("{{TRIAL_KINDS}}", "".join(
+                        f'<option value="{k}">{html.escape(d["label"])}</option>' if name.endswith("-en.html") else
                         f'<option value="{k}">{html.escape(d["label_zh"])} · {html.escape(d["label"])}</option>'
                         for k, d in demos_mod.DEMOS.items())))
         return web.Response(text=body, content_type="text/html", headers={"Cache-Control": "no-cache"})
@@ -516,6 +531,7 @@ class WebChat:
                 return self._json({"error": "site"}, 422)
             name = name if len(name) >= 2 else title or (sitetext.urlparse(site).hostname or "").removeprefix("www.")
         row = self.trials.create(name, field("kind", 20), info, field("contact", 120), site=site)
+        row = {**row, "lang": "en" if field("lang", 5) == "en" else ""}  # which page it was made on
         await self._tell("new", row)
         return self._json({"slug": row["slug"]})
 
