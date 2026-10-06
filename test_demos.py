@@ -42,7 +42,7 @@ async def main():
         assert r.status == 200 and "Willow Cottage B&amp;B" in page and "24 小時 AI 客服示範" in page
         assert '"kind": "bnb"' in page and "{{" not in page and "aiChatAsk(text)" in page
         assert "Is a double room free next Friday and Saturday?" in page and "w.dataset.demo = demo" in page
-        assert 'window.DEEP_LANG = "zh"' in page and "ALWAYS ON" in page or "OPEN 24/7" in page
+        assert 'window.DEEP_LANG = "zh"' in page and "OPEN 24/7" in page
         assert (await client.get("/demo-nope")).status == 404
         print("PASS each kind of business has a demo page with ready-made questions")
 

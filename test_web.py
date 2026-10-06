@@ -46,7 +46,8 @@ async def main():
         # the homepage: the two deep-sea pages
         r = await client.get("/")
         home = await r.text()
-        assert r.status == 200 and "ALWAYS ON" in home and "Wake The Quiet Hours" in home and "{{" not in home
+        assert r.status == 200 and "THE GIANT" in home and "Unveil The Unseen" in home and "{{" not in home
+        assert "Ocean Conservation Summit" in home and "Heuristic scoring v4.2" in home and "exploring the abyss · since 1992" in home
         assert 'data-src=""' in home, "no whale video yet: the page draws its own deep sea"
         assert "url('art/wood-top.jpg')" in home and "url('art/wood-bloom.jpg')" in home
         assert 'href="about"' in home and '<script id="chat-widget" src="/widget.js"' in home
