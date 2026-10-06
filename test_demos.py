@@ -39,10 +39,10 @@ async def main():
         # the page
         r = await client.get("/demo-bnb")
         page = await r.text()
-        assert r.status == 200 and "Willow Cottage B&amp;B" in page and "民宿的 24 小時 AI 客服" in page
-        assert 'data-demo="bnb"' in page and "{{" not in page and "aiChatAsk(this.textContent)" in page
-        assert "Is a double room free next Friday and Saturday?" in page and 'href="demo-florist"' in page
-        assert 'href="demo-bnb"' not in page, "the other demos are listed, not this one"
+        assert r.status == 200 and "Willow Cottage B&amp;B" in page and "24 小時 AI 客服示範" in page
+        assert '"kind": "bnb"' in page and "{{" not in page and "aiChatAsk(text)" in page
+        assert "Is a double room free next Friday and Saturday?" in page and "w.dataset.demo = demo" in page
+        assert 'window.DEEP_LANG = "zh"' in page and "OPEN 24/7" in page
         assert (await client.get("/demo-nope")).status == 404
         print("PASS each kind of business has a demo page with ready-made questions")
 
@@ -71,7 +71,7 @@ async def main():
     build_pages.build(out)
     for kind in demos.DEMOS:
         html = (out / f"demo-{kind}.html").read_text(encoding="utf-8")
-        assert f'data-demo="{kind}"' in html and f'src="{build_pages.API}/widget.js"' in html, kind
+        assert f'"kind": "{kind}"' in html and f'var API = "{build_pages.API}";' in html, kind
     assert "/demo-groomer.html</loc>" in (out / "sitemap.xml").read_text(encoding="utf-8")
     print("PASS every demo is published with the site and listed in the sitemap")
 

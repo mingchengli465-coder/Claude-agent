@@ -131,7 +131,7 @@ async def main():
             assert db.get((await r.json())["slug"])["site"] == "", "typed information wins over the website"
         page_html = (pathlib.Path(__file__).parent / "web_static" / "trial.html").read_text(encoding="utf-8")
         assert 'name="url"' in page_html and "url: url" in page_html
-        shop_html = (pathlib.Path(__file__).parent / "web_static" / "trial-shop.html").read_text(encoding="utf-8")
+        shop_html = (pathlib.Path(__file__).parent / "web_static" / "showcase.html").read_text(encoding="utf-8")
         assert "wa.me/?text=" in shop_html and "t.me/share/url" in shop_html and "from=share" in shop_html
         print("PASS a shop pastes its website and gets an assistant that answers from it; it can pass the page on")
 
