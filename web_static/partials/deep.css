@@ -84,17 +84,9 @@ html.en .zh{display:none!important}
 @keyframes btnIn{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
 
 /* ================= page 2 ================= */
-.art-bg{position:absolute;inset:0;z-index:0;background-image:{{ART_BOTTOM_CSS}};background-size:cover;background-position:center}
 .silver-dots{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
 .silver-dots i{position:absolute;bottom:-10px;border-radius:50%;background:radial-gradient(circle,rgba(220,225,235,0.85) 0%,rgba(220,225,235,0.15) 60%,transparent 100%);animation:silverFloat linear infinite;opacity:0}
 @keyframes silverFloat{0%{transform:translateY(0) translateX(0);opacity:0}20%{opacity:0.6}80%{opacity:0.6}100%{transform:translateY(-100vh) translateX(-20px);opacity:0}}
-.mask{position:absolute;inset:0;z-index:2;pointer-events:none;background-image:{{ART_TOP_CSS}};background-size:cover;background-position:center;background-repeat:no-repeat;
-  /* spring comes by itself: the dead wood on top melts away from left to right, showing the moss and
-     flowers underneath, holds, then closes again; no cursor or finger needed */
-  -webkit-mask-image:linear-gradient(90deg,transparent 0%,transparent 42%,black 58%,black 100%);mask-image:linear-gradient(90deg,transparent 0%,transparent 42%,black 58%,black 100%);
-  -webkit-mask-size:300% 100%;mask-size:300% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
-  -webkit-mask-position:100% 0;mask-position:100% 0;animation:springGrow 16s ease-in-out infinite}
-@keyframes springGrow{0%,10%{-webkit-mask-position:100% 0;mask-position:100% 0}45%,72%{-webkit-mask-position:0% 0;mask-position:0% 0}100%{-webkit-mask-position:100% 0;mask-position:100% 0}}
 .page2 .top-fade{position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(to bottom,#000 0%,rgba(0,0,0,0.92) 12%,rgba(0,0,0,0.5) 30%,transparent 50%)}
 .ui{position:absolute;inset:0;z-index:3;pointer-events:none}
 .fade-in{opacity:var(--p2fade)}

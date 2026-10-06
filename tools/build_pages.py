@@ -91,7 +91,6 @@ def build(out: Path) -> None:
     (out / "media").mkdir()
     # the mockups the English-market emails link to (their plain-text version)
     shutil.copytree(ROOT / "web_static" / "mockups", out / "mockups")
-    shutil.copytree(ROOT / "web_static" / "art", out / "art")
     for name in web._MEDIA:
         shutil.copy(ROOT / "media" / name, out / "media" / name)
     for font in (ROOT / "web_static" / "fonts").iterdir():
