@@ -23,7 +23,17 @@
     video.addEventListener("error", function () { video.removeAttribute("src"); });
     video.src = src;
   }
+  // only the page on screen moves: the other one's animations and drawing pause (phones need it)
+  var seen = { page1: true, page2: false };
   if ("IntersectionObserver" in window) {
+    ["page1", "page2"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      new IntersectionObserver(function (e) {
+        seen[id] = e[0].isIntersecting;
+        el.classList.toggle("off", !e[0].isIntersecting);
+      }, { threshold: 0, rootMargin: "-2px 0px -2px 0px" }).observe(el);
+    });
     new IntersectionObserver(function (e) {
       if (e[0].isIntersecting) { if (video.getAttribute("src")) { var p = video.play(); if (p && p.catch) p.catch(function () {}); } }
       else video.pause();
@@ -32,14 +42,15 @@
 
   // the deep sea: light from far above, drifting specks, a ball of silver fish, and every ten
   // seconds something enormous coming out of the dark
-  var ctx = canvas.getContext("2d"), W = 0, H = 0, DPR = Math.min(2, window.devicePixelRatio || 1);
+  var phone = !!(window.matchMedia && matchMedia("(hover: none)").matches);
+  var ctx = canvas.getContext("2d"), W = 0, H = 0, DPR = phone ? 1 : Math.min(2, window.devicePixelRatio || 1);
   var fish = [], specks = [], t0 = performance.now();
   function size() {
     W = canvas.clientWidth; H = canvas.clientHeight;
     canvas.width = W * DPR; canvas.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
   size(); addEventListener("resize", size);
-  for (var i = 0; i < 420; i++) fish.push({ a: Math.random() * 6.283, r: Math.pow(Math.random(), 0.6), s: 0.4 + Math.random() * 0.8, z: Math.random(), vx: 0, vy: 0, x: 0, y: 0, free: 0 });
+  for (var i = 0; i < (phone ? 200 : 420); i++) fish.push({ a: Math.random() * 6.283, r: Math.pow(Math.random(), 0.6), s: 0.4 + Math.random() * 0.8, z: Math.random(), vx: 0, vy: 0, x: 0, y: 0, free: 0 });
   for (i = 0; i < 90; i++) specks.push({ x: Math.random(), y: Math.random(), r: 0.5 + Math.random() * 1.6, s: 0.002 + Math.random() * 0.006, h: Math.random() < 0.6 ? 190 : 160 });
   function whale(x, y, L, alpha) {
     ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y);
@@ -59,6 +70,7 @@
   }
   function frame(now) {
     if (!drawing) return;
+    if (!seen.page1) { requestAnimationFrame(frame); return; }
     var t = (now - t0) / 1000, cyc = t % 10, cx = W * 0.5, cy = H * 0.52, R = Math.min(W, H) * 0.16;
     ctx.fillStyle = "#010307"; ctx.fillRect(0, 0, W, H);
     for (var k = 0; k < 4; k++) {                                                 // light shafts
@@ -106,7 +118,7 @@
   page2.addEventListener("touchmove", touch, { passive: true });
   if (window.matchMedia && matchMedia("(hover: none)").matches) {
     (function drift(now) {
-      if (now - touched > 3500) {
+      if (seen.page2 && now - touched > 3500) {
         var k = now / 9000, w = page2.clientWidth, h = page2.clientHeight;
         mask.style.setProperty("--mx", (w * (0.5 + 0.38 * Math.sin(k * 6.283))) + "px");
         mask.style.setProperty("--my", (h * (0.80 - 0.07 * Math.sin(k * 6.283))) + "px");
@@ -122,14 +134,19 @@
       "animation-duration:" + (16 + Math.random() * 12) + "s;animation-delay:" + (Math.random() * 30) + "s;filter:opacity(" + (0.25 + Math.random() * 0.5) + ")";
     dots.appendChild(d);
   }
-  var title = document.getElementById("art-title"), text = title.textContent;
-  title.textContent = "";
-  for (i = 0; i < text.length; i++) {
-    var c = document.createElement("span");
-    c.textContent = text[i] === " " ? " " : text[i];
-    c.style.animationDelay = (i * 0.12) + "s";
-    title.appendChild(c);
-  }
+  // the title, one glowing span per character (again whenever its words change)
+  window.deepSplitTitle = function (text) {
+    var title = document.getElementById("art-title");
+    text = text == null ? title.textContent : text;
+    title.textContent = "";
+    for (var n = 0; n < text.length; n++) {
+      var c = document.createElement("span");
+      c.textContent = text[n] === " " ? "\u00a0" : text[n];
+      c.style.animationDelay = (n * 0.12) + "s";
+      title.appendChild(c);
+    }
+  };
+  window.deepSplitTitle();
 
   // ---- the two pages hand over as you scroll ----
   var ticking = false;
