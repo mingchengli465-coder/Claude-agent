@@ -43,17 +43,24 @@ async def main():
     # --- pages -------------------------------------------------------------------
     chat, svc, model, owner, clock = fresh()
     async with TestClient(TestServer(chat.app())) as client:
-        # the homepage: the two deep-sea pages
+        # the homepage: the whole site (services, prices, contacts, FAQ) in the deep-sea design
         r = await client.get("/")
         home = await r.text()
-        assert r.status == 200 and "ALWAYS ON" in home and "Wake The Quiet Hours" in home and "{{" not in home
-        assert "YOUR SHOP<br>KEEPS ANSWERING" in home and "US$70 one-off setup" in home and "Ocean" not in home, "the business, not the ocean"
+        assert r.status == 200 and "ALWAYS ON" in home and "{{" not in home
+        assert "YOUR SHOP<br>KEEPS ANSWERING" in home and "Ocean" not in home, "the business, not the ocean"
+        for section in ("services", "ai-cs", "claude-code", "pricing", "about", "contact", "faq"):
+            assert f'id="{section}"' in home, section
+        assert "US$70–85" in home and "US$9.9" in home and "US$14" in home, "the prices"
+        assert 'data-copy="Vinc100327"' in home and 'href="https://t.me/Vinceeeeentttt"' in home, "the owner's contacts"
+        assert 'href="https://x.com/Vincent40769988"' in home and "<details" in home
         assert 'data-src=""' in home, "no whale video yet: the page draws its own deep sea"
-        assert 'id="lang"' in home and 'data-zh="永不打烊"' in home and 'localStorage.setItem("siteLang"' in home, "繁 / EN on the homepage"
+        assert 'id="lang"' in home and 'data-k="heroH1"' in home and '"heroH1": ["永不打烊", "ALWAYS ON"]' in home
+        assert 'localStorage.setItem("siteLang"' in home, "繁 / EN on the homepage"
+        assert "复制" not in home, "繁體 and English only"
         assert 'data-href-en="trial-en"' in home, "English readers go to the English trial"
         assert "html{scroll-snap-type:none}" in home, "phones scroll freely (Safari's snapping pulled swipes back)"
         assert 'class="art-bg"' not in home and 'id="mask"' not in home, "no dead-wood strip on page two"
-        assert 'href="about"' in home and '<script id="chat-widget" src="/widget.js"' in home
+        assert '<script id="chat-widget" src="/widget.js"' in home
         # the full site (services, prices, contacts) is the About page
         r = await client.get("/about")
         site = await r.text()

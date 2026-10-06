@@ -421,7 +421,7 @@ class WebChat:
             f'<b>{html.escape(label)}</b><span>{html.escape(text)}</span></a>'
             for label, href, text in links)
         wechat_html = "".join(
-            f'<button type="button" class="wx" data-copy="{w}"><span>{w}</span><small data-i="wxCopy">复制</small></button>'
+            f'<button type="button" class="wx" data-copy="{w}"><span>{w}</span><small data-i="wxCopy">複製</small></button>'
             for w in (html.escape(w, quote=True) for w in wechat))
         # the English-only pages (for the English-speaking countries) carry no Chinese, the name included
         title = ENGLISH_TITLE if english or name in ("home.html", "showcase.html") else self.title

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{TITLE}} · 24/7 AI assistants for small businesses</title>
+<title>vinc · AI assistants & Claude Code setup</title>
 <meta name="description" content="A 24/7 AI assistant for your business: it answers your customers from your own prices, day and night, and tells you the moment someone is ready to buy. 24 小時 AI 客服，按你的價目表回覆客人。">
 <meta property="og:title" content="Always on · vinc">
 <meta property="og:image" content="media/vinc-intro-poster.jpg">
@@ -14,9 +14,193 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Bruno+Ace&family=Exo+2:wght@400;500;600;700;800;900&family=Marcellus&family=Marcellus+SC&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 {{DEEP_CSS}}
+/* ===== the rest of the site, in the same deep-sea language ===== */
+html{scroll-snap-type:none!important}
+body{background:#000 radial-gradient(ellipse 120% 60% at 50% 0%,rgba(20,45,85,.25),transparent 70%) fixed}
+html[lang="zh-TW"] body{font-family:"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+.sea-dots{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.sea-dots i{position:absolute;bottom:-10px;border-radius:50%;background:radial-gradient(circle,rgba(220,225,235,.85) 0%,rgba(220,225,235,.15) 60%,transparent 100%);animation:silverFloat linear infinite;opacity:0}
+.page1,.sea,.final{position:relative;z-index:1}
+.sea{max-width:1240px;margin:0 auto;padding:0 6vw}
+.scroll-hint{position:absolute;left:50%;bottom:4%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;font-family:'Marcellus SC',serif;font-size:.7rem;letter-spacing:.3em;color:rgba(220,235,250,.55);text-decoration:none;opacity:0;animation:btnIn .8s ease-out 3s forwards}
+.scroll-hint i{width:1px;height:38px;background:linear-gradient(rgba(255,200,80,.9),transparent);animation:hintDrop 2s ease-in-out infinite}
+@keyframes hintDrop{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+
+/* reveal as it comes into view */
+.rv,.rv-left{opacity:0}
+.rv.in{animation:fadeUp .9s ease-out var(--d,0s) forwards}
+.rv-left.in{animation:slideRight .9s ease-out var(--d,0s) forwards}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin-top:clamp(60px,10vh,110px);border-top:1px solid rgba(180,220,255,.12);border-bottom:1px solid rgba(180,220,255,.12)}
+.stat{padding:34px 10px;text-align:center}
+.stat b{display:block;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(2rem,4vw,3.2rem);color:rgba(190,225,255,.95);text-shadow:0 0 22px rgba(120,190,255,.45);animation:secGlow 5s ease-in-out infinite}
+.stat b small{font-size:.4em;margin-left:4px;color:rgba(255,200,80,.9)}
+.stat>span{display:block;margin-top:6px;font-family:'Marcellus SC',serif;font-size:.8rem;letter-spacing:.14em;color:rgba(210,225,240,.6)}
+.works{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 16px;padding:26px 0;font-family:'Marcellus SC',serif;font-size:.85rem;letter-spacing:.16em;color:rgba(220,235,250,.7)}
+.works .wl{color:rgba(255,200,80,.9);margin-right:6px}
+.works i{width:4px;height:4px;border-radius:50%;background:rgba(255,200,80,.6)}
+
+.sec{padding:clamp(80px,14vh,150px) 0 0}
+.sec-head{max-width:820px}
+.sec-kick{display:flex;align-items:center;gap:14px;font-family:'Marcellus SC',serif;font-size:.82rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,200,80,.9)}
+.sec-kick .n{font-family:'Cinzel',serif;color:rgba(180,220,255,.75)}
+.sec-kick::after{content:'';width:70px;height:1px;background:linear-gradient(90deg,rgba(255,200,80,.85),transparent)}
+.sec-title{margin-top:20px;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(2rem,4.6vw,3.7rem);line-height:1.14;letter-spacing:.03em;color:rgba(200,228,255,.95);text-shadow:0 0 24px rgba(120,190,255,.35),0 0 60px rgba(80,160,240,.15);animation:secGlow 5s ease-in-out infinite}
+.sec-title em,.sub-title em{font-style:normal;color:rgba(255,212,120,.95);text-shadow:0 0 22px rgba(255,200,80,.35)}
+@keyframes secGlow{0%,100%{text-shadow:0 0 18px rgba(120,190,255,.3),0 0 50px rgba(80,160,240,.12)}50%{text-shadow:0 0 32px rgba(180,220,255,.6),0 0 90px rgba(100,180,255,.25)}}
+.sec-sub{margin-top:18px;font-family:'Cormorant Garamond',serif;font-size:clamp(1.08rem,1.5vw,1.3rem);line-height:1.8;color:rgba(205,222,240,.72)}
+html[lang="zh-TW"] .sec-sub,html[lang="zh-TW"] .desc,html[lang="zh-TW"] .about p,html[lang="zh-TW"] .faq p{font-family:"PingFang TC","Noto Sans TC",sans-serif;font-size:1rem;line-height:1.9}
+.quote-head .sec-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:500;letter-spacing:.01em}
+
+.card{position:relative;background:linear-gradient(160deg,rgba(24,36,58,.55),rgba(6,10,18,.65));border:1px solid rgba(180,220,255,.09);border-left:3px solid rgba(255,200,80,.85);border-radius:4px 18px 18px 4px;padding:clamp(24px,3vw,38px)}
+.card .tag{display:flex;align-items:center;gap:10px;font-family:'Marcellus SC',serif;font-size:.78rem;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,200,80,.9)}
+.card .tag span,.card .tag b{font-weight:400}
+.card .tag span{color:rgba(180,220,255,.6)}
+.card-title{margin-top:12px;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(1.3rem,2.2vw,1.8rem);line-height:1.25;color:#fff;text-shadow:0 0 18px rgba(200,225,255,.25)}
+.desc{margin-top:12px;font-family:'Cormorant Garamond',serif;font-size:1.12rem;line-height:1.75;color:rgba(210,225,240,.72)}
+.ticks{list-style:none;margin-top:16px;display:grid;gap:9px}
+.ticks li{position:relative;padding-left:22px;font-family:'Montserrat',sans-serif;font-size:.86rem;line-height:1.6;color:rgba(220,232,245,.8)}
+.ticks li::before{content:'';position:absolute;left:2px;top:.62em;width:7px;height:7px;transform:rotate(45deg);background:rgba(255,200,80,.85);box-shadow:0 0 8px rgba(255,200,80,.6)}
+.menu{list-style:none;margin-top:16px;display:grid;gap:10px}
+.menu li{display:flex;align-items:baseline;gap:10px;font-family:'Montserrat',sans-serif;font-size:.88rem;color:rgba(220,232,245,.82)}
+.menu b{font-weight:500}
+.menu .dots{flex:1;border-bottom:1px dotted rgba(180,220,255,.25)}
+.menu li>span:last-child{color:rgba(255,212,120,.95)}
+
+.svc-list{display:grid;gap:22px;margin-top:48px}
+.svc{display:grid;grid-template-columns:70px 1fr 260px;gap:28px;align-items:start}
+.svc-no{font-family:'Cinzel',serif;font-size:1.1rem;color:rgba(180,220,255,.55)}
+.svc-side{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.price b{display:block;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(1.6rem,2.6vw,2.2rem);color:rgba(255,212,120,.95);animation:goldPulse 3.5s ease-in-out infinite}
+.price small{display:block;margin-top:4px;font-family:'Montserrat',sans-serif;font-size:.78rem;color:rgba(210,225,240,.6)}
+
+.gbtn,.obtn{display:inline-flex;align-items:center;gap:10px;padding:12px 22px;border-radius:999px;font-family:'Montserrat',sans-serif;font-size:.74rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;text-decoration:none;cursor:pointer;transition:background .3s,box-shadow .3s,color .3s,border-color .3s}
+.gbtn{color:#000;background:rgba(255,200,80,.92);border:1px solid transparent}
+.gbtn:hover{background:#ffd88a;box-shadow:0 0 26px rgba(255,200,80,.5)}
+.obtn{color:rgba(255,212,120,.95);background:transparent;border:1px solid rgba(255,200,80,.55)}
+.obtn:hover{border-color:rgba(255,212,120,1);box-shadow:0 0 20px rgba(255,200,80,.25)}
+.arr{width:14px;height:14px}
+.tlink{font-family:'Montserrat',sans-serif;font-size:.78rem;letter-spacing:.1em;color:rgba(190,225,255,.8);text-decoration:none;border-bottom:1px solid rgba(190,225,255,.3);padding-bottom:3px}
+.tlink:hover{color:#fff;border-color:#fff}
+html[lang="zh-TW"] .gbtn,html[lang="zh-TW"] .obtn{letter-spacing:.12em}
+
+.how{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;margin-top:48px;align-items:start}
+.steps{list-style:none;display:grid;gap:18px}
+.step{position:relative;padding:4px 0 18px 70px;border-bottom:1px solid rgba(180,220,255,.08)}
+.step .sn{position:absolute;left:0;top:0;font-family:'Cinzel',serif;font-weight:700;font-size:2rem;color:rgba(180,220,255,.85);text-shadow:0 0 18px rgba(120,190,255,.45)}
+.step h4{font-family:'Cinzel',serif;font-weight:600;font-size:1.15rem;color:#fff;letter-spacing:.03em}
+.step p{margin-top:6px;font-family:'Montserrat',sans-serif;font-size:.86rem;line-height:1.7;color:rgba(210,225,240,.66)}
+.chat{border-radius:22px;overflow:hidden;background:rgba(8,14,24,.85);border:1px solid rgba(180,220,255,.12);box-shadow:0 30px 80px -30px rgba(0,0,0,.8),0 0 60px -20px rgba(80,160,240,.25)}
+.chat-head{display:flex;gap:12px;align-items:center;padding:16px 18px;border-bottom:1px solid rgba(180,220,255,.08)}
+.chat-av{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:rgba(255,200,80,.15);font-size:1.2rem}
+.chat-head b{display:block;font-family:'Montserrat',sans-serif;font-size:.9rem;color:#fff}
+.chat-head small{display:flex;align-items:center;gap:6px;font-family:'Montserrat',sans-serif;font-size:.72rem;color:rgba(200,220,240,.6)}
+.pulse{width:7px;height:7px;border-radius:50%;background:#3ddc84;box-shadow:0 0 8px #3ddc84;animation:vertBreathe 2s ease-in-out infinite}
+.feed{display:flex;flex-direction:column;gap:10px;padding:18px;min-height:380px}
+.msg{max-width:84%;padding:10px 14px;border-radius:16px;font-family:'Montserrat',sans-serif;font-size:.84rem;line-height:1.55;opacity:0}
+.msg.me{align-self:flex-end;background:rgba(255,200,80,.9);color:#141008;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:rgba(180,220,255,.1);color:rgba(230,240,250,.92);border-bottom-left-radius:4px}
+.msg.note{align-self:center;display:flex;gap:10px;align-items:center;max-width:94%;background:rgba(255,200,80,.08);border:1px solid rgba(255,200,80,.3);border-radius:12px}
+.msg.note b{display:block;font-size:.8rem;color:rgba(255,212,120,.95)}
+.msg.note small{display:block;font-size:.7rem;color:rgba(210,225,240,.6)}
+.chat.in .msg{animation:fadeUp .6s ease-out var(--d,0s) forwards}
+.chat-foot{display:flex;justify-content:space-between;padding:12px 18px;border-top:1px solid rgba(180,220,255,.08);font-family:'Marcellus SC',serif;font-size:.72rem;letter-spacing:.16em;color:rgba(200,220,240,.5)}
+.plats-head{margin-top:clamp(70px,10vh,110px)}
+.sub-title{margin-top:16px;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(1.5rem,3vw,2.4rem);color:rgba(200,228,255,.95);text-shadow:0 0 20px rgba(120,190,255,.3)}
+.plats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin-top:34px}
+.plat{display:flex;flex-direction:column;align-items:center;gap:10px;padding:22px 10px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid rgba(180,220,255,.08);text-align:center}
+.plat i{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-style:normal;font-weight:700;color:#fff;font-family:'Montserrat',sans-serif}
+.plat i.more{background:transparent;border:1px dashed rgba(255,200,80,.6);color:rgba(255,200,80,.9)}
+.plat b{font-family:'Montserrat',sans-serif;font-weight:500;font-size:.8rem;color:rgba(220,232,245,.82)}
+.row-ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+
+.cc{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;margin-top:48px;align-items:start}
+.term{border-radius:16px;overflow:hidden;background:#05080d;border:1px solid rgba(180,220,255,.12);box-shadow:0 0 60px -20px rgba(80,160,240,.3)}
+.term-bar{display:flex;align-items:center;gap:7px;padding:12px 14px;border-bottom:1px solid rgba(180,220,255,.08);font-family:'Montserrat',sans-serif;font-size:.72rem;color:rgba(200,220,240,.5)}
+.term-bar i{width:10px;height:10px;border-radius:50%;background:#ff5f57}.term-bar i:nth-child(2){background:#febc2e}.term-bar i:nth-child(3){background:#28c840;margin-right:8px}
+.term pre{padding:20px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;line-height:1.75;white-space:pre-wrap;color:rgba(220,232,245,.85)}
+.tl{display:block}.tl.cm{color:rgba(150,170,190,.6)}.tl i{font-style:normal;color:rgba(255,200,80,.9)}.tl.ok{color:#5be39a}.tl.ok i{color:#5be39a}
+.cc-side{display:flex;flex-direction:column;gap:18px;align-items:flex-start}
+.cc-side .ticks{margin-top:0}
+.notice{padding:14px 16px;border-radius:12px;background:rgba(255,200,80,.06);border:1px solid rgba(255,200,80,.22);font-family:'Montserrat',sans-serif;font-size:.8rem;line-height:1.65;color:rgba(220,232,245,.75)}
+.notice b{color:rgba(255,212,120,.95)}
+
+.plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;margin-top:48px;align-items:stretch}
+.plan{display:flex;flex-direction:column;gap:6px}
+.plan .gbtn,.plan .obtn{margin-top:auto;align-self:flex-start}
+.plan .ticks,.plan .menu{margin-bottom:22px}
+.plan.featured{box-shadow:0 0 0 1px rgba(255,200,80,.35),0 0 60px -12px rgba(255,200,80,.35)}
+.amount{margin-top:14px;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(1.8rem,3vw,2.5rem);color:rgba(255,212,120,.95);animation:goldPulse 3.5s ease-in-out infinite}
+.amount small{display:block;margin-top:2px;font-family:'Montserrat',sans-serif;font-weight:400;font-size:.76rem;letter-spacing:.06em;color:rgba(210,225,240,.6);animation:none;text-shadow:none}
+.monthly{font-family:'Montserrat',sans-serif;font-size:.86rem;color:rgba(220,232,245,.8)}
+.monthly b{color:rgba(255,212,120,.95)}
+.ticket{display:flex;gap:14px;align-items:center;margin-top:26px;padding:18px 22px;border-radius:14px;border:1px dashed rgba(255,200,80,.45);font-family:'Montserrat',sans-serif;font-size:.88rem;color:rgba(220,232,245,.85)}
+.ticket b{color:rgba(255,212,120,.95)}
+.gift{font-size:1.2rem;color:rgba(255,200,80,.95);animation:goldPulse 3s ease-in-out infinite}
+
+.about{max-width:760px;margin-top:30px;display:grid;gap:16px}
+.about p{font-family:'Cormorant Garamond',serif;font-size:1.2rem;line-height:1.85;color:rgba(215,228,242,.78)}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chips span{padding:7px 14px;border-radius:999px;border:1px solid rgba(180,220,255,.2);font-family:'Montserrat',sans-serif;font-size:.76rem;letter-spacing:.06em;color:rgba(210,228,245,.8)}
+.sig{display:flex;gap:14px;align-items:center;margin-top:6px}
+.sig .av{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:rgba(255,200,80,.9);color:#000;font-family:'Cinzel',serif;font-weight:700;font-size:1.3rem}
+.sig b{display:block;font-family:'Cinzel',serif;font-size:1.1rem;color:#fff}
+.sig small{font-family:'Montserrat',sans-serif;font-size:.76rem;color:rgba(210,225,240,.6)}
+
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;margin-top:48px;align-items:stretch}
+.contact{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.contact .desc{margin-top:0}
+.handle{font-family:'Cinzel',serif;font-size:1.15rem;color:rgba(190,225,255,.95)}
+.wxs{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:4px}
+.wx{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:12px 14px;border-radius:12px;background:rgba(7,193,96,.08);border:1px solid rgba(7,193,96,.35);color:#fff;font-family:'Montserrat',sans-serif;font-size:.9rem;cursor:pointer}
+.wx small{font-size:.72rem;letter-spacing:.1em;color:rgba(120,230,160,.95)}
+.socials{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
+.social{display:flex;gap:10px;align-items:baseline;padding:12px 18px;border-radius:999px;border:1px solid rgba(180,220,255,.18);text-decoration:none;font-family:'Montserrat',sans-serif;font-size:.82rem;color:rgba(220,232,245,.85)}
+.social b{font-family:'Marcellus SC',serif;letter-spacing:.14em;color:rgba(255,200,80,.9);font-weight:400}
+.social:hover{border-color:rgba(255,200,80,.6)}
+
+.faq{margin-top:40px;border-top:1px solid rgba(180,220,255,.1)}
+.faq details{border-bottom:1px solid rgba(180,220,255,.1)}
+.faq summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:22px 0;cursor:pointer;font-family:'Cinzel',serif;font-weight:600;font-size:clamp(1rem,1.6vw,1.2rem);color:#fff}
+.faq summary::-webkit-details-marker{display:none}
+.faq .pm{position:relative;flex:0 0 16px;height:16px}
+.faq .pm::before,.faq .pm::after{content:'';position:absolute;left:0;top:7px;width:16px;height:2px;background:rgba(255,200,80,.9);transition:transform .3s}
+.faq .pm::after{transform:rotate(90deg)}
+.faq details[open] .pm::after{transform:rotate(0)}
+.faq p{padding:0 0 22px;font-family:'Cormorant Garamond',serif;font-size:1.12rem;line-height:1.8;color:rgba(210,225,240,.72);max-width:760px}
+
+.final{margin-top:clamp(80px,12vh,140px);height:auto;min-height:100vh}
+.final .ui{position:relative;inset:auto;min-height:100vh;pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(22px,4vh,40px);padding:clamp(90px,14vh,140px) 6% 40px;text-align:center}
+.final-kick{display:flex;gap:12px;font-family:'Marcellus SC',serif;font-size:.82rem;letter-spacing:.3em;color:rgba(255,200,80,.9)}
+.final-kick .n{font-family:'Cinzel',serif;color:rgba(180,220,255,.75)}
+.final .art-title{position:relative;top:auto;left:auto;transform:none;white-space:normal;max-width:100%;animation:finalFloat 8s ease-in-out infinite,artGlow 5s ease-in-out infinite}
+@keyframes finalFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.final .art-sub{position:relative;top:auto;left:auto;transform:none;width:min(760px,100%);white-space:normal;font-family:'Cormorant Garamond',serif;font-size:clamp(1.1rem,2vw,1.5rem);line-height:1.6;color:rgba(220,230,245,.8);animation:none;opacity:1}
+.final-ctas{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;width:100%}
+.final .explore{position:relative;right:auto;left:auto;bottom:auto}
+.final .vert{position:absolute}
+html[lang^=zh] .final .vert{display:none}
+.foot{position:relative;width:100%;margin-top:clamp(30px,6vh,60px);padding-top:24px;border-top:1px solid rgba(180,220,255,.1);display:grid;gap:8px;justify-items:center;font-family:'Montserrat',sans-serif;font-size:.74rem;color:rgba(200,215,230,.5)}
+.foot-links{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 18px}
+.foot-links a{color:rgba(220,232,245,.7);text-decoration:none;font-family:'Marcellus SC',serif;letter-spacing:.14em}
+.foot-links a:hover{color:#fff}
+
+@media (max-width:900px){
+  .svc{grid-template-columns:1fr;gap:14px}
+  .svc-no{display:none}
+  .how,.cc{grid-template-columns:1fr}
+  .plans,.cards{grid-template-columns:1fr}
+  .plats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:760px){
+  .scroll-hint{display:none}
+}
 </style>
 </head>
 <body>
+
+<div class="sea-dots" id="sea-dots" aria-hidden="true"></div>
 
 <section class="page page1" id="page1">
   <canvas class="deep" id="deep" aria-hidden="true"></canvas>
@@ -26,97 +210,274 @@
   <div class="bottom-fade"></div>
   <div class="p1-ui">
     <div class="logo">
-      <a class="brand" href="/">vinc<sup>AI</sup></a>
-      <div class="tagline" data-zh="小店的 24 小時 AI 客服">24/7 assistants for small businesses</div>
+      <a class="brand" href="#page1">vinc<sup>AI</sup></a>
+      <div class="tagline" data-k="tagline">24/7 AI assistants · Claude Code setup</div>
     </div>
     <nav class="nav">
-      <a class="active keep" href="/" data-zh="首頁">Home</a>
-      <a href="/demo" data-href-en="/demo?lang=en" data-zh="示範">Demo</a>
-      <a href="trial" data-href-en="trial-en" data-zh="試用">Trial</a>
-      <a href="about" data-zh="關於">About</a>
-      <a href="{{OWNER_TG}}" target="_blank" rel="noopener" data-zh="聯絡">Contact</a>
+      <a class="active keep" href="#page1" data-k="navHome">Home</a>
+      <a href="#services" data-k="navServices">Services</a>
+      <a href="#pricing" data-k="navPricing">Pricing</a>
+      <a href="#faq" data-k="navFaq">FAQ</a>
+      <a href="#contact" data-k="navContact">Contact</a>
       <button class="lang keep" type="button" id="lang" aria-label="繁體中文 / English"><span data-l="zh">繁</span> / <span data-l="en">EN</span></button>
-      <button class="search keep" type="button" aria-label="Ask the assistant" onclick="window.aiChatOpen && aiChatOpen()">&#8981;</button>
+      <button class="search keep" type="button" aria-label="Ask my AI" data-chat>&#8981;</button>
     </nav>
     <div class="hero">
-      <h1 data-text="ALWAYS ON" data-zh="永不打烊">ALWAYS ON</h1>
-      <div class="vol" data-zh="你打烊了，它還在接客">Your shop closes. It keeps answering.</div>
+      <h1 data-text="ALWAYS ON" data-k="heroH1">ALWAYS ON</h1>
+      <div class="vol" data-k="heroVol">Your shop closes. It keeps answering.</div>
     </div>
     <div class="report">
-      <div class="label" data-zh="你休息的時候：">WHILE YOU SLEEP:</div>
-      <div class="title" data-zh="你的店<br>照樣回覆客人">YOUR SHOP<br>KEEPS ANSWERING</div>
+      <div class="label" data-k="heroLabel">WHILE YOU SLEEP:</div>
+      <div class="title" data-k="heroTitle2">YOUR SHOP<br>KEEPS ANSWERING</div>
       <div class="body-wrap">
         <div class="body"><div class="scroll">
-          <p data-zh="打烊之後，客人的問題還是一直來。">When the shop closes, the questions keep coming.</p>
-          <p data-zh="價錢、房間、蛋糕、預約，半夜也有人問。">Prices, rooms, cakes and bookings, at midnight.</p>
-          <p data-zh="它按你自己的價目表回答，從不亂報價。">It answers from your own price list, never guessing.</p>
-          <p data-zh="客人準備下單時，第一時間通知你。">When someone is ready to buy, you hear first.</p>
-          <p data-zh="2–3 天上線，一次性 US$70 起，之後每月 US$9.9。">Live in 2–3 days. From US$70, then US$9.9 a month.</p>
-          <p data-zh="打烊之後，客人的問題還是一直來。">When the shop closes, the questions keep coming.</p>
-          <p data-zh="價錢、房間、蛋糕、預約，半夜也有人問。">Prices, rooms, cakes and bookings, at midnight.</p>
-          <p data-zh="它按你自己的價目表回答，從不亂報價。">It answers from your own price list, never guessing.</p>
-          <p data-zh="客人準備下單時，第一時間通知你。">When someone is ready to buy, you hear first.</p>
-          <p data-zh="2–3 天上線，一次性 US$70 起，之後每月 US$9.9。">Live in 2–3 days. From US$70, then US$9.9 a month.</p>
+          <p data-k="hl1">When the shop closes, the questions keep coming.</p><p data-k="hl2">Prices, rooms, cakes and bookings, at midnight.</p><p data-k="hl3">It answers from your own price list, never guessing.</p><p data-k="hl4">When someone is ready to buy, you hear first.</p><p data-k="hl5">Live in 2–3 days. From US$70, then US$9.9 a month.</p>
+          <p data-k="hl1">When the shop closes, the questions keep coming.</p><p data-k="hl2">Prices, rooms, cakes and bookings, at midnight.</p><p data-k="hl3">It answers from your own price list, never guessing.</p><p data-k="hl4">When someone is ready to buy, you hear first.</p><p data-k="hl5">Live in 2–3 days. From US$70, then US$9.9 a month.</p>
         </div></div>
       </div>
-      <a class="btn" href="trial" data-href-en="trial-en" data-zh="免費試用">TRY IT FREE</a>
+      <a class="btn" href="trial" data-href-en="trial-en" data-k="heroBtn">TRY IT FREE</a>
     </div>
     <a class="event" href="trial" data-href-en="trial-en">
-      <div class="label" data-zh="免費試用：">FREE TRIAL:</div>
-      <div class="what" data-zh="貼上你的網址<br>幾秒鐘做好">Paste your website,<br>ready in seconds</div>
+      <div class="label" data-k="evLabel">FREE TRIAL:</div>
+      <div class="what" data-k="evWhat">Paste your website,<br>ready in seconds</div>
     </a>
-    <div class="side" data-zh="在黑夜裡回覆客人 · since 2026">answering in the dark · since 2026</div>
+    <div class="side" data-k="heroSide">answering in the dark · since 2026</div>
+    <a class="scroll-hint" href="#services"><span data-k="scrollHint">Scroll</span><i></i></a>
   </div>
 </section>
 
-<section class="page page2" id="page2">
+<main class="sea">
+  <div class="stats">
+    <div class="stat rv"><b>24/7</b><span data-k="stat1">Always answering</span></div>
+    <div class="stat rv" style="--d:.1s"><b>3+</b><span data-k="stat2">Languages, auto-matched</span></div>
+    <div class="stat rv" style="--d:.2s"><b>2–3<small data-k="days">days</small></b><span data-k="stat3">From your info to live</span></div>
+    <div class="stat rv" style="--d:.3s"><b>1:1</b><span data-k="stat4">Handled by me, start to finish</span></div>
+  </div>
+  <div class="works rv"><span class="wl" data-k="worksLabel">Works with</span><span data-k="worksWx">WeChat</span><i></i><span>Telegram</span><i></i><span>WhatsApp</span><i></i><span data-k="worksWeb">Your website</span><i></i><span>Claude Code</span><i></i><span>Codex</span><i></i><span>DeepSeek</span></div>
+
+  <section class="sec" id="services">
+    <div class="sec-head "><div class="sec-kick rv"><span class="n">01</span><span data-k="svcKicker">Services</span></div><h2 class="sec-title rv" data-k="svcTitle">What I can <em>do for you</em></h2><p class="sec-sub rv" data-k="svcSub">Two main things: an AI that looks after your customers, and an AI that writes code on your computer. Smaller jobs welcome too.</p></div>
+    <div class="svc-list">
+      <article class="card svc rv-left">
+        <div class="svc-no">(01)</div>
+        <div class="svc-main">
+          <div class="tag" data-k="csTag">For businesses</div>
+          <h3 class="card-title" data-k="csTitle">AI customer assistant</h3>
+          <p class="desc" data-k="csDesc">Answers customers from your own price list and FAQ, and asks the right questions. Orders, haggling and anything it can't answer go straight to your phone.</p>
+          <ul class="ticks"><li><span data-k="cs1">On WeChat, Telegram and more, or right on your website</span></li><li><span data-k="cs2">Alerts when someone new arrives, gets interested, or wants to pay</span></li><li><span data-k="cs3">Chinese, English and more, automatically</span></li><li><span data-k="cs4">Price list and FAQ updates included</span></li></ul>
+        </div>
+        <div class="svc-side">
+          <div class="price"><b data-k="csPrice">From US$70</b><small data-k="csPriceSub">one-off setup · plus US$9.9 a month</small></div>
+          <button class="gbtn" type="button" data-chat><span data-k="askPrice">Ask about pricing</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+          <a class="tlink" href="/demo" data-href-en="/demo?lang=en" data-k="csDemo">See the demo</a>
+          <a class="tlink" href="trial" data-href-en="trial-en" data-k="csTrial">Make one free for your shop</a>
+        </div>
+      </article>
+      <article class="card svc rv-left" style="--d:.1s">
+        <div class="svc-no">(02)</div>
+        <div class="svc-main">
+          <div class="tag" data-k="ccTag">For individuals</div>
+          <h3 class="card-title" data-k="ccTitle">Claude Code & Codex, set up for you</h3>
+          <p class="desc" data-k="ccDesc">Over screen share, I install and configure it on your computer, make sure it runs, then walk you through your first task.</p>
+          <ul class="ticks"><li><span data-k="cc1">Windows or Mac</span></li><li><span data-k="cc2">Hands-on walkthrough after setup</span></li><li><span data-k="cc3">Common errors explained</span></li><li><span data-k="cc4">About an hour</span></li></ul>
+        </div>
+        <div class="svc-side">
+          <div class="price"><b data-k="ccPrice">From US$14</b><small data-k="ccPriceSub">one session, about an hour</small></div>
+          <button class="gbtn" type="button" data-chat><span data-k="askPrice">Ask about pricing</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+          <a class="tlink" href="#claude-code" data-k="ccMore">Learn more</a>
+        </div>
+      </article>
+      <article class="card svc rv-left" style="--d:.2s">
+        <div class="svc-no">(03)</div>
+        <div class="svc-main">
+          <div class="tag" data-k="otherTag">Also available</div>
+          <h3 class="card-title" data-k="otherTitle">Code, slides, websites, copy</h3>
+          <p class="desc" data-k="otherDesc">AI-assisted, checked by me before delivery. Ask the assistant for details.</p>
+          <ul class="menu"><li><b data-k="o1">Code</b><span class="dots"></span><span data-k="o1p">US$8 per job</span></li><li><b data-k="o2">Slides</b><span class="dots"></span><span data-k="o2p">US$0.2 / slide</span></li><li><b data-k="o3">Simple website</b><span class="dots"></span><span data-k="o3p">US$10–14</span></li><li><b data-k="o4">Copywriting</b><span class="dots"></span><span data-k="o4p">US$2–4</span></li></ul>
+        </div>
+        <div class="svc-side">
+          <div class="price"><b>US$2</b><small data-k="otherPriceSub">and up, depending on the job</small></div>
+          <button class="obtn" type="button" data-chat><span data-k="otherAsk">Tell me what you need</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="sec" id="ai-cs">
+    <div class="sec-head "><div class="sec-kick rv"><span class="n">02</span><span data-k="howKicker">AI assistant</span></div><h2 class="sec-title rv" data-k="howTitle">It handles questions.<br><em>You close deals.</em></h2><p class="sec-sub rv" data-k="howSub">The AI takes the repetitive questions. When money is on the table it calls you in with the chat so far, and replying to the alert talks straight to the customer.</p></div>
+    <div class="how">
+      <ol class="steps">
+        <li class="step rv-left" style="--d:0.1s"><span class="sn">01</span><h4 data-k="st1">Send me your info</h4><p data-k="st1d">What you sell, prices, common questions. No price list yet? I'll help.</p></li><li class="step rv-left" style="--d:0.2s"><span class="sn">02</span><h4 data-k="st2">I build it</h4><p data-k="st2d">Your name, colours and tone of voice. Live in 2–3 days.</p></li><li class="step rv-left" style="--d:0.3s"><span class="sn">03</span><h4 data-k="st3">It looks after customers</h4><p data-k="st3d">Replies 24/7 and finds out what people need. Orders and haggling go to you.</p></li><li class="step rv-left" style="--d:0.4s"><span class="sn">04</span><h4 data-k="st4">It calls you to close</h4><p data-k="st4d">An alert lands on your phone with the chat so far. Reply to it and you're talking to the customer.</p></li>
+      </ol>
+      <div class="chat rv" id="chat-demo">
+        <div class="chat-head"><div class="chat-av">🍰</div><div><b data-k="mockName">Sunny Bakery · AI assistant</b><small><i class="pulse"></i><span data-k="mockStatus">online · replies in seconds</span></small></div></div>
+        <div class="feed"><div class="msg me rv-chat" style="--d:0.35s" data-k="fm0">Hi, how much is a 6-inch birthday cake?</div><div class="msg note rv-chat" style="--d:0.80s"><span class="ic">👋</span><div><b data-k="fn1a">New customer</b><small data-k="fn1b">The AI is on it</small></div></div><div class="msg ai rv-chat" style="--d:1.25s" data-k="fm2">Hi! It&#x27;s $38, and if you order before 6pm it&#x27;s ready tomorrow. Which flavour? 🎂</div><div class="msg me rv-chat" style="--d:1.70s" data-k="fm3">Chocolate. Can I pick it up tomorrow afternoon?</div><div class="msg note rv-chat" style="--d:2.15s"><span class="ic">🔥</span><div><b data-k="fn4a">Customer is interested</b><small data-k="fn4b">Asking about timing</small></div></div><div class="msg ai rv-chat" style="--d:2.60s" data-k="fm5">Yes! Chocolate, 6-inch, tomorrow afternoon.</div><div class="msg me rv-chat" style="--d:3.05s" data-k="fm6">Great, let&#x27;s order one</div><div class="msg note rv-chat" style="--d:3.50s"><span class="ic">💰</span><div><b data-k="fn7a">Ready to buy</b><small data-k="fn7b">Sent to the owner's phone with the chat</small></div></div><div class="msg ai rv-chat" style="--d:3.95s" data-k="fm8">Lovely! Let me get the owner to confirm payment and pick-up with you.</div></div>
+        <div class="chat-foot"><span data-k="chatFoot">Sample chat</span><span>vinc · AI</span></div>
+      </div>
+    </div>
+    <div class="plats-head">
+      <div class="sec-kick rv"><span class="n">02.1</span><span data-k="platKicker">Platforms</span></div>
+      <h3 class="sub-title rv" data-k="platTitle">Wherever your customers are, <em>it's there</em></h3>
+      <p class="sec-sub rv" data-k="platSub">WeChat, Telegram, WhatsApp or your own website: connected wherever your customers already message you.</p>
+    </div>
+    <div class="plats">
+      <div class="plat rv"><i style="background:#07c160">微</i><b data-k="pWxOA">WeChat Official Account</b></div>
+      <div class="plat rv" style="--d:.06s"><i style="background:#2f7cf6">企</i><b data-k="pWecom">WeCom</b></div>
+      <div class="plat rv" style="--d:.12s"><i style="background:#229ed9">T</i><b>Telegram</b></div>
+      <div class="plat rv" style="--d:.18s"><i style="background:#25d366">W</i><b>WhatsApp</b></div>
+      <div class="plat rv" style="--d:.24s"><i style="background:#5f5d57">&lt;/&gt;</i><b data-k="pWeb">Your website</b></div>
+      <div class="plat rv" style="--d:.3s"><i class="more">+</i><b data-k="pMore">More, just ask</b></div>
+    </div>
+    <div class="row-ctas rv">
+      <a class="gbtn" href="/demo" data-href-en="/demo?lang=en"><span data-k="csDemoLong">See a finished demo</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></a>
+      <a class="obtn" href="trial" data-href-en="trial-en"><span data-k="csTrial">Make one free for your shop</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></a>
+    </div>
+  </section>
+
+  <section class="sec" id="claude-code">
+    <div class="sec-head "><div class="sec-kick rv"><span class="n">03</span><span data-k="navCc">Claude Code</span></div><h2 class="sec-title rv" data-k="cc2Title">The best AI coding tools,<br><em>set up for you.</em></h2><p class="sec-sub rv" data-k="cc2Sub">The docs assume you know your way around a terminal. I'll take you through it step by step, in English or Chinese.</p></div>
+    <div class="cc">
+      <div class="term rv-left">
+        <div class="term-bar"><i></i><i></i><i></i><span data-k="termTitle">~/my-first-project</span></div>
+        <pre><span class="tl cm" data-k="tm0"># Step 1: install</span><span class="tl p"><i>$ </i><span data-k="tm1">npm install -g @anthropic-ai/claude-code</span></span><span class="tl ok"><i>✓ </i><span data-k="tm2">Installed</span></span><span class="tl"> </span><span class="tl cm" data-k="tm4"># Step 2: sign in with your own account</span><span class="tl p"><i>$ </i><span data-k="tm5">claude</span></span><span class="tl ok"><i>✓ </i><span data-k="tm6">Signed in, ready to go</span></span><span class="tl"> </span><span class="tl cm" data-k="tm8"># Step 3: your first task, together</span><span class="tl p"><i>> </i><span data-k="tm9">Build me a small expense-tracker page</span></span><span class="tl ok"><i>✓ </i><span data-k="tm10">Created index.html and app.js, ready to open</span></span></pre>
+      </div>
+      <div class="cc-side rv" style="--d:.15s">
+        <ul class="ticks"><li><span data-k="inc1">A scheduled remote screen-share session</span></li><li><span data-k="inc2">Claude Code or Codex installed (or both)</span></li><li><span data-k="inc3">Configured and tested</span></li><li><span data-k="inc4">Your first task, done together</span></li><li><span data-k="inc5">Common errors and everyday use explained</span></li></ul>
+        <button class="gbtn" type="button" data-chat><span data-k="ccAsk">Ask my AI to book</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+        <a class="tlink" href="guides/" data-k="ccGuide">Rather do it yourself? Read the guide</a>
+        <div class="notice" data-k="incNote"><b>Note:</b> you sign up and pay for your own account or API under the official terms. I don't sell, top up or share accounts.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="pricing">
+    <div class="sec-head "><div class="sec-kick rv"><span class="n">04</span><span data-k="prKicker">Pricing</span></div><h2 class="sec-title rv" data-k="prTitle">Pricing, <em>all in USD</em></h2><p class="sec-sub rv" data-k="prSub">Everything is priced in US dollars. The AI assistant is a one-off setup fee plus a monthly fee covering hosting, AI usage and updates to your price list and FAQ. Monthly, cancel any time.</p></div>
+    <div class="plans">
+      <div class="card plan featured rv-left">
+        <div class="tag"><b data-k="csTag">For businesses</b><span>USD</span></div>
+        <h3 class="card-title" data-k="csTitle">AI customer assistant</h3>
+        <div class="amount">US$70–85<small data-k="once">one-off setup</small></div>
+        <div class="monthly" data-k="plMonthly">then <b>US$9.9</b> a month, cancel any time</div>
+        <ul class="ticks"><li><span data-k="plA">WeChat, Telegram or your website</span></li><li><span data-k="plB2">English, Chinese and more</span></li><li><span data-k="plC">New-customer, buying-intent and payment alerts</span></li><li><span data-k="plD">Price-list updates included</span></li></ul>
+        <button class="gbtn" type="button" data-chat><span data-k="plCta">Ask my AI</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+      </div>
+      <div class="card plan rv-left" style="--d:.1s">
+        <div class="tag"><b data-k="ccTag">For individuals</b><span>USD</span></div>
+        <h3 class="card-title" data-k="ccTitle">Claude Code & Codex, set up for you</h3>
+        <div class="amount">US$14<small data-k="ccPlanSub">and up · one session, about an hour</small></div>
+        <ul class="ticks"><li><span data-k="cc1">Windows or Mac</span></li><li><span data-k="cc2">Hands-on walkthrough after setup</span></li><li><span data-k="cc3">Common errors explained</span></li><li><span data-k="cc4">About an hour</span></li></ul>
+        <button class="obtn" type="button" data-chat><span data-k="askPrice">Ask about pricing</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+      </div>
+      <div class="card plan rv-left" style="--d:.2s">
+        <div class="tag"><b data-k="otherTag">Also available</b><span>USD</span></div>
+        <h3 class="card-title" data-k="otherTitle">Code, slides, websites, copy</h3>
+        <div class="amount">US$2<small data-k="otherPriceSub">and up, depending on the job</small></div>
+        <ul class="menu"><li><b data-k="o1">Code</b><span class="dots"></span><span data-k="o1p">US$8 per job</span></li><li><b data-k="o2">Slides</b><span class="dots"></span><span data-k="o2p">US$0.2 / slide</span></li><li><b data-k="o3">Simple website</b><span class="dots"></span><span data-k="o3p">US$10–14</span></li><li><b data-k="o4">Copywriting</b><span class="dots"></span><span data-k="o4p">US$2–4</span></li></ul>
+        <button class="obtn" type="button" data-chat><span data-k="otherAsk">Tell me what you need</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+      </div>
+    </div>
+    <div class="ticket rv"><span class="gift" aria-hidden="true">✦</span><span data-k="referral"><b>Referral:</b> for every business you refer that signs up, you get a month free.</span></div>
+  </section>
+
+  <section class="sec" id="about">
+    <div class="sec-head quote-head"><div class="sec-kick rv"><span class="n">05</span><span data-k="aboutKicker">About</span></div><h2 class="sec-title rv" data-k="aboutQuote">“I use AI to get real work done every day, <em>so I know where it actually helps.</em>”</h2></div>
+    <div class="about rv">
+      <p data-k="about1">Hi, I'm vinc: Singaporean-Chinese, studying at university in China. I build my own projects with Claude Code and Codex, and this site and the assistant in the corner are my own work.</p>
+      <p data-k="about2">Every job is handled by me and checked before delivery. Talk to me in English or Chinese.</p>
+      <div class="chips"><span>中文</span><span>English</span><span>Claude Code</span><span>Codex</span><span data-k="aboutTag">AI assistants</span></div>
+      <div class="sig"><div class="av" aria-hidden="true">v</div><div><b>vinc</b><small data-k="sigRole">Singaporean · studying in China</small></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="contact">
+    <div class="sec-head "><div class="sec-kick rv"><span class="n">06</span><span data-k="contactKicker">Contact</span></div><h2 class="sec-title rv" data-k="contactTitle">Talk to me, <em>not a bot</em></h2><p class="sec-sub rv" data-k="contactSub">Detailed questions, ready to order, or just saying hi: add me directly.</p></div>
+    <div class="cards">
+      <div class="card contact rv-left" style="display: {{WECHAT_DISPLAY}}">
+        <div class="tag">WeChat<span data-k="wxTag">Best in China</span></div>
+        <h3 class="card-title" data-k="wxLabel">WeChat</h3>
+        <p class="desc" data-k="wxDesc">Tap to copy an ID, then paste it into WeChat's Add Contacts search.</p>
+        <div class="wxs">{{WECHAT_IDS}}</div>
+      </div>
+      <div class="card contact rv-left" style="display: {{OWNER_TG_DISPLAY}}; --d:.1s">
+        <div class="tag">Telegram<span data-k="tgTag">Best overseas</span></div>
+        <h3 class="card-title">Telegram</h3>
+        <div class="handle">{{OWNER_TG_HANDLE}}</div>
+        <p class="desc" data-k="tgDesc">Best for overseas clients. I reply personally.</p>
+        <a class="gbtn" href="{{OWNER_TG}}" target="_blank" rel="noopener"><span data-k="tgBtn">Open Telegram</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></a>
+      </div>
+      <div class="card contact rv-left" style="--d:.2s">
+        <div class="tag">24/7<span data-k="aiTag">Fastest</span></div>
+        <h3 class="card-title" data-k="aiLabel">AI assistant</h3>
+        <div class="handle" data-k="aiHandle">Online 24/7</div>
+        <p class="desc" data-k="aiDesc">Fastest for prices, process and timing. It calls me in when needed.</p>
+        <button class="obtn" type="button" data-chat><span data-k="aiBtn">Ask now</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+        <a class="tlink" href="{{CONTACT}}" target="_blank" rel="noopener" style="display: {{CONTACT_DISPLAY}}" data-k="botLink">Or find it on Telegram →</a>
+      </div>
+    </div>
+    <div class="socials rv" style="display: {{SOCIAL_DISPLAY}}">{{SOCIAL_LINKS}}</div>
+  </section>
+
+  <section class="sec" id="faq">
+    <div class="sec-head "><div class="sec-kick rv"><span class="n">07</span><span data-k="faqKicker">FAQ</span></div><h2 class="sec-title rv" data-k="faqTitle">You might be <em>wondering</em></h2></div>
+    <div class="faq">
+      <details class="rv" style="--d:0.00s"><summary><span data-k="q1">How do I pay?</span><span class="pm"></span></summary><p data-k="a1">Prices are in US dollars. 50% deposit to start, the rest on delivery, by Alipay, WeChat Pay or card.</p></details><details class="rv" style="--d:0.05s"><summary><span data-k="q8">Can it work on WeChat?</span><span class="pm"></span></summary><p data-k="a8">Yes: a WeChat Official Account or WeCom, as well as Telegram, WhatsApp and others, whichever your customers use. I don't recommend a personal WeChat account: WeChat's rules make it easy to get banned.</p></details><details class="rv" style="--d:0.10s"><summary><span data-k="q4">What does the monthly fee cover?</span><span class="pm"></span></summary><p data-k="a4">Hosting, AI usage, and updates to your price list and FAQ. Monthly, cancel any time.</p></details><details class="rv" style="--d:0.15s"><summary><span data-k="q2">What if I'm not happy with it?</span><span class="pm"></span></summary><p data-k="a2">Three rounds of small changes are free; bigger changes are discussed. If you're not happy, I'll redo it.</p></details><details class="rv" style="--d:0.20s"><summary><span data-k="q3">Can you rush it?</span><span class="pm"></span></summary><p data-k="a3">Yes. I'll confirm exactly how fast.</p></details><details class="rv" style="--d:0.25s"><summary><span data-k="q5">I'm not very technical. Can I still use Claude Code?</span><span class="pm"></span></summary><p data-k="a5">Yes. We do it together over screen share, step by step, and I show you how to use it afterwards.</p></details><details class="rv" style="--d:0.30s"><summary><span data-k="q7">Am I talking to a real person?</span><span class="pm"></span></summary><p data-k="a7">The chat in the corner is my AI assistant, always online. For quotes, orders and details, I reply personally.</p></details><details class="rv" style="--d:0.35s"><summary><span data-k="q6">Can you issue an invoice?</span><span class="pm"></span></summary><p data-k="a6">Sorry, I can't issue invoices.</p></details>
+    </div>
+  </section>
+</main>
+
+<section class="page page2 final" id="page2">
   <div class="silver-dots" id="dots"></div>
-  <div class="top-fade"></div>
   <div class="ui">
-    <div class="vert fade-in" data-zh="安靜的時間，也能長出生意">Quiet hours hold new growth</div>
-    <div class="art-title fade-in" id="art-title" data-zh="喚醒打烊後的時間">Wake The Quiet Hours</div>
-    <div class="art-sub fade-in" data-zh="門關了，生意照樣開花">where closed doors still bloom</div>
-    <div class="p2blocks fade-in">
-      <div class="col"><div class="line" data-zh="幾秒內回覆">Answers in seconds</div><div class="line" data-zh="按你的價目表回答">From your own price list</div><div class="line" data-zh="中英文都可以">English &amp; Chinese</div><div class="line" data-zh="不會亂報價">Never invents a price</div><div class="line" data-zh="學會你的常見問題">Learns your FAQs</div></div>
-      <div class="col"><div class="line" data-zh="預約直接通知你">Bookings sent to you</div><div class="line" data-zh="有人下單馬上提醒">Orders flagged at once</div><div class="line" data-zh="Telegram · WhatsApp · Email">Telegram · WhatsApp · Email</div><div class="line" data-zh="你一回覆，它就退下">You reply, it steps back</div><div class="line" data-zh="每段對話都有記錄">Every chat on record</div></div>
-      <div class="col"><div class="line" data-zh="2–3 天上線">Live in 2–3 days</div><div class="line" data-zh="一次性架設 US$70">US$70 one-off setup</div><div class="line" data-zh="之後每月 US$9.9">Then US$9.9 a month</div><div class="line" data-zh="隨時可停">Cancel anytime</div><div class="line" data-zh="先免費試用">Free trial first</div></div>
+    <div class="vert fade-in"><span data-k="ringText">Talk to my AI · online 24/7 · </span></div>
+    <div class="final-kick fade-in"><span class="n">08</span><span data-k="finalKicker">Start</span></div>
+    <div class="art-title fade-in" id="art-title" data-k="finalArt">Start With My AI</div>
+    <div class="art-sub fade-in" data-k="finalSub">It can answer prices, process and timing right away, and I step in whenever it's needed.</div>
+    <div class="final-ctas fade-in">
+      <button class="gbtn" type="button" data-chat><span data-k="finalChat">Start chatting</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+      <a class="obtn" href="#contact"><span data-k="finalTg">WeChat / Telegram</span><svg class="arr" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></a>
     </div>
-    <div class="p2cta fade-in">
-      <a href="trial" data-href-en="trial-en" data-zh="免費試用">Try it free</a>
-      <a href="/demo" data-href-en="/demo?lang=en" data-zh="看示範">See a demo</a>
-      <a href="video" data-href-en="video-en" data-zh="38 秒影片">38-second video</a>
-    </div>
-    <button class="explore fade-in" type="button" id="explore" data-zh="探索">Explore</button>
+    <footer class="foot fade-in">
+      <div class="foot-links">
+        <a href="#services" data-k="navServices">Services</a><a href="#ai-cs" data-k="navCs">AI assistant</a><a href="#claude-code">Claude Code</a>
+        <a href="#pricing" data-k="navPricing">Pricing</a><a href="#faq" data-k="navFaq">FAQ</a><a href="guides/" data-k="navGuides">Guides</a>
+        <a href="privacy">Privacy</a>
+      </div>
+      <p data-k="footNote">I don't do coursework, theses or exams for students.</p>
+      <p data-k="copyright">© vinc · Singaporean · studying in China</p>
+    </footer>
+    <button class="explore fade-in" type="button" id="explore" data-k="toTopBtn">Back to top</button>
   </div>
 </section>
-
 <script id="chat-widget" src="/widget.js" data-color="#ffc850" data-track defer></script>
 <script>
 window.DEEP_LANG = "auto";
 {{DEEP_JS}}
-// 繁 / EN: every line has its 繁體 version in data-zh; the choice is remembered (with the About page's)
 (function () {
   "use strict";
-  var items = [].slice.call(document.querySelectorAll("[data-zh]"));
-  items.forEach(function (el) { el.setAttribute("data-en-html", el.id === "art-title" ? "Wake The Quiet Hours" : el.innerHTML); });
+  // 繁 / EN: every line carries a key into T = {key: [繁體, English]}; the choice is remembered (with the About page's)
+  var T = {"brand": ["vinc的ai鋪子", "vinc · AI studio"], "askPrice": ["問價格", "Ask about pricing"], "toDark": ["切換到黑夜模式", "Switch to dark mode"], "toLight": ["切換到白天模式", "Switch to light mode"], "menu": ["選單", "Menu"], "statusOpen": ["接案中", "Taking on work"], "navServices": ["服務", "Services"], "navCs": ["AI 客服", "AI assistant"], "navCc": ["Claude Code", "Claude Code"], "navPricing": ["價格", "Pricing"], "navFaq": ["常見問題", "FAQ"], "navContact": ["聯絡我", "Contact"], "navGuides": ["教學", "Guides"], "ccGuide": ["想自己裝？看安裝教學", "Rather do it yourself? Read the guide"], "navChat": ["問 AI 助理", "Ask my AI"], "metaL": ["個人 AI 工作室 · 中英雙語 · 一對一", "A one-person AI studio · English & Chinese · 1-on-1"], "metaR": ["AI 客服 & Claude Code", "AI assistants & Claude Code"], "heroTitle": ["你打烊了，<br><em>它還在接客。</em>", "You close up.<br><em>It keeps answering.</em>"], "heroLead": ["我幫商家架設 24 小時在線的 AI 客服，也幫個人把 Claude Code、Codex 裝進自己的電腦。講人話、一對一、裝好教會為止。", "I build 24/7 AI assistants that look after your customers, and set up Claude Code and Codex on your own computer. Plain language, one-on-one, until it works."], "ctaChat": ["和我的 AI 助理聊聊", "Talk to my AI"], "ctaPrice": ["看價格", "See pricing"], "dialClosed": ["打烊時段", "After hours"], "dialAnswered": ["AI 回覆", "AI replies"], "dialNow": ["現在", "Now"], "worksLabel": ["支援 / 接入", "Works with"], "worksWeb": ["網站聊天視窗", "Your website"], "worksWx": ["微信", "WeChat"], "stat1": ["全天自動接待", "Always answering"], "stat2": ["種語言自動切換", "Languages, auto-matched"], "days": ["天", "days"], "stat3": ["資料齊後上線", "From your info to live"], "stat4": ["本人全程跟進", "Handled by me, start to finish"], "svcKicker": ["服務", "Services"], "svcTitle": ["我能幫你<em>做什麼</em>", "What I can <em>do for you</em>"], "svcSub": ["兩件主要的事：幫商家裝一個會接待客戶的 AI，幫個人裝好會寫程式的 AI。其他小案子也能接。", "Two main things: an AI that looks after your customers, and an AI that writes code on your computer. Smaller jobs welcome too."], "csTag": ["給商家", "For businesses"], "csTitle": ["AI 客服架設", "AI customer assistant"], "csDesc": ["依照你的價目表和常見問題，自動回答客戶、主動問清需求。要下單、殺價、它答不了的，馬上轉到你手機上，你直接回。", "Answers customers from your own price list and FAQ, and asks the right questions. Orders, haggling and anything it can't answer go straight to your phone."], "cs1": ["接到微信、Telegram 等平台，或直接放進你的網站", "On WeChat, Telegram and more, or right on your website"], "cs2": ["新客戶來了、有購買意向、要付款時，第一時間通知你", "Alerts when someone new arrives, gets interested, or wants to pay"], "cs3": ["中文、英文等多種語言自動切換", "Chinese, English and more, automatically"], "cs4": ["價目表、常見問題隨時幫你更新", "Price list and FAQ updates included"], "csPrice": ["US$70 起", "From US$70"], "csPriceSub": ["一次性架設 · 另有 US$9.9 月費", "one-off setup · plus US$9.9 a month"], "csDemo": ["看示範頁", "See the demo"], "csTrial": ["免費做一個你店的", "Make one free for your shop"], "csDemoLong": ["看一個做好的示範頁", "See a finished demo"], "ccTag": ["給個人", "For individuals"], "ccTitle": ["幫你裝好 Claude Code / Codex", "Claude Code & Codex, set up for you"], "ccDesc": ["遠端螢幕分享，在你自己的電腦上裝好、設定好、跑通，再帶你用它完成第一個小任務。", "Over screen share, I install and configure it on your computer, make sure it runs, then walk you through your first task."], "cc1": ["Windows / Mac 都可以", "Windows or Mac"], "cc2": ["裝好後手把手教你用", "Hands-on walkthrough after setup"], "cc3": ["常見錯誤怎麼處理，一起講清楚", "Common errors explained"], "cc4": ["一小時左右搞定", "About an hour"], "ccPrice": ["US$14 起", "From US$14"], "ccPriceSub": ["一次，約一小時", "one session, about an hour"], "ccPlanSub": ["起 · 一次，約一小時", "and up · one session, about an hour"], "ccMore": ["了解更多", "Learn more"], "otherTag": ["其他也能做", "Also available"], "otherTitle": ["寫程式、做簡報、做網站、寫文案", "Code, slides, websites, copy"], "otherDesc": ["用 AI 提升效率，交付前本人逐一檢查。具體需求直接問右下角的助理。", "AI-assisted, checked by me before delivery. Ask the assistant for details."], "otherPriceSub": ["起，看具體需求", "and up, depending on the job"], "otherAsk": ["說說你的需求", "Tell me what you need"], "o1": ["寫程式", "Code"], "o2": ["做簡報", "Slides"], "o3": ["簡單網站", "Simple website"], "o4": ["文案", "Copywriting"], "howKicker": ["AI 客服", "AI assistant"], "howTitle": ["它接待客戶，<br><em>你只管成交。</em>", "It handles questions.<br><em>You close deals.</em>"], "howSub": ["大部分重複的問題交給 AI。真正要付錢的那一刻，它會叫你，附上聊天紀錄；回覆通知就能直接跟客戶說話。", "The AI takes the repetitive questions. When money is on the table it calls you in with the chat so far, and replying to the alert talks straight to the customer."], "st1": ["把資料傳給我", "Send me your info"], "st1d": ["你賣什麼、價格、常見問題。沒有價目表，我幫你整理。", "What you sell, prices, common questions. No price list yet? I'll help."], "st2": ["我來架設", "I build it"], "st2d": ["依照你的店名、顏色和說話風格調好，2–3 天上線。", "Your name, colours and tone of voice. Live in 2–3 days."], "st3": ["客戶來了它接待", "It looks after customers"], "st3d": ["24 小時回覆、問清需求；下單、殺價這一步轉給你本人。", "Replies 24/7 and finds out what people need. Orders and haggling go to you."], "st4": ["要付錢時叫你", "It calls you to close"], "st4d": ["通知直接傳到你手機，附上聊天紀錄。你回覆通知，就是在跟客戶說話。", "An alert lands on your phone with the chat so far. Reply to it and you're talking to the customer."], "mockName": ["某某烘焙 · AI 客服", "Sunny Bakery · AI assistant"], "mockStatus": ["在線 · 幾秒內回覆", "online · replies in seconds"], "chatFoot": ["示範對話", "Sample chat"], "platKicker": ["接入平台", "Platforms"], "platTitle": ["客人在哪，<em>它就在哪</em>", "Wherever your customers are, <em>it's there</em>"], "platSub": ["微信、Telegram、WhatsApp，或者你自己的網站。按你店裡客人最常用的平台來接。", "WeChat, Telegram, WhatsApp or your own website: connected wherever your customers already message you."], "pWxOA": ["微信公眾號", "WeChat Official Account"], "pWecom": ["企業微信", "WeCom"], "pWeb": ["你的網站", "Your website"], "pMore": ["更多平台，問我", "More, just ask"], "cc2Title": ["最強 AI 程式助手，<br><em>我幫你裝好。</em>", "The best AI coding tools,<br><em>set up for you.</em>"], "cc2Sub": ["官方文件是英文的，命令列對新手不友善，錯誤訊息看不懂。我用中文或英文，陪你一步一步來。", "The docs assume you know your way around a terminal. I'll take you through it step by step, in English or Chinese."], "inc1": ["約好時間，遠端螢幕分享", "A scheduled remote screen-share session"], "inc2": ["裝好 Claude Code 或 Codex（兩個都裝也可以）", "Claude Code or Codex installed (or both)"], "inc3": ["設定好、跑通，確認能正常使用", "Configured and tested"], "inc4": ["帶你用它完成第一個小任務", "Your first task, done together"], "inc5": ["講清楚常見錯誤和日常用法", "Common errors and everyday use explained"], "ccAsk": ["問 AI 助理怎麼約", "Ask my AI to book"], "incNote": ["<b>說明：</b>帳號或 API 需要你本人依官方條款註冊和付費，我不代儲、不賣也不共用帳號。", "<b>Note:</b> you sign up and pay for your own account or API under the official terms. I don't sell, top up or share accounts."], "prKicker": ["價格", "Pricing"], "prTitle": ["價格，<em>全部美元</em>", "Pricing, <em>all in USD</em>"], "prSub": ["全部以美元（USD）計價。AI 客服是一次性架設費加月費，月費包含伺服器、AI 用量、價目表和常見問題的更新；按月付，隨時可以停。", "Everything is priced in US dollars. The AI assistant is a one-off setup fee plus a monthly fee covering hosting, AI usage and updates to your price list and FAQ. Monthly, cancel any time."], "pl1Tag": ["中國大陸商戶", "Mainland China"], "once": ["一次性架設", "one-off setup"], "rSetup": ["架設（一次性）", "Setup, one-off"], "rMonthly": ["之後每月", "Then monthly"], "rCancel": ["按月付 · 隨時可停", "Monthly · cancel any time"], "rStamp": ["美元結算", "Billed in USD"], "plA": ["微信、Telegram 或你的網站", "WeChat, Telegram or your website"], "plB": ["多語言自動回覆", "Multilingual replies"], "plC": ["新客戶、購買意向、付款通知", "New-customer, buying-intent and payment alerts"], "plD": ["價目表更新包含在月費裡", "Price-list updates included"], "plCta": ["問問 AI 助理", "Ask my AI"], "pl2Tag": ["海外商戶", "Overseas"], "once2": ["一次性架設（美元）", "one-off setup (USD)"], "plB2": ["中英文等多語言接待", "English, Chinese and more"], "plD2": ["支援 Alipay 或銀行卡付款", "Pay by Alipay or card"], "referral": ["<b>推薦有禮：</b>每成功介紹一家商戶開通，你免 1 個月月費。", "<b>Referral:</b> for every business you refer that signs up, you get a month free."], "aboutKicker": ["關於我", "About"], "aboutQuote": ["「我自己每天都在用 AI 做事，<em>所以知道它怎麼真正幫上忙。</em>」", "“I use AI to get real work done every day, <em>so I know where it actually helps.</em>”"], "about1": ["你好，我是 vinc。新加坡華人，現在在中國讀大學。平常自己就在用 Claude Code、Codex 做專案，這個網站和右下角的 AI 助理也都是我自己架的。", "Hi, I'm vinc: Singaporean-Chinese, studying at university in China. I build my own projects with Claude Code and Codex, and this site and the assistant in the corner are my own work."], "about2": ["每一個案子都是本人跟進、交付前逐一檢查。中文、英文都可以直接聊。", "Every job is handled by me and checked before delivery. Talk to me in English or Chinese."], "aboutTag": ["AI 客服", "AI assistants"], "sigRole": ["新加坡華人 · 在中國讀大學", "Singaporean · studying in China"], "contactKicker": ["聯絡我", "Contact"], "contactTitle": ["直接找我，<em>本人回覆</em>", "Talk to me, <em>not a bot</em>"], "contactSub": ["想問得更細、準備下單，或只是想認識一下，都可以直接加我。", "Detailed questions, ready to order, or just saying hi: add me directly."], "wxTag": ["中國大陸首選", "Best in China"], "wxLabel": ["微信", "WeChat"], "wxDesc": ["點一下就能複製微信號，打開微信「添加朋友」貼上搜尋。", "Tap to copy an ID, then paste it into WeChat's Add Contacts search."], "wxCopy": ["複製", "Copy"], "wxCopied": ["已複製 ✓", "Copied ✓"], "tgTag": ["海外首選", "Best overseas"], "tgDesc": ["海外客戶推薦用 Telegram，訊息我會親自回。", "Best for overseas clients. I reply personally."], "tgBtn": ["打開 Telegram 聊天", "Open Telegram"], "aiTag": ["最快", "Fastest"], "aiLabel": ["AI 助理", "AI assistant"], "aiHandle": ["24 小時在線", "Online 24/7"], "aiDesc": ["價格、流程、要多久，先問它最快；需要的時候它會叫我。", "Fastest for prices, process and timing. It calls me in when needed."], "aiBtn": ["現在就問", "Ask now"], "botLink": ["也可以在 Telegram 上找它 →", "Or find it on Telegram →"], "faqKicker": ["常見問題", "FAQ"], "faqTitle": ["你可能<em>想問</em>", "You might be <em>wondering</em>"], "q1": ["怎麼付款？", "How do I pay?"], "a1": ["價格以美元計。先付 50% 訂金再開工，交付後付尾款，可以用 Alipay、微信支付或銀行卡。", "Prices are in US dollars. 50% deposit to start, the rest on delivery, by Alipay, WeChat Pay or card."], "q2": ["做完不滿意怎麼辦？", "What if I'm not happy with it?"], "a2": ["交付後免費小改 3 次，大改另議；不滿意可以重做。", "Three rounds of small changes are free; bigger changes are discussed. If you're not happy, I'll redo it."], "q3": ["可以加急嗎？", "Can you rush it?"], "a3": ["可以加急，具體多快請本人確認。", "Yes. I'll confirm exactly how fast."], "q4": ["AI 客服的月費包含什麼？", "What does the monthly fee cover?"], "a4": ["伺服器、AI 用量、價目表和常見問題的更新。按月付，隨時可以停。", "Hosting, AI usage, and updates to your price list and FAQ. Monthly, cancel any time."], "q5": ["我電腦不太會用，也能裝 Claude Code 嗎？", "I'm not very technical. Can I still use Claude Code?"], "a5": ["可以。全程遠端螢幕分享，我帶著你一步一步操作，裝好之後還會教你怎麼用。", "Yes. We do it together over screen share, step by step, and I show you how to use it afterwards."], "q6": ["能開發票嗎？", "Can you issue an invoice?"], "a6": ["不能開發票。", "Sorry, I can't issue invoices."], "q7": ["跟我聊天的是真人嗎？", "Am I talking to a real person?"], "a7": ["右下角是 AI 助理，隨時在線；要報價、下單或細節確認時，會由我本人親自回覆你。", "The chat in the corner is my AI assistant, always online. For quotes, orders and details, I reply personally."], "q8": ["能接入微信嗎？", "Can it work on WeChat?"], "a8": ["可以。能接微信公眾號、企業微信，也能接 Telegram、WhatsApp 等其他平台，依你店裡客人常用的來。個人微信號因為微信的規定容易被封號，不建議接。", "Yes: a WeChat Official Account or WeCom, as well as Telegram, WhatsApp and others, whichever your customers use. I don't recommend a personal WeChat account: WeChat's rules make it easy to get banned."], "finalKicker": ["開始", "Start"], "finalTitle": ["有想法？<br><em>先跟 <span class=\"nw\">AI 助理</span>聊兩句。</em>", "Got an idea?<br><em>Start with my AI.</em>"], "finalSub": ["價格、流程、要多久，它都能先回答你；需要的時候，我本人馬上接手。", "It can answer prices, process and timing right away, and I step in whenever it's needed."], "finalChat": ["開始聊天", "Start chatting"], "finalTg": ["加我微信 / Telegram", "WeChat / Telegram"], "ringText": ["和 AI 助理聊聊 · 24 小時在線 · ", "Talk to my AI · online 24/7 · "], "footIndex": ["目錄", "Index"], "footReach": ["找到我", "Reach me"], "plMonthly": ["之後每月 <b>US$9.9</b>，隨時可停", "then <b>US$9.9</b> a month, cancel any time"], "toTop": ["回到頂部 ↑", "Back to top ↑"], "footNote": ["不接課程作業、論文、考試的代寫或代考。", "I don't do coursework, theses or exams for students."], "title": ["vinc · AI 客服架設 & Claude Code 安裝", "vinc · AI assistants & Claude Code setup"], "desc": ["幫商家架設 24 小時在線的 AI 客服，幫個人裝好 Claude Code / Codex。中英雙語，一對一。", "24/7 AI customer assistants for businesses, and Claude Code / Codex set up on your computer. One-on-one, in English or Chinese."], "o1p": ["US$8 一次", "US$8 per job"], "o2p": ["US$0.2 / 頁", "US$0.2 / slide"], "o3p": ["US$10–14", "US$10–14"], "o4p": ["US$2–4", "US$2–4"], "tagline": ["小店的 24 小時 AI 客服 · Claude Code 安裝", "24/7 AI assistants · Claude Code setup"], "navHome": ["首頁", "Home"], "heroH1": ["永不打烊", "ALWAYS ON"], "heroVol": ["你打烊了，它還在接客", "Your shop closes. It keeps answering."], "heroLabel": ["你休息的時候：", "WHILE YOU SLEEP:"], "heroTitle2": ["你的店<br>照樣回覆客人", "YOUR SHOP<br>KEEPS ANSWERING"], "hl1": ["打烊之後，客人的問題還是一直來。", "When the shop closes, the questions keep coming."], "hl2": ["價錢、房間、蛋糕、預約，半夜也有人問。", "Prices, rooms, cakes and bookings, at midnight."], "hl3": ["它按你自己的價目表回答，從不亂報價。", "It answers from your own price list, never guessing."], "hl4": ["客人準備下單時，第一時間通知你。", "When someone is ready to buy, you hear first."], "hl5": ["2–3 天上線，一次性 US$70 起，之後每月 US$9.9。", "Live in 2–3 days. From US$70, then US$9.9 a month."], "heroBtn": ["免費試用", "TRY IT FREE"], "evLabel": ["免費試用：", "FREE TRIAL:"], "evWhat": ["貼上你的網址<br>幾秒鐘做好", "Paste your website,<br>ready in seconds"], "heroSide": ["在黑夜裡回覆客人 · since 2026", "answering in the dark · since 2026"], "scrollHint": ["往下看", "Scroll"], "termTitle": ["~/我的第一個專案", "~/my-first-project"], "notifTag": ["通知", "Alert"], "finalArt": ["先跟 AI 聊兩句", "Start With My AI"], "toTopBtn": ["回到頂部", "Back to top"], "copyright": ["© vinc · 新加坡華人 · 在中國讀大學", "© vinc · Singaporean · studying in China"], "fm0": ["你好，生日蛋糕 6 吋多少錢？", "Hi, how much is a 6-inch birthday cake?"], "fn1a": ["有客戶來詢問了", "New customer"], "fn1b": ["AI 正在接待", "The AI is on it"], "fm2": ["你好～6 吋 US$38，今天下午 6 點前訂，明天就能取。想要什麼口味呢？🎂", "Hi! It's $38, and if you order before 6pm it's ready tomorrow. Which flavour? 🎂"], "fm3": ["巧克力的，明天下午能拿嗎", "Chocolate. Can I pick it up tomorrow afternoon?"], "fn4a": ["客戶有購買意向", "Customer is interested"], "fn4b": ["在問具體時間", "Asking about timing"], "fm5": ["可以的！巧克力 6 吋，明天下午取～", "Yes! Chocolate, 6-inch, tomorrow afternoon."], "fm6": ["那就訂一個吧", "Great, let's order one"], "fn7a": ["客戶準備購買了", "Ready to buy"], "fn7b": ["已推播到老闆手機 · 附聊天紀錄", "Sent to the owner's phone with the chat"], "fm8": ["好的！我請老闆跟你確認付款和取貨時間，稍等喔", "Lovely! Let me get the owner to confirm payment and pick-up with you."], "tm0": ["# 第 1 步：裝好", "# Step 1: install"], "tm1": ["npm install -g @anthropic-ai/claude-code", "npm install -g @anthropic-ai/claude-code"], "tm2": ["安裝完成", "Installed"], "tm4": ["# 第 2 步：登入你自己的帳號", "# Step 2: sign in with your own account"], "tm5": ["claude", "claude"], "tm6": ["已登入，可以開始了", "Signed in, ready to go"], "tm8": ["# 第 3 步：一起做第一個小任務", "# Step 3: your first task, together"], "tm9": ["幫我做一個記帳的小網頁", "Build me a small expense-tracker page"], "tm10": ["已建立 index.html、app.js，打開就能用", "Created index.html and app.js, ready to open"]};
   var btn = document.getElementById("lang");
   function apply(zh) {
     document.documentElement.lang = zh ? "zh-TW" : "en";
-    items.forEach(function (el) {
-      var html = el.getAttribute(zh ? "data-zh" : "data-en-html");
-      if (el.id === "art-title") window.deepSplitTitle(html);
-      else el.innerHTML = html;
+    [].forEach.call(document.querySelectorAll("[data-k]"), function (el) {
+      var pair = T[el.getAttribute("data-k")];
+      if (!pair) return;
+      var text = pair[zh ? 0 : 1];
+      if (el.id === "art-title") { window.deepSplitTitle(text); return; }
+      el.innerHTML = text;
       if (el.tagName === "H1") el.setAttribute("data-text", el.textContent);
     });
-    // links go to the English-only pages for English readers
     [].forEach.call(document.querySelectorAll("[data-href-en]"), function (link) {
       if (!link.hasAttribute("data-href-zh")) link.setAttribute("data-href-zh", link.getAttribute("href"));
       link.setAttribute("href", link.getAttribute(zh ? "data-href-zh" : "data-href-en"));
     });
+    [].forEach.call(document.querySelectorAll(".wx small"), function (s) { s.textContent = T.wxCopy[zh ? 0 : 1]; });
     [].forEach.call(btn.querySelectorAll("[data-l]"), function (b) {
-      b.outerHTML = (b.getAttribute("data-l") === "zh") === zh ? '<b data-l="' + b.getAttribute("data-l") + '">' + b.textContent + "</b>"
-                                                              : '<span data-l="' + b.getAttribute("data-l") + '">' + b.textContent + "</span>";
+      var on = (b.getAttribute("data-l") === "zh") === zh;
+      b.outerHTML = on ? '<b data-l="' + b.getAttribute("data-l") + '">' + b.textContent + "</b>"
+                       : '<span data-l="' + b.getAttribute("data-l") + '">' + b.textContent + "</span>";
     });
+    document.title = T.title[zh ? 0 : 1];
     if (window.aiChatSetLang) window.aiChatSetLang(zh ? "zh-TW" : "en");
     else { var w = document.getElementById("chat-widget"); if (w) w.setAttribute("data-lang", zh ? "zh-TW" : "en"); }
   }
@@ -130,6 +491,38 @@ window.DEEP_LANG = "auto";
     try { localStorage.setItem("siteLang", zh ? "zh-TW" : "en"); } catch (e) {}
     apply(zh);
   });
+
+  // every "ask" button opens the chat window
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-chat]");
+    if (b) { e.preventDefault(); if (window.aiChatOpen) window.aiChatOpen(); }
+    var wx = e.target.closest && e.target.closest(".wx");
+    if (wx && navigator.clipboard) {
+      navigator.clipboard.writeText(wx.getAttribute("data-copy")).then(function () {
+        var s = wx.querySelector("small"); s.textContent = T.wxCopied[zh ? 0 : 1];
+        setTimeout(function () { s.textContent = T.wxCopy[zh ? 0 : 1]; }, 1800);
+      });
+    }
+  });
+
+  // sections slide in as they come into view
+  var items = document.querySelectorAll(".rv, .rv-left, .chat");
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+    }, { threshold: 0.12, rootMargin: "0px 0px -6% 0px" });
+    [].forEach.call(items, function (el) { io.observe(el); });
+  } else [].forEach.call(items, function (el) { el.classList.add("in"); });
+
+  // silver specks drifting up behind the whole site
+  var sea = document.getElementById("sea-dots");
+  var phone = !!(window.matchMedia && matchMedia("(hover: none)").matches);
+  for (var i = 0; i < (phone ? 18 : 34); i++) {
+    var d = document.createElement("i"), s = 1 + Math.random() * 2.5;
+    d.style.cssText = "width:" + s + "px;height:" + s + "px;left:" + (Math.random() * 100) + "%;" +
+      "animation-duration:" + (18 + Math.random() * 14) + "s;animation-delay:" + (Math.random() * 30) + "s";
+    sea.appendChild(d);
+  }
 })();
 </script>
 </body>
