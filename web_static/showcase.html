@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{SHOP_TITLE}} · 24/7 AI assistant · {{TITLE}}</title>
+<meta name="description" content="A live demo: a 24/7 AI assistant that answers customers from the business's own information and passes bookings to the owner.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23000'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-style='italic' font-size='40' fill='%23ffc850' text-anchor='middle'%3Ev%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Bruno+Ace&family=Exo+2:wght@400;500;600;700;800;900&family=Marcellus&family=Marcellus+SC&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+{{DEEP_CSS}}
+/* ---- a business's own demo on the same two pages ---- */
+.brand{max-width:46vw;white-space:normal}
+.hero h1::after{content:attr(data-text)}
+.note{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(.9rem,1.2vw,1.1rem);letter-spacing:.06em;color:rgba(255,215,140,.8);margin-top:14px;opacity:0;animation:fadeUp 1s ease-out 1.6s forwards}
+.note a{color:#ffd27a;text-decoration:none;border-bottom:1px solid rgba(255,200,80,.5)}
+.note .zh{display:block;font-size:.85em;margin-top:4px}
+.ask-line{pointer-events:auto;cursor:pointer;background:none;border:0;text-align:left;padding:0;font-weight:400}
+.ask-line:hover{color:#ffd27a}
+.p2cta button{font-family:'Montserrat',sans-serif;font-size:.7rem;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,200,80,.9);background:none;border:0;border-bottom:1px solid rgba(255,200,80,.45);padding:0 0 4px;cursor:pointer}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);z-index:50;background:rgba(10,14,20,.92);border:1px solid rgba(255,200,80,.4);color:#fff;font-family:'Montserrat',sans-serif;font-size:.8rem;letter-spacing:.06em;padding:12px 18px;border-radius:999px;opacity:0;transition:all .4s ease;pointer-events:none;max-width:90vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#missing{position:fixed;inset:0;z-index:60;background:#000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;font-family:'Cinzel',serif;text-align:center;padding:24px}
+#missing a{font-family:'Montserrat',sans-serif;color:#ffc850;letter-spacing:.2em;font-size:.8rem;text-decoration:none}
+</style>
+</head>
+<body>
+
+<section class="page page1" id="page1">
+  <canvas class="deep" id="deep" aria-hidden="true"></canvas>
+  <video class="video-bg" id="hero-video" muted loop playsinline preload="auto" data-src="{{HERO_VIDEO}}"></video>
+  <div class="vignette"></div>
+  <div class="top-fade"></div>
+  <div class="bottom-fade"></div>
+  <div class="p1-ui">
+    <div class="logo">
+      <span class="brand"><span id="brand-name">{{SHOP_NAME}}</span><sup>AI</sup></span>
+      <div class="tagline">a 24/7 assistant · live demo<span class="zh"> · 24 小時 AI 客服示範</span></div>
+    </div>
+    <nav class="nav">
+      <a class="active keep" href="#page1">Home</a>
+      <a href="#" class="js-ask">Ask</a>
+      <a href="trial" class="js-trial">Your own</a>
+      <a href="video" data-en="video-en">Video</a>
+      <a href="mailto:{{EMAIL}}" class="js-mail">Contact</a>
+      <button class="search keep js-ask" type="button" aria-label="Ask the assistant">&#8981;</button>
+    </nav>
+    <div class="hero">
+      <h1 data-text="OPEN 24/7">OPEN 24/7</h1>
+      <div class="vol"><span id="vol-name">{{SHOP_NAME}}</span> · its assistant never sleeps<span class="zh">打烊了，它還在接客</span></div>
+      <div class="note" id="note-sample" hidden>Sample prices for now. <a href="trial" class="js-own">Put in your own website →</a><span class="zh">價格先用示範資料，<a href="trial" class="js-own">貼上你的網址換成自己的 →</a></span></div>
+      <div class="note" id="note-read" hidden>It has read <b id="site-host"></b> and answers from it.<span class="zh">它已經讀過你的網站，會按上面寫的回答。</span></div>
+      <div class="note" id="note-fresh" hidden>Done. Bookmark this page to come back any time.<span class="zh">做好了！把這個頁面存起來，隨時回來試。</span></div>
+    </div>
+    <div class="report">
+      <div class="label">LIVE DEMO:</div>
+      <div class="title"><span id="title-name">{{SHOP_NAME}}</span><br>ANSWERS 24/7<span class="zh">按店家自己的資料回覆客人</span></div>
+      <div class="body-wrap">
+        <div class="body"><div class="scroll" id="scroll">{{SHOP_LINES}}</div></div>
+      </div>
+      <a class="btn js-ask" href="#">ASK IT NOW</a>
+    </div>
+    <a class="event js-own" href="trial">
+      <div class="label">MAKE IT YOURS:</div>
+      <div class="what">Paste your website,<br>ready in seconds<span class="zh">貼上網址，幾秒鐘做好</span></div>
+    </a>
+    <div class="side" id="side">answering in the dark · {{SHOP_WHERE}}</div>
+  </div>
+</section>
+
+<section class="page page2" id="page2">
+  <div class="art-bg"></div>
+  <div class="silver-dots" id="dots"></div>
+  <div class="mask" id="mask"></div>
+  <div class="top-fade"></div>
+  <div class="ui">
+    <div class="vert fade-in">Quiet hours hold new growth</div>
+    <div class="art-title fade-in" id="art-title">Wake The Quiet Hours</div>
+    <div class="art-sub fade-in">where closed doors still bloom<span class="zh">讓打烊後的時間也有生意</span></div>
+    <div class="p2blocks fade-in">
+      <div class="col" id="questions">{{SHOP_QUESTIONS}}</div>
+      <div class="col">
+        <div class="line">From its own information</div><div class="line">Never invents a price</div><div class="line">Bookings go to the owner</div>
+        <div class="line">English &amp; Chinese</div><div class="line">Every chat on record</div>
+      </div>
+      <div class="col">
+        <div class="line">Live in 2–3 days</div><div class="line">US$70 one-off setup</div><div class="line">Then US$9.9 a month</div>
+        <div class="line">Cancel anytime</div><div class="line">Free trial first</div>
+      </div>
+    </div>
+    <div class="p2cta fade-in">
+      <button type="button" id="embed" hidden>Copy the code for your site</button>
+      <a href="#" class="js-mail">Make it official</a>
+      <a href="#" id="share-wa" target="_blank" rel="noopener">Share on WhatsApp</a>
+      <a href="#" id="share-tg" target="_blank" rel="noopener">Telegram</a>
+    </div>
+    <button class="explore fade-in" type="button" id="explore">Explore</button>
+  </div>
+</section>
+<div class="toast" id="toast"></div>
+<div id="missing"><div>This demo doesn't exist<span class="zh"> · 找不到這個示範</span></div><a href="trial" class="js-own">Make your own →</a></div>
+
+<script>
+var API = "";
+var SHOP = {{SHOP_JSON}};
+window.DEEP_LANG = "{{DEEP_LANG}}";
+(function () {
+  "use strict";
+  var ZH = window.DEEP_LANG !== "en";
+  var $ = function (id) { return document.getElementById(id); };
+  var all = function (sel, fn) { [].forEach.call(document.querySelectorAll(sel), fn); };
+  var base = API || location.origin;
+  var q = new URLSearchParams(location.search);
+  var TRIAL = ZH ? "trial" : "trial-en";
+  function toast(text) { var t = $("toast"); t.textContent = text; t.classList.add("on"); setTimeout(function () { t.classList.remove("on"); }, 2600); }
+  function ask(text) { if (text && window.aiChatAsk) aiChatAsk(text); else if (window.aiChatOpen) aiChatOpen(); }
+  all(".js-ask", function (el) { el.addEventListener("click", function (e) { e.preventDefault(); ask(); }); });
+  if (!ZH) all("[data-en]", function (a) { a.setAttribute("href", a.getAttribute("data-en")); });
+
+  function show(shop) {
+    document.title = shop.name + " · 24/7 AI assistant";
+    $("brand-name").textContent = shop.name;
+    $("vol-name").textContent = $("title-name").textContent = shop.name;
+    var lines = shop.questions.concat(["It answers from its own information.", "Bookings go straight to the owner."]);
+    $("scroll").innerHTML = "";
+    lines.concat(lines).forEach(function (text) { var p = document.createElement("p"); p.textContent = text; $("scroll").appendChild(p); });
+    $("questions").innerHTML = "";
+    shop.questions.concat(["Ask your own question"]).forEach(function (text, i, list) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "line ask-line"; b.textContent = text;
+      b.onclick = function () { ask(i === list.length - 1 ? "" : text); };
+      $("questions").appendChild(b);
+    });
+    var own = TRIAL + "?kind=" + encodeURIComponent(shop.kind) + (shop.slug ? "&name=" + encodeURIComponent(shop.name) : "");
+    all(".js-own", function (a) { a.setAttribute("href", own); });
+    all(".js-trial", function (a) { a.setAttribute("href", own); });
+    var mail = "mailto:{{EMAIL}}?subject=" + encodeURIComponent("Going live: " + shop.name)
+      + "&body=" + encodeURIComponent("Hi Vincent, I'd like to make the assistant for " + shop.name + " official.\n" + location.href);
+    all(".js-mail", function (a) { a.setAttribute("href", mail); });
+    if (shop.sample && shop.slug) $("note-sample").hidden = false;
+    if (shop.site) { $("site-host").textContent = shop.site.replace(/^https?:\/\//, "").replace(/\/.*$/, ""); $("note-read").hidden = false; }
+    if (q.get("new")) $("note-fresh").hidden = false;
+    if (shop.where) $("side").textContent = "answering in the dark · " + shop.where;
+    // passing it on: other business owners land on the free trial
+    var trialUrl = new URL(TRIAL, location.href).href + "?from=share";
+    var pitch = "{{PITCH}}";
+    $("share-wa").href = "https://wa.me/?text=" + encodeURIComponent(pitch + trialUrl);
+    $("share-tg").href = "https://t.me/share/url?url=" + encodeURIComponent(trialUrl) + "&text=" + encodeURIComponent(pitch);
+    var demo = shop.slug ? "t-" + shop.slug : shop.kind;
+    if (shop.slug) {
+      var tag = '<script src="' + base + '/widget.js" data-demo="' + demo + '" data-title="' + shop.name.replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }) + '" defer></' + 'script>';
+      $("embed").hidden = false;
+      $("embed").onclick = function () {
+        if (navigator.clipboard) navigator.clipboard.writeText(tag).then(function () { toast("{{COPIED}}"); });
+      };
+    }
+    var w = document.createElement("script");
+    w.src = base + "/widget.js"; w.defer = true;
+    w.dataset.demo = demo; w.dataset.title = shop.name; w.dataset.color = "#ffc850"; w.dataset.track = "";
+    w.dataset.lang = ZH ? "zh-TW" : "en";
+    document.body.appendChild(w);
+  }
+
+  if (SHOP) show(SHOP);
+  else {
+    var slug = q.get("s") || (location.pathname.match(/\/t\/([a-z0-9-]+)/) || [])[1] || "";
+    fetch(base + "/api/trial/" + encodeURIComponent(slug) + (q.get("from") ? "?from=" + encodeURIComponent(q.get("from")) : ""))
+      .then(function (r) { if (!r.ok) throw r; return r.json(); })
+      .then(show)
+      .catch(function () { $("missing").style.display = "flex"; });
+  }
+})();
+{{DEEP_JS}}
+</script>
+</body>
+</html>
