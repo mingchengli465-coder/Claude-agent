@@ -59,12 +59,9 @@ _FAVICON = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect w
 _FONT = re.compile(r"^[a-z0-9-]+\.woff2$")
 _GUIDE = re.compile(r"^[a-z0-9-]+\.html$")
 _MOCKUP = re.compile(r"^[a-z0-9-]+\.png$")
-_ART = re.compile(r"^[a-z0-9-]+\.(jpg|png|webp)$")
-# The pictures and the video the owner sends the bot (bot.py), kept on the volume: the whale video
-# behind the homepage, and the two layers of the dead-wood page (the cursor reveals the bottom one).
-SITE_MEDIA = {"hero.mp4": "video/mp4", "art-top.jpg": "image/jpeg", "art-bottom.jpg": "image/jpeg"}
-# until they're sent: the drawn deep sea (in the page) and these two pictures (web_static/art)
-ART_FALLBACK = {"art-top.jpg": "art/wood-top.jpg", "art-bottom.jpg": "art/wood-bloom.jpg"}
+# The whale video the owner sends the bot (bot.py), kept on the volume, behind the homepage;
+# until it's sent, the page draws its own deep sea.
+SITE_MEDIA = {"hero.mp4": "video/mp4"}
 
 
 def site_media_dir() -> Path:
@@ -267,7 +264,6 @@ class WebChat:
             return app
         app.router.add_get("/", self.home)
         app.router.add_get("/about", self.site)
-        app.router.add_get("/art/{name}", self.art)
         app.router.add_get("/site-media/{name}", self.site_media)
         app.router.add_get("/demo", self.page)
         app.router.add_get("/demo-{kind}", self.demo_page)
@@ -316,14 +312,8 @@ class WebChat:
     async def site(self, request: web.Request) -> web.Response:
         return self._render("site.html")
 
-    async def art(self, request: web.Request) -> web.StreamResponse:
-        name = request.match_info["name"]
-        if not _ART.match(name) or not (_STATIC / "art" / name).is_file():
-            raise web.HTTPNotFound()
-        return web.FileResponse(_STATIC / "art" / name, headers={"Cache-Control": "public, max-age=86400", **CORS})
-
     async def site_media(self, request: web.Request) -> web.StreamResponse:
-        """The owner's own pictures and video for the site (sent to the bot), with range requests for phones."""
+        """The owner's own video for the site (sent to the bot), with range requests for phones."""
         name = request.match_info["name"]
         path = site_media_dir() / name
         if name not in SITE_MEDIA or not path.is_file():
@@ -334,10 +324,6 @@ class WebChat:
         if self.media_origin is not None:
             return f"{self.media_origin}/site-media/{name}"
         return f"/site-media/{name}" if (site_media_dir() / name).is_file() else ""
-
-    def _art_css(self, name: str) -> str:
-        own = self.media_url(name)
-        return (f"url('{own}'), " if own else "") + f"url('{ART_FALLBACK[name]}')"
 
     async def page(self, request: web.Request) -> web.Response:
         return self._render("demo.html")
@@ -420,9 +406,7 @@ class WebChat:
         # the deep-sea pages share their styles and script, written into each page (one file each)
         body = (body.replace("{{DEEP_CSS}}", (_STATIC / "partials" / "deep.css").read_text(encoding="utf-8"))
                     .replace("{{DEEP_JS}}", (_STATIC / "partials" / "deep.js").read_text(encoding="utf-8")))
-        body = (body.replace("{{HERO_VIDEO}}", html.escape(self.media_url("hero.mp4"), quote=True))
-                    .replace("{{ART_TOP_CSS}}", self._art_css("art-top.jpg"))
-                    .replace("{{ART_BOTTOM_CSS}}", self._art_css("art-bottom.jpg")))
+        body = body.replace("{{HERO_VIDEO}}", html.escape(self.media_url("hero.mp4"), quote=True))
         if english is None:
             english = name.endswith("-en.html")
         if name == "showcase.html" or showcase:

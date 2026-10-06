@@ -52,9 +52,8 @@ async def main():
         assert 'id="lang"' in home and 'data-zh="永不打烊"' in home and 'localStorage.setItem("siteLang"' in home, "繁 / EN on the homepage"
         assert 'data-href-en="trial-en"' in home, "English readers go to the English trial"
         assert "html{scroll-snap-type:none}" in home, "phones scroll freely (Safari's snapping pulled swipes back)"
-        assert "url('art/wood-top.jpg')" in home and "url('art/wood-bloom.jpg')" in home
+        assert 'class="art-bg"' not in home and 'id="mask"' not in home, "no dead-wood strip on page two"
         assert 'href="about"' in home and '<script id="chat-widget" src="/widget.js"' in home
-        assert (await client.get("/art/wood-top.jpg")).status == 200 and (await client.get("/art/x.svg")).status == 404
         # the full site (services, prices, contacts) is the About page
         r = await client.get("/about")
         site = await r.text()

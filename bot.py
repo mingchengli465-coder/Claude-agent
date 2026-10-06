@@ -982,13 +982,11 @@ async def route_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def save_site_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """The owner's whale video and dead-wood pictures (sitemedia.py) go straight onto the site."""
+    """The owner's whale video (sitemedia.py) goes straight onto the site."""
     message = update.effective_message
     doc = message.document
     if message.video or (doc and (doc.mime_type or "").startswith("video/")):
-        media, video = message.video or doc, True
-    elif message.photo or (doc and (doc.mime_type or "").startswith("image/")):
-        media, video = (message.photo[-1] if message.photo else doc), False
+        media = message.video or doc
     else:
         return
     if (media.file_size or 0) > sitemedia.TELEGRAM_LIMIT:
@@ -997,21 +995,16 @@ async def save_site_media(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     try:
         data = bytes(await (await context.bot.get_file(media.file_id)).download_as_bytearray())
-        slot = sitemedia.slot_for(video, message.caption or "", None if video else data)
         folder = web.site_media_dir()
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / slot).write_bytes(data if video else await asyncio.to_thread(sitemedia.as_jpeg, data))
+        (folder / sitemedia.HERO).write_bytes(data)
     except Exception:  # noqa: BLE001 - tell the owner rather than fail silently
         logger.exception("网站素材没存好")
         await message.reply_text("⚠️ 这个文件没存好，再发一次试试。")
         return
-    missing = [sitemedia.LABELS[s] for s in (sitemedia.HERO, sitemedia.TOP, sitemedia.BOTTOM)
-               if not (folder / s).is_file()]
-    note = ("\n\n还差：" + "、".join(missing) + "。") if missing else "\n\n三个素材都齐了 🎉"
     warn = ("\n（这个视频不是 mp4，有些浏览器放不了。最好用 Telegram「视频」方式发，它会自动转成 mp4。）"
-            if video and getattr(media, "mime_type", "video/mp4") not in ("video/mp4", None) else "")
-    await message.reply_text(f"✅ 已经换上网站了：{sitemedia.LABELS[slot]}。首页和示范页刷新就能看到。{warn}"
-                             f"\n放错位置的话，重新发一次并在说明里写「枯木」或「苔藓」。{note}")
+            if getattr(media, "mime_type", "video/mp4") not in ("video/mp4", None) else "")
+    await message.reply_text(f"✅ 已经换上网站了：{sitemedia.LABEL}。首页和示范页刷新就能看到。{warn}")
 
 
 async def forward_owner_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
