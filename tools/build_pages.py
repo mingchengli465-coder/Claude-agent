@@ -26,10 +26,10 @@ import web  # noqa: E402
 
 API = os.environ.get("PAGES_API_ORIGIN", "https://worker-production-42fb.up.railway.app").rstrip("/")
 BOT = os.environ.get("PAGES_BOT_LINK", "https://t.me/emilyhanbot")
-PAGES = {"home.html": "index.html", "site.html": "about.html", "demo.html": "demo.html", "video.html": "video.html",
-         "trial.html": "trial.html",
+PAGES = {"site.html": "index.html", "demo.html": "demo.html", "video.html": "video.html",
+         "trial.html": "trial.html", "trial-shop.html": "t.html",
          # English-only versions, for the English-speaking countries' emails
-         "video-en.html": "video-en.html", "trial-en.html": "trial-en.html"}
+         "video-en.html": "video-en.html", "trial-en.html": "trial-en.html", "trial-shop-en.html": "t-en.html"}
 
 
 class _NoService:
@@ -46,7 +46,6 @@ def static_copy(html: str) -> str:
                 .replace('src="/widget.js"', f'src="{API}/widget.js"')
                 .replace('href="/demo"', 'href="demo.html"')
                 .replace('href="/demo?lang=en"', 'href="demo.html?lang=en"')
-                .replace('data-en="/demo?lang=en"', 'data-en="demo.html?lang=en"')
                 .replace('href="/"', 'href="./"')
                 .replace('var API = "";', f'var API = "{API}";'))
 
@@ -56,7 +55,7 @@ SITE = os.environ.get("PAGES_SITE_URL", "https://mingchengli465-coder.github.io/
 
 def write_sitemap(out: Path) -> None:
     """sitemap.xml and robots.txt, so search engines find the guides."""
-    pages = (["", "about.html", "demo.html", "video.html", "trial.html", "video-en.html", "trial-en.html", "guides/"]
+    pages = (["", "demo.html", "video.html", "trial.html", "video-en.html", "trial-en.html", "guides/"]
              + [f"demo-{kind}.html" for kind in demos.DEMOS] + [f"demo-{kind}-en.html" for kind in demos.DEMOS])
     pages += [f"guides/{p.name}" for p in sorted((out / "guides").glob("*.html")) if p.name != "index.html"]
     urls = "".join(f"  <url><loc>{SITE}/{p}</loc></url>\n" for p in pages)
@@ -67,22 +66,18 @@ def write_sitemap(out: Path) -> None:
 
 
 def build(out: Path) -> None:
-    # the owner's pictures and video stay on the chat server; the pages fall back to drawn ones without them
-    chat = web.WebChat(_NoService(), title=web.shop_name(), contact_link=BOT, media_origin=API)
+    chat = web.WebChat(_NoService(), title=web.shop_name(), contact_link=BOT)
     if out.exists():
         shutil.rmtree(out)
     (out / "fonts").mkdir(parents=True)
     for source, target in PAGES.items():
         html = chat._render(source).text
         (out / target).write_text(static_copy(html), encoding="utf-8")
-    # each business's own demo (t.html?s=<slug>) and the industry demos: the two-page deep-sea design
-    for english, target in ((False, "t.html"), (True, "t-en.html")):
-        html = chat._render("showcase.html", english=english).text
-        (out / target).write_text(static_copy(html), encoding="utf-8")
     for kind in demos.DEMOS:
-        for english, target in ((False, f"demo-{kind}.html"), (True, f"demo-{kind}-en.html")):
-            html = chat._render("showcase.html", demo=kind, english=english).text
-            (out / target).write_text(static_copy(html), encoding="utf-8")
+        html = chat._render("demo-industry.html", demo=kind).text
+        (out / f"demo-{kind}.html").write_text(static_copy(html), encoding="utf-8")
+        html = chat._render("demo-industry-en.html", demo=kind).text
+        (out / f"demo-{kind}-en.html").write_text(static_copy(html), encoding="utf-8")
     (out / "guides").mkdir()
     for guide in sorted((ROOT / "web_static" / "guides").glob("*.html")):
         html = chat._render(f"guides/{guide.name}").text
@@ -91,7 +86,6 @@ def build(out: Path) -> None:
     (out / "media").mkdir()
     # the mockups the English-market emails link to (their plain-text version)
     shutil.copytree(ROOT / "web_static" / "mockups", out / "mockups")
-    shutil.copytree(ROOT / "web_static" / "art", out / "art")
     for name in web._MEDIA:
         shutil.copy(ROOT / "media" / name, out / "media" / name)
     for font in (ROOT / "web_static" / "fonts").iterdir():
