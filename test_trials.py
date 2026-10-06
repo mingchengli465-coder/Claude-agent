@@ -208,6 +208,6 @@ assert bot.leads_db.followup_due(dt.datetime.now(dt.timezone.utc) + dt.timedelta
 assert bot.leads_db.sent_today() == 0, "not counted in the day's cold emails"
 msgs = om2.reply_messages(lead, "Re: ready", "How do I pay?")
 assert "Bloom Room" in msgs[1]["content"] and "one line of code" in msgs[1]["content"]
-shop_page = (pathlib.Path(__file__).parent / "web_static" / "showcase.html").read_text(encoding="utf-8")
-assert 'class="js-mail"' in shop_page and "Going live: " in shop_page and "mailto:{{EMAIL}}" in shop_page
+shop_page = (pathlib.Path(__file__).parent / "web_static" / "trial-shop.html").read_text(encoding="utf-8")
+assert 'id="mail-us"' in shop_page and "Going live: " in shop_page
 print("PASS a shop that left its email gets how to use its trial and go live, once; its answer is watched")

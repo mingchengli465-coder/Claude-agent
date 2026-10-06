@@ -59,45 +59,6 @@ _FAVICON = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect w
 _FONT = re.compile(r"^[a-z0-9-]+\.woff2$")
 _GUIDE = re.compile(r"^[a-z0-9-]+\.html$")
 _MOCKUP = re.compile(r"^[a-z0-9-]+\.png$")
-_ART = re.compile(r"^[a-z0-9-]+\.(jpg|png|webp)$")
-# The pictures and the video the owner sends the bot (bot.py), kept on the volume: the whale video
-# behind the homepage, and the two layers of the dead-wood page (the cursor reveals the bottom one).
-SITE_MEDIA = {"hero.mp4": "video/mp4", "art-top.jpg": "image/jpeg", "art-bottom.jpg": "image/jpeg"}
-# until they're sent: the drawn deep sea (in the page) and these two pictures (web_static/art)
-ART_FALLBACK = {"art-top.jpg": "art/wood-top.jpg", "art-bottom.jpg": "art/wood-bloom.jpg"}
-
-
-def site_media_dir() -> Path:
-    return Path(cs.CS_DB_PATH).with_name("site_media")
-
-
-_ZH_SPAN = re.compile(r'<span class="zh">.*?</span>', re.S)
-SHOWCASE_TEXT = {
-    True: {"PITCH": "I made a free 24/7 AI assistant for my business in seconds, try it for yours: ",
-           "COPIED": "Copied: paste it just before </body> on your site"},
-    False: {"PITCH": "我剛免費做了一個 24 小時回覆客人的 AI 客服，貼上自己店的網址幾秒就好 / "
-                     "I made a free 24/7 AI assistant for my business in seconds, try it for yours: ",
-            "COPIED": "已複製：貼到網站的 </body> 前面就好 · Copied: paste it before </body>"},
-}
-
-
-def showcase_fill(body: str, kind: str = "", english: bool = False) -> str:
-    """The two-page demo of one business: an industry demo (its data inline) or, without a kind,
-    a business's own demo (the page fetches it from /api/trial/<slug>). English: no 繁體 at all."""
-    esc = lambda t: html.escape(t, quote=True)  # noqa: E731
-    d = demos_mod.DEMOS.get(kind)
-    shop = ({"kind": kind, "name": d["name"], "where": d["where"], "questions": d["questions"], "slug": "",
-             "sample": False, "site": ""} if d else None)
-    name = d["name"] if d else ""
-    questions = d["questions"] if d else []
-    fill = {"SHOP_JSON": json.dumps(shop, ensure_ascii=False).replace("</", "<\\/"),
-            "SHOP_TITLE": esc(name or "Your assistant"), "SHOP_NAME": esc(name), "SHOP_WHERE": esc(d["where"] if d else ""),
-            "SHOP_LINES": "".join(f"<p>{esc(t)}</p>" for t in questions * 2),
-            "SHOP_QUESTIONS": "".join(f'<div class="line">{esc(t)}</div>' for t in questions),
-            "DEEP_LANG": "en" if english else "zh", **SHOWCASE_TEXT[english]}
-    for key, value in fill.items():
-        body = body.replace("{{" + key + "}}", value)
-    return _ZH_SPAN.sub("", body).replace('<html lang="zh-CN">', '<html lang="en">', 1) if english else body
 # Per IP address: messages a minute, and new visitor ids an hour (each new
 # visitor pings the owner, so this is what keeps a script from spamming them).
 IP_MESSAGES_PER_MINUTE = int(os.environ.get("WEB_IP_MESSAGES_PER_MINUTE", "20"))
@@ -216,11 +177,8 @@ class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
                  clock=time.time, visits: visits_mod.Visits | None = None, messenger=None, sites=None,
                  demos: dict | None = None, trials: trials_mod.Trials | None = None, trial_service=None,
-                 on_trial=None, media_origin: str | None = None):
+                 on_trial=None):
         self.service = service
-        # where the owner's pictures and video are served from: this server (None: when they're on
-        # the volume), or another origin for a copy of the pages hosted elsewhere (GitHub Pages)
-        self.media_origin = media_origin
         # free trials and personal demos (trials.py): trial_service(row) builds each one's assistant,
         # on_trial(event, row) tells the owner ("new" for a trial made, "view" for a personal demo opened)
         self.trials = trials
@@ -265,10 +223,7 @@ class WebChat:
             app.router.add_get("/favicon.ico", self.favicon)
             app.router.add_get("/s/{slug}", self.built_site)
             return app
-        app.router.add_get("/", self.home)
-        app.router.add_get("/about", self.site)
-        app.router.add_get("/art/{name}", self.art)
-        app.router.add_get("/site-media/{name}", self.site_media)
+        app.router.add_get("/", self.site)
         app.router.add_get("/demo", self.page)
         app.router.add_get("/demo-{kind}", self.demo_page)
         app.router.add_get("/video", self.video)
@@ -310,34 +265,8 @@ class WebChat:
 
     # ---- pages -------------------------------------------------------------------
 
-    async def home(self, request: web.Request) -> web.Response:
-        return self._render("home.html")
-
     async def site(self, request: web.Request) -> web.Response:
         return self._render("site.html")
-
-    async def art(self, request: web.Request) -> web.StreamResponse:
-        name = request.match_info["name"]
-        if not _ART.match(name) or not (_STATIC / "art" / name).is_file():
-            raise web.HTTPNotFound()
-        return web.FileResponse(_STATIC / "art" / name, headers={"Cache-Control": "public, max-age=86400", **CORS})
-
-    async def site_media(self, request: web.Request) -> web.StreamResponse:
-        """The owner's own pictures and video for the site (sent to the bot), with range requests for phones."""
-        name = request.match_info["name"]
-        path = site_media_dir() / name
-        if name not in SITE_MEDIA or not path.is_file():
-            raise web.HTTPNotFound()
-        return web.FileResponse(path, headers={"Content-Type": SITE_MEDIA[name], "Cache-Control": "public, max-age=600", **CORS})
-
-    def media_url(self, name: str) -> str:
-        if self.media_origin is not None:
-            return f"{self.media_origin}/site-media/{name}"
-        return f"/site-media/{name}" if (site_media_dir() / name).is_file() else ""
-
-    def _art_css(self, name: str) -> str:
-        own = self.media_url(name)
-        return (f"url('{own}'), " if own else "") + f"url('{ART_FALLBACK[name]}')"
 
     async def page(self, request: web.Request) -> web.Response:
         return self._render("demo.html")
@@ -348,7 +277,7 @@ class WebChat:
         kind = kind.removesuffix("-en")
         if kind not in demos_mod.DEMOS:
             raise web.HTTPNotFound()
-        return self._render("showcase.html", demo=kind, english=english)
+        return self._render("demo-industry-en.html" if english else "demo-industry.html", demo=kind)
 
     async def video(self, request: web.Request) -> web.Response:
         return self._render("video.html")
@@ -366,7 +295,7 @@ class WebChat:
         # the page fetches the shop from /api/trial/<slug> (the same page is on GitHub Pages as t.html)
         if self.trials is None or self.trials.get(request.match_info["slug"]) is None:
             raise web.HTTPNotFound(text="找不到這個示範 / Not found")
-        page = self._render("showcase.html", english=request.query.get("lang") == "en", showcase=True)
+        page = self._render("trial-shop-en.html" if request.query.get("lang") == "en" else "trial-shop.html")
         # relative links (video, trial…) from /t/<slug> point at the site's root
         page.text = page.text.replace("<head>", '<head>\n<base href="/">', 1)
         return page
@@ -415,20 +344,10 @@ class WebChat:
     async def privacy(self, request: web.Request) -> web.Response:
         return self._render("privacy.html")
 
-    def _render(self, name: str, demo: str = "", english: bool | None = None, showcase: bool = False) -> web.Response:
+    def _render(self, name: str, demo: str = "") -> web.Response:
         body = (_STATIC / name).read_text(encoding="utf-8")
-        # the deep-sea pages share their styles and script, written into each page (one file each)
-        body = (body.replace("{{DEEP_CSS}}", (_STATIC / "partials" / "deep.css").read_text(encoding="utf-8"))
-                    .replace("{{DEEP_JS}}", (_STATIC / "partials" / "deep.js").read_text(encoding="utf-8")))
-        body = (body.replace("{{HERO_VIDEO}}", html.escape(self.media_url("hero.mp4"), quote=True))
-                    .replace("{{ART_TOP_CSS}}", self._art_css("art-top.jpg"))
-                    .replace("{{ART_BOTTOM_CSS}}", self._art_css("art-bottom.jpg")))
-        if english is None:
-            english = name.endswith("-en.html")
-        if name == "showcase.html" or showcase:
-            body = showcase_fill(body, demo, english)
-        elif demo:
-            body = demo_fill(body, demo, english=english)
+        if demo:
+            body = demo_fill(body, demo, english=name.endswith("-en.html"))
         contact = html.escape(self.contact_link, quote=True)
         telegram, wechat = owner_contacts()
         links = owner_links()
@@ -440,7 +359,7 @@ class WebChat:
             f'<button type="button" class="wx" data-copy="{w}"><span>{w}</span><small data-i="wxCopy">复制</small></button>'
             for w in (html.escape(w, quote=True) for w in wechat))
         # the English-only pages (for the English-speaking countries) carry no Chinese, the name included
-        title = ENGLISH_TITLE if english or name in ("home.html", "showcase.html") else self.title
+        title = ENGLISH_TITLE if name.endswith("-en.html") else self.title
         body = (body.replace("{{TITLE}}", html.escape(title))
                     .replace("{{TITLE_ATTR}}", html.escape(title, quote=True))
                     .replace("{{CONTACT}}", contact)
