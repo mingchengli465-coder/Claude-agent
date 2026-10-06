@@ -46,10 +46,11 @@ async def main():
         # the homepage: the two deep-sea pages
         r = await client.get("/")
         home = await r.text()
-        assert r.status == 200 and "THE GIANT" in home and "Unveil The Unseen" in home and "{{" not in home
-        assert "Ocean Conservation Summit" in home and "Heuristic scoring v4.2" in home and "exploring the abyss · since 1992" in home
+        assert r.status == 200 and "ALWAYS ON" in home and "Wake The Quiet Hours" in home and "{{" not in home
+        assert "YOUR SHOP<br>KEEPS ANSWERING" in home and "US$70 one-off setup" in home and "Ocean" not in home, "the business, not the ocean"
         assert 'data-src=""' in home, "no whale video yet: the page draws its own deep sea"
-        assert 'id="lang"' in home and 'data-zh="巨獸"' in home and 'localStorage.setItem("siteLang"' in home, "繁 / EN on the homepage"
+        assert 'id="lang"' in home and 'data-zh="永不打烊"' in home and 'localStorage.setItem("siteLang"' in home, "繁 / EN on the homepage"
+        assert 'data-href-en="trial-en"' in home, "English readers go to the English trial"
         assert "html{scroll-snap-type:none}" in home, "phones scroll freely (Safari's snapping pulled swipes back)"
         assert "url('art/wood-top.jpg')" in home and "url('art/wood-bloom.jpg')" in home
         assert 'href="about"' in home and '<script id="chat-widget" src="/widget.js"' in home

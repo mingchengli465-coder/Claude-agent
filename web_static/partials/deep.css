@@ -140,7 +140,7 @@ html.en .zh{display:none!important}
   .vert{display:none}
   .p2blocks{left:6%;right:6%;width:auto;bottom:20%;gap:4%}
   .line{font-size:.52rem;letter-spacing:.08em}
-  .p2cta{bottom:7%;left:6%}
+  .p2cta{bottom:13%;left:6%;right:6%;gap:14px}
   .explore{bottom:7%;right:auto;left:6%}
 }
 /* the page off screen holds still */
