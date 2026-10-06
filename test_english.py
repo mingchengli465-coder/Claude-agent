@@ -80,12 +80,12 @@ async def server():
             assert r.status == 200 and not CJK.search(page), (path, CJK.findall(page)[:10])
             assert '<html lang="en">' in page, path
         page = await (await client.get("/demo-bnb-en")).text()
-        assert 'data-lang="en"' in page and 'href="demo-florist-en"' in page and 'href="trial-en"' in page
-        assert 'href="video-en"' in page and "Willow Cottage B&amp;B" in page
+        assert 'window.DEEP_LANG = "en"' in page and '"trial-en"' in page and '"name": "Willow Cottage B&B"' in page
+        assert 'data-en="video-en"' in page and "Willow Cottage B&amp;B" in page
         assert CJK.search(await (await client.get("/demo-bnb")).text()), "the bilingual page stays"
         assert (await client.get("/demo-nope-en")).status == 404
         shop = await (await client.get(f"/t/{row['slug']}?lang=en")).text()
-        assert "w.dataset.lang = \"en\"" in shop and '"/trial-en"' in shop
+        assert 'window.DEEP_LANG = "en"' in shop and 'w.dataset.lang = ZH ? "zh-TW" : "en"' in shop and "var SHOP = null" in shop
         form = await (await client.get("/trial-en")).text()
         assert 'lang: "en"' in form and '"/t/" + res[1].slug + "?lang=en&new=1"' in form
         r = await client.post("/api/trial", json={"name": "Rose Cottage", "info": "Double £95", "lang": "en"})
