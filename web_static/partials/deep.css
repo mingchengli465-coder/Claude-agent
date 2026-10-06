@@ -2,7 +2,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-snap-type:y proximity}
 body{background:#000;overflow-x:hidden;color:#fff}
-:root{--mx:50%;--my:50%;--p1fade:1;--p2fade:0}
+:root{--p1fade:1;--p2fade:0}
 .page{position:relative;width:100%;height:100vh;overflow:hidden;scroll-snap-align:start}
 a{color:inherit}
 .zh{font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;font-style:normal}
@@ -89,7 +89,12 @@ html.en .zh{display:none!important}
 .silver-dots i{position:absolute;bottom:-10px;border-radius:50%;background:radial-gradient(circle,rgba(220,225,235,0.85) 0%,rgba(220,225,235,0.15) 60%,transparent 100%);animation:silverFloat linear infinite;opacity:0}
 @keyframes silverFloat{0%{transform:translateY(0) translateX(0);opacity:0}20%{opacity:0.6}80%{opacity:0.6}100%{transform:translateY(-100vh) translateX(-20px);opacity:0}}
 .mask{position:absolute;inset:0;z-index:2;pointer-events:none;background-image:{{ART_TOP_CSS}};background-size:cover;background-position:center;background-repeat:no-repeat;
-  -webkit-mask-image:radial-gradient(circle 240px at var(--mx) var(--my),transparent 0%,transparent 50%,black 100%);mask-image:radial-gradient(circle 240px at var(--mx) var(--my),transparent 0%,transparent 50%,black 100%)}
+  /* spring comes by itself: the dead wood on top melts away from left to right, showing the moss and
+     flowers underneath, holds, then closes again; no cursor or finger needed */
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,transparent 42%,black 58%,black 100%);mask-image:linear-gradient(90deg,transparent 0%,transparent 42%,black 58%,black 100%);
+  -webkit-mask-size:300% 100%;mask-size:300% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:100% 0;mask-position:100% 0;animation:springGrow 16s ease-in-out infinite}
+@keyframes springGrow{0%,10%{-webkit-mask-position:100% 0;mask-position:100% 0}45%,72%{-webkit-mask-position:0% 0;mask-position:0% 0}100%{-webkit-mask-position:100% 0;mask-position:100% 0}}
 .page2 .top-fade{position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(to bottom,#000 0%,rgba(0,0,0,0.92) 12%,rgba(0,0,0,0.5) 30%,transparent 50%)}
 .ui{position:absolute;inset:0;z-index:3;pointer-events:none}
 .fade-in{opacity:var(--p2fade)}
