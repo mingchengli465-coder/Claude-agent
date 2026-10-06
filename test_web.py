@@ -43,7 +43,16 @@ async def main():
     # --- pages -------------------------------------------------------------------
     chat, svc, model, owner, clock = fresh()
     async with TestClient(TestServer(chat.app())) as client:
+        # the homepage: the two deep-sea pages
         r = await client.get("/")
+        home = await r.text()
+        assert r.status == 200 and "ALWAYS ON" in home and "Wake The Quiet Hours" in home and "{{" not in home
+        assert 'data-src=""' in home, "no whale video yet: the page draws its own deep sea"
+        assert "url('art/wood-top.jpg')" in home and "url('art/wood-bloom.jpg')" in home
+        assert 'href="about"' in home and '<script id="chat-widget" src="/widget.js"' in home
+        assert (await client.get("/art/wood-top.jpg")).status == 200 and (await client.get("/art/x.svg")).status == 404
+        # the full site (services, prices, contacts) is the About page
+        r = await client.get("/about")
         site = await r.text()
         assert r.status == 200 and "text/html" in r.headers["Content-Type"]
         assert "Claude Code" in site and "AI 客服" in site and '<script src="/widget.js"' in site

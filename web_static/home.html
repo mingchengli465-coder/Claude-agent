@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{TITLE}} · 24/7 AI assistants for small businesses</title>
+<meta name="description" content="A 24/7 AI assistant for your business: it answers your customers from your own prices, day and night, and tells you the moment someone is ready to buy. 24 小時 AI 客服，按你的價目表回覆客人。">
+<meta property="og:title" content="Always awake · vinc">
+<meta property="og:image" content="media/vinc-intro-poster.jpg">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23000'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-style='italic' font-size='40' fill='%23ffc850' text-anchor='middle'%3Ev%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Bruno+Ace&family=Exo+2:wght@400;500;600;700;800;900&family=Marcellus&family=Marcellus+SC&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+{{DEEP_CSS}}
+</style>
+</head>
+<body>
+
+<section class="page page1" id="page1">
+  <canvas class="deep" id="deep" aria-hidden="true"></canvas>
+  <video class="video-bg" id="hero-video" muted loop playsinline preload="auto" data-src="{{HERO_VIDEO}}"></video>
+  <div class="vignette"></div>
+  <div class="top-fade"></div>
+  <div class="bottom-fade"></div>
+  <div class="p1-ui">
+    <div class="logo">
+      <a class="brand" href="/">vinc<sup>AI</sup></a>
+      <div class="tagline">24/7 assistants for small businesses</div>
+    </div>
+    <nav class="nav">
+      <a class="active keep" href="/">Home</a>
+      <a href="/demo" data-en="/demo?lang=en">Demo</a>
+      <a href="trial" data-en="trial-en">Trial</a>
+      <a href="about">About</a>
+      <a href="{{OWNER_TG}}" target="_blank" rel="noopener">Contact</a>
+      <button class="search keep" type="button" aria-label="Ask the assistant" onclick="window.aiChatOpen && aiChatOpen()">&#8981;</button>
+    </nav>
+    <div class="hero">
+      <h1>ALWAYS ON</h1>
+      <div class="vol">Your shop closes. It keeps answering.<span class="zh">你打烊了，它還在接客</span></div>
+    </div>
+    <div class="report">
+      <div class="label">WHILE YOU SLEEP:</div>
+      <div class="title">YOUR SHOP<br>KEEPS ANSWERING<span class="zh">24 小時 AI 客服</span></div>
+      <div class="body-wrap">
+        <div class="body"><div class="scroll">
+          <p>When the shop closes, the questions keep coming.</p>
+          <p>Prices, rooms, cakes and bookings, at midnight.</p>
+          <p>It answers from your own price list, never guessing.</p>
+          <p>When someone is ready to buy, you hear first.</p>
+          <p>Live in 2–3 days. From US$70, then US$9.9 a month.</p>
+          <p>When the shop closes, the questions keep coming.</p>
+          <p>Prices, rooms, cakes and bookings, at midnight.</p>
+          <p>It answers from your own price list, never guessing.</p>
+          <p>When someone is ready to buy, you hear first.</p>
+          <p>Live in 2–3 days. From US$70, then US$9.9 a month.</p>
+        </div></div>
+      </div>
+      <a class="btn" href="trial" data-en="trial-en">TRY IT FREE</a>
+    </div>
+    <a class="event" href="trial" data-en="trial-en">
+      <div class="label">FREE TRIAL:</div>
+      <div class="what">Paste your website,<br>ready in seconds<span class="zh">貼上網址，幾秒鐘做好</span></div>
+    </a>
+    <div class="side">answering in the dark · since 2026</div>
+  </div>
+</section>
+
+<section class="page page2" id="page2">
+  <div class="art-bg"></div>
+  <div class="silver-dots" id="dots"></div>
+  <div class="mask" id="mask"></div>
+  <div class="top-fade"></div>
+  <div class="ui">
+    <div class="vert fade-in">Quiet hours hold new growth</div>
+    <div class="art-title fade-in" id="art-title">Wake The Quiet Hours</div>
+    <div class="art-sub fade-in">where closed doors still bloom<span class="zh">讓打烊後的時間也有生意</span></div>
+    <div class="p2blocks fade-in">
+      <div class="col">
+        <div class="line">Answers in seconds</div><div class="line">From your own price list</div><div class="line">English &amp; Chinese</div>
+        <div class="line">Never invents a price</div><div class="line">Learns your FAQs</div>
+      </div>
+      <div class="col">
+        <div class="line">Bookings sent to you</div><div class="line">Orders flagged at once</div><div class="line">Telegram · WhatsApp · Email</div>
+        <div class="line">You reply, it steps back</div><div class="line">Every chat on record</div>
+      </div>
+      <div class="col">
+        <div class="line">Live in 2–3 days</div><div class="line">US$70 one-off setup</div><div class="line">Then US$9.9 a month</div>
+        <div class="line">Cancel anytime</div><div class="line">Free trial first</div>
+      </div>
+    </div>
+    <div class="p2cta fade-in">
+      <a href="trial" data-en="trial-en">Try it free</a>
+      <a href="/demo" data-en="/demo?lang=en">See a demo</a>
+      <a href="video" data-en="video-en">38-second video</a>
+    </div>
+    <button class="explore fade-in" type="button" id="explore">Explore</button>
+  </div>
+</section>
+
+<script id="chat-widget" src="/widget.js" data-color="#ffc850" data-track defer></script>
+<script>
+window.DEEP_LANG = "auto";
+{{DEEP_JS}}
+</script>
+</body>
+</html>
