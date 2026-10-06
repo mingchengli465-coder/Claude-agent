@@ -40,7 +40,7 @@ html.en .zh{display:none!important}
 @keyframes heroIn{0%{opacity:0;transform:scale(2.5);letter-spacing:0.5em;filter:blur(20px)}40%{opacity:0.5;filter:blur(5px)}70%{opacity:1;transform:scale(0.92);letter-spacing:0.02em;filter:blur(0)}85%{transform:scale(1.03)}100%{opacity:1;transform:scale(1);letter-spacing:0.06em;filter:blur(0)}}
 @keyframes giantScale{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
 @keyframes giantGlow{0%,100%{text-shadow:0 0 20px rgba(120,190,255,0.5),0 0 50px rgba(80,160,240,0.2),0 0 90px rgba(60,140,220,0.1)}50%{text-shadow:0 0 40px rgba(180,220,255,0.95),0 0 90px rgba(100,180,255,0.5),0 0 160px rgba(80,160,240,0.25)}}
-.hero h1::after{content:'THE GIANT';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(180,230,255,1) 45%,rgba(255,255,255,1) 50%,rgba(180,230,255,1) 55%,transparent 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:heroSweep 3s linear 2s infinite;mix-blend-mode:screen;pointer-events:none}
+.hero h1::after{content:attr(data-text);position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(180,230,255,1) 45%,rgba(255,255,255,1) 50%,rgba(180,230,255,1) 55%,transparent 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:heroSweep 3s linear 2s infinite;mix-blend-mode:screen;pointer-events:none}
 .hero h1::before{content:'';position:absolute;left:50%;top:50%;width:100%;height:140%;border-radius:50%;pointer-events:none;background:radial-gradient(ellipse,rgba(100,180,255,0.2) 0%,rgba(80,160,240,0.08) 40%,transparent 70%);opacity:0;animation:ringExpand 2.5s ease-out 2s infinite}
 @keyframes heroSweep{0%{background-position:250% 0}100%{background-position:-250% 0}}
 @keyframes ringExpand{0%{transform:translate(-50%,-50%) scale(0.8);opacity:0.8}100%{transform:translate(-50%,-50%) scale(1.8);opacity:0}}
@@ -135,4 +135,14 @@ html.en .zh{display:none!important}
   .p2cta{bottom:7%;left:6%}
   .explore{bottom:7%;right:auto;left:6%}
 }
+/* the page off screen holds still */
+.page.off *,.page.off *::before,.page.off *::after{animation-play-state:paused!important}
+/* touch screens: plain scrolling (Safari's snapping pulls a short swipe back to page one), lighter effects */
+@media (hover:none){
+  html{scroll-snap-type:none}
+  .page{scroll-snap-align:none}
+  .hero h1::after{mix-blend-mode:normal}
+}
+.lang{background:none;border:0;cursor:pointer;font-family:'Marcellus SC',serif;font-size:clamp(0.75rem,1vw,0.95rem);letter-spacing:0.14em;color:rgba(220,235,250,0.55);padding:0}
+.lang b{color:#fff;font-weight:400}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
