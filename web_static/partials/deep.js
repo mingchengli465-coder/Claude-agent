@@ -99,7 +99,21 @@
     mask.style.setProperty("--my", (y - rect.top) + "px");
   }
   page2.addEventListener("mousemove", function (e) { move(e.clientX, e.clientY); });
-  page2.addEventListener("touchmove", function (e) { if (e.touches[0]) move(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+  // phones have no cursor: the window follows the finger, and drifts along the wood by itself otherwise
+  var touched = 0;
+  function touch(e) { if (e.touches[0]) { touched = performance.now(); move(e.touches[0].clientX, e.touches[0].clientY); } }
+  page2.addEventListener("touchstart", touch, { passive: true });
+  page2.addEventListener("touchmove", touch, { passive: true });
+  if (window.matchMedia && matchMedia("(hover: none)").matches) {
+    (function drift(now) {
+      if (now - touched > 3500) {
+        var k = now / 9000, w = page2.clientWidth, h = page2.clientHeight;
+        mask.style.setProperty("--mx", (w * (0.5 + 0.38 * Math.sin(k * 6.283))) + "px");
+        mask.style.setProperty("--my", (h * (0.80 - 0.07 * Math.sin(k * 6.283))) + "px");
+      }
+      requestAnimationFrame(drift);
+    })(0);
+  }
 
   var dots = document.getElementById("dots");
   for (i = 0; i < 40; i++) {
