@@ -113,7 +113,7 @@ INTENT_LEVELS = {"": 0, "interested": 1, "ready": 2}
 INTENT_LABELS = {1: "有购买意向", 2: "准备购买"}
 
 CHANNEL_LABELS = {"telegram": "Telegram", "web": "网站聊天窗口", "facebook": "Facebook Messenger", "fb_comment": "Facebook 评论",
-                  "wecom": "企业微信"}
+                  "wecom": "企业微信", "wecombot": "企业微信机器人"}
 
 # A safety net under the model's own judgement: these always go to the owner.
 _HANDOFF_KEYWORDS = [
