@@ -555,13 +555,34 @@ real person……），命中就一定转。
 
 ## 接企业微信
 
-```python
-service.register_channel("wecom", send)   # send(chat_id, text)
-reply = await service.handle(cs.Inbound(channel="wecom", chat_id=..., text=..., display_name=...))
-if reply: await send(chat_id, reply)
-```
+`wecom.py` 把一个企业微信**自建应用**接到同一个客服：成员给应用发消息，AI 按
+`products.yaml` 回复；转人工通知和你的回复仍然走 Telegram（回复那条通知，内容会发给
+对方）；`/ai wecom:<UserID> off` 这样指定渠道。Telegram 的行为完全不变。
 
-转人工通知和你的回复仍然走 Telegram；`/ai wecom:<id> off` 这样指定渠道。
+在企业微信管理后台（work.weixin.qq.com）：
+
+1. **应用管理 → 自建 → 创建应用**，记下 `AgentId` 和 `Secret`（Secret 在企业微信手机端「查看」）。
+2. **我的企业 → 企业信息**，记下**企业ID**。
+3. 应用页 **接收消息 → 设置API接收**：URL 填 `https://<你的域名>/wecom/callback`，
+   Token 和 EncodingAESKey 点「随机获取」。
+4. 把这五个值填进部署平台的变量，**先部署，再点后台的「保存」**（保存时企业微信会请求
+   这个地址验证，服务没起来会失败）：
+
+| 变量 | 说明 |
+| ---- | ---- |
+| `WECOM_CORP_ID` | 企业ID |
+| `WECOM_AGENT_ID` | 应用的 AgentId（数字） |
+| `WECOM_SECRET` | 应用的 Secret |
+| `WECOM_TOKEN` | 接收消息里的 Token |
+| `WECOM_AES_KEY` | 接收消息里的 EncodingAESKey（43 位） |
+
+五个都填才会启用；没填全时日志会写还缺哪几个。需要网站服务开着（`WEB_CHAT`，默认开）。
+
+5. **应用 → 企业可信IP**：把服务器的出口 IP 加进去，否则发消息会被拒绝（错误码 60020，
+   机器人会在 Telegram 通知你，错误信息里带着被拒的 IP）。
+
+注意：自建应用只有企业成员（和你加进可见范围的人）能用；企业外的普通微信用户发不了消息，
+那要走「微信客服」。
 
 ## 配置
 
