@@ -48,6 +48,7 @@ import sitetext
 import trials as trials_mod
 import visits as visits_mod
 import web
+import wecom as wecom_mod
 import xhs
 
 logging.basicConfig(
@@ -2091,6 +2092,8 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
             await bot.send_message(chat_id=int(OWNER_CHAT_ID), text=text, disable_web_page_preview=True)
 
     fb = messenger_mod.Messenger.from_env(service, notify=tell_owner)
+    # 企业微信 shares the same customer service; None (and no route) unless its WECOM_* variables are set
+    wc = wecom_mod.WeCom.from_env(service, notify=tell_owner)
     try:
         site_store = agent_mod.SiteStore(cs.CS_DB_PATH)
     except Exception:  # noqa: BLE001 - chat still works without the agent's websites
@@ -2121,7 +2124,7 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
     chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb,
                        sites=site_store, demos=getattr(service, "demo_services", {}),
                        trials=getattr(service, "trials", None), trial_service=getattr(service, "trial_service", None),
-                       on_trial=on_trial)
+                       on_trial=on_trial, wecom=wc)
     try:
         await chat.start()
     except OSError:
@@ -2132,12 +2135,17 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
     if fb is not None:
         # Meta calls our webhook back while we register it, so the server must be up first.
         fb_setup_tasks.add(asyncio.get_running_loop().create_task(fb.connect()))
+    if wc is not None:
+        # WeCom calls the callback while the URL is saved in its console, so the server is up first here too
+        fb_setup_tasks.add(asyncio.get_running_loop().create_task(wc.connect()))
 
 
 async def post_shutdown(application: Application) -> None:
     if web_chat is not None:
         if web_chat.messenger is not None:
             await web_chat.messenger.close()
+        if web_chat.wecom is not None:
+            await web_chat.wecom.close()
         await web_chat.stop()
 
 

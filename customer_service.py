@@ -1,7 +1,7 @@
 """Customer-service mode: answers customers from products.yaml and hands off to the owner.
 
 Nothing in here knows about Telegram. A messaging channel plugs in with three
-things, which is all a future 企业微信 entry needs:
+things (企业微信 in wecom.py and Facebook in messenger.py are built exactly this way):
 
     service.register_channel("wecom", send)      # send(chat_id, text) -> awaitable
     reply = await service.handle(Inbound(channel="wecom", chat_id=..., text=...))
@@ -112,7 +112,8 @@ HANDOFF_REASONS = {
 INTENT_LEVELS = {"": 0, "interested": 1, "ready": 2}
 INTENT_LABELS = {1: "有购买意向", 2: "准备购买"}
 
-CHANNEL_LABELS = {"telegram": "Telegram", "web": "网站聊天窗口", "facebook": "Facebook Messenger", "fb_comment": "Facebook 评论"}
+CHANNEL_LABELS = {"telegram": "Telegram", "web": "网站聊天窗口", "facebook": "Facebook Messenger", "fb_comment": "Facebook 评论",
+                  "wecom": "企业微信"}
 
 # A safety net under the model's own judgement: these always go to the owner.
 _HANDOFF_KEYWORDS = [

@@ -16,6 +16,7 @@
     GET  /s/<slug>    a website the owner's agent built (agent.py)
     GET  /privacy     privacy policy (Meta asks for one before Messenger goes live)
     GET/POST /fb/webhook  Facebook Messenger, when it is configured (messenger.py)
+    GET/POST /wecom/callback  企业微信, when it is configured (wecom.py)
 
 Visitors are customers on the "web" channel, keyed by a random id the widget
 keeps in the browser. The owner is told and replies in Telegram exactly as for
@@ -228,8 +229,10 @@ class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
                  clock=time.time, visits: visits_mod.Visits | None = None, messenger=None, sites=None,
                  demos: dict | None = None, trials: trials_mod.Trials | None = None, trial_service=None,
-                 on_trial=None, media_origin: str | None = None):
+                 on_trial=None, media_origin: str | None = None, wecom=None):
         self.service = service
+        # 企业微信 (wecom.py): brings its own callback route, like the Facebook messenger
+        self.wecom = wecom
         # where the owner's pictures and video are served from: this server (None: when they're on
         # the volume), or another origin for a copy of the pages hosted elsewhere (GitHub Pages)
         self.media_origin = media_origin
@@ -305,6 +308,8 @@ class WebChat:
         app.router.add_get("/s/{slug}", self.built_site)
         if self.messenger is not None:
             self.messenger.routes(app)
+        if self.wecom is not None:
+            self.wecom.routes(app)
         app.router.add_route("OPTIONS", "/api/{tail:.*}", self.preflight)
         return app
 
