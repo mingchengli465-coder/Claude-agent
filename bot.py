@@ -49,6 +49,7 @@ import trials as trials_mod
 import visits as visits_mod
 import web
 import wecom as wecom_mod
+import wecom_bot as wecom_bot_mod
 import xhs
 
 logging.basicConfig(
@@ -2034,6 +2035,7 @@ def check_env(name: str, value: str) -> str:
 
 # Set in post_init when customer service is on. None means no website chat.
 web_chat: web.WebChat | None = None
+wecom_robot: wecom_bot_mod.WeComBot | None = None  # 企业微信智能机器人 (long connection, no web server needed)
 fb_setup_tasks: set[asyncio.Task] = set()
 # The bot itself, for posting in the owner's Telegram channel. Set in post_init.
 telegram_bot = None
@@ -2094,6 +2096,12 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
     fb = messenger_mod.Messenger.from_env(service, notify=tell_owner)
     # 企业微信 shares the same customer service; None (and no route) unless its WECOM_* variables are set
     wc = wecom_mod.WeCom.from_env(service, notify=tell_owner)
+    # 企业微信「智能机器人」: a WebSocket we open ourselves, so it needs no callback URL; off unless WECOM_BOT_* are set
+    global wecom_robot
+    if wecom_robot is None:
+        wecom_robot = wecom_bot_mod.WeComBot.from_env(service, notify=tell_owner)
+        if wecom_robot is not None:
+            wecom_robot.start()
     try:
         site_store = agent_mod.SiteStore(cs.CS_DB_PATH)
     except Exception:  # noqa: BLE001 - chat still works without the agent's websites
@@ -2141,6 +2149,8 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
 
 
 async def post_shutdown(application: Application) -> None:
+    if wecom_robot is not None:
+        await wecom_robot.close()
     if web_chat is not None:
         if web_chat.messenger is not None:
             await web_chat.messenger.close()
