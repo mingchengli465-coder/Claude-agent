@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-TW">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -24,6 +24,15 @@
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);z-index:50;background:rgba(10,14,20,.92);border:1px solid rgba(255,200,80,.4);color:#fff;font-family:'Montserrat',sans-serif;font-size:.8rem;letter-spacing:.06em;padding:12px 18px;border-radius:999px;opacity:0;transition:all .4s ease;pointer-events:none;max-width:90vw;text-align:center}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 #missing{position:fixed;inset:0;z-index:60;background:#000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;font-family:'Cinzel',serif;text-align:center;padding:24px}
+.sub{display:block;margin-top:6px;font-family:'Montserrat',sans-serif;font-weight:400;font-size:clamp(.62rem,.85vw,.8rem);letter-spacing:.12em;text-transform:none;color:rgba(210,225,240,.6);text-shadow:none}
+.art-sub .sub{font-size:clamp(.7rem,1vw,.95rem);letter-spacing:.2em}
+html[lang^=zh] .hero h1,html[lang^=zh] .report .label,html[lang^=zh] .report .title,html[lang^=zh] .event .label,html[lang^=zh] .art-title,html[lang^=zh] .art-sub{font-family:'Cinzel',"Noto Serif TC","Songti TC","PMingLiU",serif}
+@media (max-width:760px){
+  .brand{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:92vw;font-size:clamp(1.2rem,6.4vw,1.9rem)}
+  .p2blocks{bottom:27%}
+  .p2blocks .col:nth-child(2){display:none}
+  .p2blocks .col{flex:1}
+}
 #missing a{font-family:'Montserrat',sans-serif;color:#ffc850;letter-spacing:.2em;font-size:.8rem;text-decoration:none}
 </style>
 </head>
@@ -49,23 +58,23 @@
       <button class="search keep js-ask" type="button" aria-label="Ask the assistant">&#8981;</button>
     </nav>
     <div class="hero">
-      <h1 data-text="OPEN 24/7">OPEN 24/7</h1>
-      <div class="vol"><span id="vol-name">{{SHOP_NAME}}</span> · its assistant never sleeps<span class="zh">打烊了，它還在接客</span></div>
+      <h1 data-text="{{BIG_H1}}">{{BIG_H1}}</h1>
+      <div class="vol"><span id="vol-name">{{SHOP_NAME}}</span> · {{BIG_VOL}}</div>
       <div class="note" id="note-sample" hidden>Sample prices for now. <a href="trial" class="js-own">Put in your own website →</a><span class="zh">價格先用示範資料，<a href="trial" class="js-own">貼上你的網址換成自己的 →</a></span></div>
       <div class="note" id="note-read" hidden>It has read <b id="site-host"></b> and answers from it.<span class="zh">它已經讀過你的網站，會按上面寫的回答。</span></div>
       <div class="note" id="note-fresh" hidden>Done. Bookmark this page to come back any time.<span class="zh">做好了！把這個頁面存起來，隨時回來試。</span></div>
     </div>
     <div class="report">
-      <div class="label">LIVE DEMO:</div>
-      <div class="title"><span id="title-name">{{SHOP_NAME}}</span><br>ANSWERS 24/7<span class="zh">按店家自己的資料回覆客人</span></div>
+      <div class="label">{{BIG_LIVE}}</div>
+      <div class="title"><span id="title-name">{{SHOP_NAME}}</span><br>{{BIG_ANSWERS}}</div>
       <div class="body-wrap">
         <div class="body"><div class="scroll" id="scroll">{{SHOP_LINES}}</div></div>
       </div>
-      <a class="btn js-ask" href="#">ASK IT NOW</a>
+      <a class="btn js-ask" href="#">{{BIG_ASK}}</a>
     </div>
     <a class="event js-own" href="trial">
-      <div class="label">MAKE IT YOURS:</div>
-      <div class="what">Paste your website,<br>ready in seconds<span class="zh">貼上網址，幾秒鐘做好</span></div>
+      <div class="label">{{BIG_MINE}}</div>
+      <div class="what">{{BIG_WHAT}}</div>
     </a>
     <div class="side" id="side">answering in the dark · {{SHOP_WHERE}}</div>
   </div>
@@ -75,9 +84,9 @@
   <div class="silver-dots" id="dots"></div>
   <div class="top-fade"></div>
   <div class="ui">
-    <div class="vert fade-in">Quiet hours hold new growth</div>
-    <div class="art-title fade-in" id="art-title">Wake The Quiet Hours</div>
-    <div class="art-sub fade-in">where closed doors still bloom<span class="zh">讓打烊後的時間也有生意</span></div>
+    <div class="vert fade-in">{{BIG_VERT}}</div>
+    <div class="art-title fade-in" id="art-title">{{BIG_ART}}</div>
+    <div class="art-sub fade-in">{{BIG_ARTSUB}}</div>
     <div class="p2blocks fade-in">
       <div class="col" id="questions">{{SHOP_QUESTIONS}}</div>
       <div class="col">

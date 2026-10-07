@@ -78,6 +78,20 @@ SHOWCASE_TEXT = {
 }
 
 
+# the big words on the demo pages: Chinese on the 繁/EN pages (English underneath), English on the English-only ones
+SHOWCASE_BIG = {
+    True: {"BIG_H1": "OPEN 24/7", "BIG_VOL": "its assistant never sleeps", "BIG_LIVE": "LIVE DEMO:",
+           "BIG_ANSWERS": "ANSWERS 24/7", "BIG_ASK": "ASK IT NOW", "BIG_MINE": "MAKE IT YOURS:",
+           "BIG_WHAT": "Paste your website,<br>ready in seconds", "BIG_VERT": "Quiet hours hold new growth",
+           "BIG_ART": "Wake The Quiet Hours", "BIG_ARTSUB": "where closed doors still bloom"},
+    False: {"BIG_H1": "全天營業", "BIG_VOL": "打烊了，它還在接客", "BIG_LIVE": "現場示範：",
+            "BIG_ANSWERS": "24 小時回覆客人<span class='sub'>answers 24/7</span>", "BIG_ASK": "現在問問它",
+            "BIG_MINE": "做一個你自己的：", "BIG_WHAT": "貼上你的網址<br>幾秒鐘做好<span class='sub'>paste your website, ready in seconds</span>",
+            "BIG_VERT": "夜裡也有新客人", "BIG_ART": "打烊後也有生意",
+            "BIG_ARTSUB": "門關了，生意還開著<span class='sub'>where closed doors still bloom</span>"},
+}
+
+
 def showcase_fill(body: str, kind: str = "", english: bool = False) -> str:
     """The two-page demo of one business: an industry demo (its data inline) or, without a kind,
     a business's own demo (the page fetches it from /api/trial/<slug>). English: no 繁體 at all."""
@@ -91,10 +105,10 @@ def showcase_fill(body: str, kind: str = "", english: bool = False) -> str:
             "SHOP_TITLE": esc(name or "Your assistant"), "SHOP_NAME": esc(name), "SHOP_WHERE": esc(d["where"] if d else ""),
             "SHOP_LINES": "".join(f"<p>{esc(t)}</p>" for t in questions * 2),
             "SHOP_QUESTIONS": "".join(f'<div class="line">{esc(t)}</div>' for t in questions),
-            "DEEP_LANG": "en" if english else "zh", **SHOWCASE_TEXT[english]}
+            "DEEP_LANG": "en" if english else "zh", **SHOWCASE_TEXT[english], **SHOWCASE_BIG[english]}
     for key, value in fill.items():
         body = body.replace("{{" + key + "}}", value)
-    return _ZH_SPAN.sub("", body).replace('<html lang="zh-CN">', '<html lang="en">', 1) if english else body
+    return _ZH_SPAN.sub("", body).replace('<html lang="zh-TW">', '<html lang="en">', 1) if english else body
 # Per IP address: messages a minute, and new visitor ids an hour (each new
 # visitor pings the owner, so this is what keeps a script from spamming them).
 IP_MESSAGES_PER_MINUTE = int(os.environ.get("WEB_IP_MESSAGES_PER_MINUTE", "20"))
