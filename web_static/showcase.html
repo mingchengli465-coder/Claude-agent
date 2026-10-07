@@ -25,6 +25,16 @@
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 #missing{position:fixed;inset:0;z-index:60;background:#000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;font-family:'Cinzel',serif;text-align:center;padding:24px}
 .sub{display:block;margin-top:6px;font-family:'Montserrat',"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;font-weight:400;font-size:clamp(.62rem,.85vw,.8rem);letter-spacing:.12em;text-transform:none;color:rgba(210,225,240,.6);text-shadow:none}
+.btn{text-align:center}
+.btn .sub{display:block;margin:3px 0 0;font-size:.9em;letter-spacing:.2em;color:rgba(0,0,0,.6)}
+.label .sub{display:inline;margin:0 0 0 .7em;vertical-align:middle}
+@media (min-width:761px){.report .label .sub{display:block;margin:4px 0 0}}
+@media (max-width:760px){
+  html[lang^=zh] .hero{top:27%}
+  html[lang^=zh] .body{height:5.4em}
+  .event .label{letter-spacing:.08em}
+  .event .label .sub{display:block;margin:4px 0 0}
+}
 .art-sub .sub{font-size:clamp(.8rem,1.3vw,1.1rem);letter-spacing:.2em}
 @media (max-width:760px){
   .brand{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:92vw;font-size:clamp(1.2rem,6.4vw,1.9rem)}
