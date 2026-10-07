@@ -78,17 +78,18 @@ SHOWCASE_TEXT = {
 }
 
 
-# the big words on the demo pages: Chinese on the 繁/EN pages (English underneath), English on the English-only ones
+# the big words on the demo pages stay English; the 繁/EN pages add a small Chinese line underneath
 SHOWCASE_BIG = {
     True: {"BIG_H1": "OPEN 24/7", "BIG_VOL": "its assistant never sleeps", "BIG_LIVE": "LIVE DEMO:",
            "BIG_ANSWERS": "ANSWERS 24/7", "BIG_ASK": "ASK IT NOW", "BIG_MINE": "MAKE IT YOURS:",
            "BIG_WHAT": "Paste your website,<br>ready in seconds", "BIG_VERT": "Quiet hours hold new growth",
            "BIG_ART": "Wake The Quiet Hours", "BIG_ARTSUB": "where closed doors still bloom"},
-    False: {"BIG_H1": "全天營業", "BIG_VOL": "打烊了，它還在接客", "BIG_LIVE": "現場示範：",
-            "BIG_ANSWERS": "24 小時回覆客人<span class='sub'>answers 24/7</span>", "BIG_ASK": "現在問問它",
-            "BIG_MINE": "做一個你自己的：", "BIG_WHAT": "貼上你的網址<br>幾秒鐘做好<span class='sub'>paste your website, ready in seconds</span>",
-            "BIG_VERT": "夜裡也有新客人", "BIG_ART": "打烊後也有生意",
-            "BIG_ARTSUB": "門關了，生意還開著<span class='sub'>where closed doors still bloom</span>"},
+    False: {"BIG_H1": "OPEN 24/7", "BIG_VOL": "its assistant never sleeps<span class='sub'>打烊了，它還在接客</span>",
+            "BIG_LIVE": "LIVE DEMO:", "BIG_ANSWERS": "ANSWERS 24/7<span class='sub'>24 小時回覆客人</span>",
+            "BIG_ASK": "ASK IT NOW", "BIG_MINE": "MAKE IT YOURS:",
+            "BIG_WHAT": "Paste your website,<br>ready in seconds<span class='sub'>貼上你的網址，幾秒鐘做好</span>",
+            "BIG_VERT": "Quiet hours hold new growth", "BIG_ART": "Wake The Quiet Hours",
+            "BIG_ARTSUB": "where closed doors still bloom<span class='sub'>打烊後也有生意</span>"},
 }
 
 
