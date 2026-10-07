@@ -56,6 +56,8 @@ async def main():
         assert 'data-src=""' in home, "no whale video yet: the page draws its own deep sea"
         assert 'id="lang"' in home and 'data-k="heroH1"' in home and '"heroH1": ["永不打烊", "ALWAYS ON"]' in home
         assert 'localStorage.setItem("siteLang"' in home, "繁 / EN on the homepage"
+        assert 'var BIG = ["heroH1"' in home and '"finalArt"]' in home and '<span class="sub">' in home, \
+            "繁 mode: the big words stay English, the Chinese underneath in small"
         assert "复制" not in home, "繁體 and English only"
         assert 'data-href-en="trial-en"' in home, "English readers go to the English trial"
         assert "html{scroll-snap-type:none}" in home, "phones scroll freely (Safari's snapping pulled swipes back)"

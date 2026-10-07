@@ -43,7 +43,7 @@ async def main():
         assert '"kind": "bnb"' in page and "{{" not in page and "aiChatAsk(text)" in page
         assert "Is a double room free next Friday and Saturday?" in page and "w.dataset.demo = demo" in page
         assert 'window.DEEP_LANG = "zh"' in page and 'data-text="OPEN 24/7"' in page, "the big words in English"
-        assert "Wake The Quiet Hours" in page and "<span class='sub'>打烊後也有生意</span>" in page, "Chinese underneath"
+        assert "Wake The Quiet Hours" in page and "<span class='sub'>打烊後也有生意</span>" in page and "LIVE DEMO:<span class='sub'>現場示範</span>" in page, "Chinese underneath"
         assert "全天營業" not in page and "{{BIG" not in page
         r = await client.get("/demo-bnb-en")
         en = await r.text()
