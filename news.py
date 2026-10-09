@@ -272,21 +272,29 @@ def parse_events(text: str, headlines: list[Item], videos: list[Item], n: int = 
     return events[:n]
 
 
-async def choose(attempts: list[tuple], prompt: str) -> str:
-    """The AI's answer, trying each (client, model) in turn."""
+async def choose(attempts: list[tuple], prompt: str, parse) -> list[Event]:
+    """The AI's events, trying each (client, model) in turn: first in strict JSON mode, then plain
+    (not every model takes response_format); an answer that isn't usable moves on to the next model."""
     last: Exception | None = None
     for api, model in attempts:
-        try:
-            response = await asyncio.wait_for(api.chat.completions.create(
-                model=model, temperature=0.3, max_tokens=4000,
-                messages=[{"role": "user", "content": prompt}]), AI_TIMEOUT)
+        for strict in (True, False):
+            kwargs = dict(model=model, temperature=0.3, max_tokens=8000,
+                          messages=[{"role": "user", "content": prompt}])
+            if strict:
+                kwargs["response_format"] = {"type": "json_object"}
+            try:
+                response = await asyncio.wait_for(api.chat.completions.create(**kwargs), AI_TIMEOUT)
+            except Exception as exc:  # noqa: BLE001 - plain mode next, then the next model
+                logger.warning("新闻：%s%s 失败：%s", model, "（JSON 模式）" if strict else "", exc)
+                last = exc
+                continue
             text = (response.choices[0].message.content or "").strip() if response.choices else ""
-            if text:
-                return text
-            last = RuntimeError(f"{model} 返回空内容")
-        except Exception as exc:  # noqa: BLE001 - try the next model
-            logger.warning("新闻：%s 失败：%s", model, exc)
-            last = exc
+            try:
+                return parse(text)
+            except ValueError as exc:
+                logger.warning("新闻：%s 的回答用不了（%s）：%s", model, exc, text[:300].replace("\n", " "))
+                last = exc
+                break  # same model, same prompt: likely the same answer; try the next model
     raise RuntimeError(f"AI 都失败了：{last}")
 
 
@@ -357,7 +365,7 @@ async def build_digest(attempts: list[tuple], now: dt.datetime, session: ClientS
     if len(headlines) < EVENTS:
         raise RuntimeError(f"只拿到 {len(headlines)} 条新闻，来源可能都打不开：{'、'.join(news_failed) or '（无）'}")
     logger.info("新闻：%s 条标题、%s 条视频，交给 AI 挑选", len(headlines), len(videos))
-    events = parse_events(await choose(attempts, build_prompt(headlines, videos)), headlines, videos)
+    events = await choose(attempts, build_prompt(headlines, videos), lambda text: parse_events(text, headlines, videos))
     return render(events, day or now.date(), failed=len(news_failed))
 
 
