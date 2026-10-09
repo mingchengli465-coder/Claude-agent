@@ -82,11 +82,12 @@ print("PASS a feed that fails is listed and skipped")
 # --- the AI's pick becomes the message -------------------------------------------------------
 class FakeAI:
     def __init__(self, answer=None, fail=False):
-        self.answer, self.fail, self.prompts = answer, fail, []
+        self.answer, self.fail, self.prompts, self.kwargs = answer, fail, [], []
         self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
 
     async def create(self, model, messages, **kw):
         self.prompts.append(messages[-1]["content"])
+        self.kwargs.append(kw)
         if self.fail:
             raise RuntimeError("no balance")
         msg = types.SimpleNamespace(content=self.answer)
@@ -99,15 +100,17 @@ answer = "好的：\n" + json.dumps({"events": [
     {"title": "", "summary": "没有标题的会被跳过", "source": 3},
     {"title": "沿海城市地震", "summary": "", "source": 99, "video": 42, "x_query": ""},
 ]}, ensure_ascii=False)
-broken, good = FakeAI(fail=True), FakeAI(answer)
+broken, chatty, good = FakeAI(fail=True), FakeAI("好的，我来整理今天的新闻。"), FakeAI(answer)
 messages = asyncio.run(news.build_digest(
-    [(broken, "deepseek-flash"), (good, "free-model")], NOW, session=session,
+    [(broken, "deepseek-flash"), (chatty, "chatty"), (good, "free-model")], NOW, session=session,
     feeds=[("BBC", "https://bbc/rss"), ("DW", "https://dw/rdf"), ("More", "https://more/rss"), ("Gone", "https://gone/rss")],
     channels=[("BBC News", "UCbbc")], day=dt.date(2026, 10, 9)))
 prompt = good.prompts[0]
 assert "H1 [BBC] Ceasefire agreed after talks in Cairo" in prompt and "V1 [BBC News] Ceasefire deal explained" in prompt
 assert "Last week's story" not in prompt
-assert len(broken.prompts) == 1, "DeepSeek failed, the next model answered"
+assert len(broken.prompts) == 2, "DeepSeek failed in JSON mode and plain mode"
+assert len(chatty.prompts) == 1, "an answer without JSON moves on to the next model"
+assert good.kwargs[0]["response_format"] == {"type": "json_object"} and good.kwargs[0]["max_tokens"] == 8000
 text = "\n".join(messages)
 assert text.startswith("🌍 <b>今日世界十大事件</b>　10月9日 周五"), text[:60]
 assert "1. <b>开罗谈判达成停火</b>\n双方同意停火并交换囚犯。" in text
