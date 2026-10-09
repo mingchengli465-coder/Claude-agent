@@ -75,7 +75,7 @@ PER_FEED = 25           # headlines kept from one feed
 MAX_HEADLINES = 220     # what the AI reads
 MAX_VIDEOS = 160
 EVENTS = 10
-AI_TIMEOUT = 240        # seconds: a long read for the model
+AI_TIMEOUT = 300        # seconds: a long read for the model
 CHUNK = 3800            # Telegram allows 4096 characters a message
 _TAG = re.compile(r"<[^>]+>")
 _SPACE = re.compile(r"\s+")
@@ -272,29 +272,51 @@ def parse_events(text: str, headlines: list[Item], videos: list[Item], n: int = 
     return events[:n]
 
 
+def _variants(api) -> list[tuple[str, dict]]:
+    """How to ask one model, in order. DeepSeek thinks by default and its thinking spends the whole
+    token budget on a list this long, leaving the answer empty: so ask it not to think, and in JSON
+    mode (which itself sometimes comes back empty, hence the plain retry). Thinking left on is last."""
+    json_mode = {"response_format": {"type": "json_object"}}
+    if "deepseek" in str(getattr(api, "base_url", "")):
+        off = {"extra_body": {"thinking": {"type": "disabled"}}}
+        return [("不思考+JSON", {**json_mode, **off, "max_tokens": 8000}), ("不思考", {**off, "max_tokens": 8000}),
+                ("思考", {"max_tokens": 32000})]
+    return [("JSON", {**json_mode, "max_tokens": 8000}), ("普通", {"max_tokens": 8000})]
+
+
+def _answer(response) -> tuple[str, str]:
+    """(content, why it may be empty) of a chat completion."""
+    if not response.choices:
+        return "", "没有 choices"
+    choice = response.choices[0]
+    text = (choice.message.content or "").strip()
+    extra = getattr(choice.message, "model_extra", None) or {}
+    thought = getattr(choice.message, "reasoning_content", None) or extra.get("reasoning_content") or ""
+    note = f"finish_reason={getattr(choice, 'finish_reason', '')}，思考 {len(thought)} 字"
+    if not text and "{" in thought:
+        return thought, note  # answered inside its thinking: parse_events finds the JSON in there
+    return text, note
+
+
 async def choose(attempts: list[tuple], prompt: str, parse) -> list[Event]:
-    """The AI's events, trying each (client, model) in turn: first in strict JSON mode, then plain
-    (not every model takes response_format); an answer that isn't usable moves on to the next model."""
+    """The AI's events, trying each (client, model) in each of its ways in turn."""
     last: Exception | None = None
     for api, model in attempts:
-        for strict in (True, False):
-            kwargs = dict(model=model, temperature=0.3, max_tokens=8000,
-                          messages=[{"role": "user", "content": prompt}])
-            if strict:
-                kwargs["response_format"] = {"type": "json_object"}
+        for label, extra in _variants(api):
             try:
-                response = await asyncio.wait_for(api.chat.completions.create(**kwargs), AI_TIMEOUT)
-            except Exception as exc:  # noqa: BLE001 - plain mode next, then the next model
-                logger.warning("新闻：%s%s 失败：%s", model, "（JSON 模式）" if strict else "", exc)
+                response = await asyncio.wait_for(api.chat.completions.create(
+                    model=model, temperature=0.3, messages=[{"role": "user", "content": prompt}], **extra), AI_TIMEOUT)
+            except Exception as exc:  # noqa: BLE001 - the next way of asking, then the next model
+                logger.warning("新闻：%s（%s）失败：%s", model, label, exc)
                 last = exc
                 continue
-            text = (response.choices[0].message.content or "").strip() if response.choices else ""
+            text, note = _answer(response)
             try:
                 return parse(text)
             except ValueError as exc:
-                logger.warning("新闻：%s 的回答用不了（%s）：%s", model, exc, text[:300].replace("\n", " "))
+                logger.warning("新闻：%s（%s）的回答用不了（%s；%s）：%s", model, label, exc, note,
+                               text[:300].replace("\n", " "))
                 last = exc
-                break  # same model, same prompt: likely the same answer; try the next model
     raise RuntimeError(f"AI 都失败了：{last}")
 
 

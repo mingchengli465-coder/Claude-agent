@@ -81,8 +81,8 @@ print("PASS a feed that fails is listed and skipped")
 
 # --- the AI's pick becomes the message -------------------------------------------------------
 class FakeAI:
-    def __init__(self, answer=None, fail=False):
-        self.answer, self.fail, self.prompts, self.kwargs = answer, fail, [], []
+    def __init__(self, answer=None, fail=False, base_url="https://openrouter.ai/api/v1"):
+        self.answer, self.fail, self.prompts, self.kwargs, self.base_url = answer, fail, [], [], base_url
         self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
 
     async def create(self, model, messages, **kw):
@@ -100,7 +100,7 @@ answer = "好的：\n" + json.dumps({"events": [
     {"title": "", "summary": "没有标题的会被跳过", "source": 3},
     {"title": "沿海城市地震", "summary": "", "source": 99, "video": 42, "x_query": ""},
 ]}, ensure_ascii=False)
-broken, chatty, good = FakeAI(fail=True), FakeAI("好的，我来整理今天的新闻。"), FakeAI(answer)
+broken, chatty, good = FakeAI(fail=True), FakeAI("好的，我来整理今天的新闻。", base_url="https://api.deepseek.com"), FakeAI(answer)
 messages = asyncio.run(news.build_digest(
     [(broken, "deepseek-flash"), (chatty, "chatty"), (good, "free-model")], NOW, session=session,
     feeds=[("BBC", "https://bbc/rss"), ("DW", "https://dw/rdf"), ("More", "https://more/rss"), ("Gone", "https://gone/rss")],
@@ -108,9 +108,11 @@ messages = asyncio.run(news.build_digest(
 prompt = good.prompts[0]
 assert "H1 [BBC] Ceasefire agreed after talks in Cairo" in prompt and "V1 [BBC News] Ceasefire deal explained" in prompt
 assert "Last week's story" not in prompt
-assert len(broken.prompts) == 2, "DeepSeek failed in JSON mode and plain mode"
-assert len(chatty.prompts) == 1, "an answer without JSON moves on to the next model"
-assert good.kwargs[0]["response_format"] == {"type": "json_object"} and good.kwargs[0]["max_tokens"] == 8000
+assert len(broken.prompts) == 2, "an erroring model: JSON mode, then plain, then the next model"
+assert [k.get("extra_body") for k in chatty.kwargs] == [{"thinking": {"type": "disabled"}}] * 2 + [None], chatty.kwargs
+assert "response_format" in chatty.kwargs[0] and "response_format" not in chatty.kwargs[1]
+assert chatty.kwargs[2]["max_tokens"] == 32000, "DeepSeek with thinking on gets room to think, last"
+assert good.kwargs[0]["response_format"] == {"type": "json_object"} and "extra_body" not in good.kwargs[0]
 text = "\n".join(messages)
 assert text.startswith("🌍 <b>今日世界十大事件</b>　10月9日 周五"), text[:60]
 assert "1. <b>开罗谈判达成停火</b>\n双方同意停火并交换囚犯。" in text
@@ -123,6 +125,11 @@ assert "没有标题" not in text, "an event without a title is skipped"
 assert "3. <b>沿海城市地震</b>" in text and "x.com/search?q=%E6%B2%BF" in text, "no keywords: search the title"
 assert "（1 个来源今天没打开）" in text
 print("PASS the AI's ten become a Chinese list with article, YouTube and X links")
+
+# an empty answer whose JSON sits in the thinking is still used
+thinker = types.SimpleNamespace(choices=[types.SimpleNamespace(finish_reason="stop", message=types.SimpleNamespace(
+    content="", model_extra={"reasoning_content": "想一想… " + answer}))])
+assert news._answer(thinker)[0].endswith("}") and "思考" in news._answer(thinker)[1]
 
 # every model failing, or too few headlines, is an error to report, not an empty message
 for kwargs, why in ((dict(attempts=[(FakeAI(fail=True), "m")]), "AI 都失败了"),
