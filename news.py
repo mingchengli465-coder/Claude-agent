@@ -88,14 +88,16 @@ PROMPT = """你是国际新闻编辑。下面是过去 {hours} 小时各大国�
 - 多家媒体都在报道的事件更重要；同一件事只算一次
 - 不要娱乐八卦，体育只有特别重大时才选
 - 每件事写一个简体中文标题（20 字内）和一两句中文摘要（60 字内），只写新闻里有的事实
+- 标题、摘要、视频标题全部翻译成简体中文，不要留英文句子（人名、地名、机构名可以保留常用英文缩写，如 NATO、OpenAI）
 
 每件事要给：
 - "source"：最能代表这件事的一条 H 编号（数字），尽量选原媒体，少选 Google News
 - "video"：讲这件事的一条 V 编号（数字）；没有真正对应的视频就填 null，宁缺毋滥
+- "video_title"：这条视频标题的简体中文翻译（没有视频就填 ""）
 - "x_query"：在 X 上搜这件事用的英文关键词（2 到 5 个词）
 
 只输出 JSON，格式：
-{{"events": [{{"title": "...", "summary": "...", "source": 3, "video": 12, "x_query": "..."}}]}}
+{{"events": [{{"title": "以色列与哈马斯在开罗达成停火", "summary": "双方同意从周五起停火并交换被扣押人员，埃及和卡塔尔担任调解方。", "source": 3, "video": 12, "video_title": "停火协议意味着什么", "x_query": "Israel Hamas ceasefire Cairo"}}]}}
 
 新闻标题：
 {headlines}
@@ -121,6 +123,7 @@ class Event:
     source: Item | None
     video: Item | None
     x_query: str
+    video_title: str = ""
 
 
 # --------------------------------------------------------------------------- #
@@ -266,7 +269,8 @@ def parse_events(text: str, headlines: list[Item], videos: list[Item], n: int = 
             continue
         events.append(Event(title=title, summary=str(row.get("summary") or "").strip(),
                             source=_pick(headlines, row.get("source")), video=_pick(videos, row.get("video")),
-                            x_query=str(row.get("x_query") or "").strip() or title))
+                            x_query=str(row.get("x_query") or "").strip() or title,
+                            video_title=str(row.get("video_title") or "").strip()))
     if not events:
         raise ValueError("AI 没有选出任何事件")
     return events[:n]
@@ -320,6 +324,54 @@ async def choose(attempts: list[tuple], prompt: str, parse) -> list[Event]:
     raise RuntimeError(f"AI 都失败了：{last}")
 
 
+_CJK = re.compile(r"[\u3400-\u9fff]")
+
+TRANSLATE = """把下面每一项的 title、summary、video_title 翻译成简体中文（人名、地名、机构名可保留常用英文缩写）。
+已经是中文的照抄。按原来的顺序，只输出 JSON：{{"items": [{{"title": "...", "summary": "...", "video_title": "..."}}]}}
+
+{items}
+"""
+
+
+def chinese(text: str) -> bool:
+    """Mostly Chinese already: empty, or more CJK characters than Latin letters."""
+    return not text or len(_CJK.findall(text)) >= len(re.findall(r"[A-Za-z]", text))
+
+
+def needs_translation(e: Event) -> bool:
+    video_title = e.video_title if e.video_title else (e.video.title if e.video else "")
+    return not (chinese(e.title) and chinese(e.summary) and chinese(video_title))
+
+
+async def translate(attempts: list[tuple], events: list[Event]) -> list[Event]:
+    """A second pass for the events the AI left in English. Kept as they are if it fails."""
+    todo = [e for e in events if needs_translation(e)]
+    if not todo:
+        return events
+    rows = [{"title": e.title, "summary": e.summary,
+             "video_title": e.video_title or (e.video.title if e.video else "")} for e in todo]
+
+    def parse(text: str) -> list[dict]:
+        found = _JSON.search(text or "")
+        items = json.loads(found.group(0)).get("items") if found else None
+        if not isinstance(items, list) or len(items) != len(todo):
+            raise ValueError("翻译的条数对不上")
+        return items
+
+    try:
+        done = await choose(attempts, TRANSLATE.format(items=json.dumps(rows, ensure_ascii=False, indent=1)), parse)
+    except RuntimeError as exc:
+        logger.warning("新闻：%s 条没翻译成中文：%s", len(todo), exc)
+        return events
+    for e, row in zip(todo, done):
+        e.title = str(row.get("title") or e.title).strip()
+        e.summary = str(row.get("summary") or e.summary).strip()
+        if e.video is not None:
+            e.video_title = str(row.get("video_title") or e.video_title).strip()
+    logger.info("新闻：%s 条补翻成中文", len(todo))
+    return events
+
+
 # --------------------------------------------------------------------------- #
 # The message
 # --------------------------------------------------------------------------- #
@@ -345,16 +397,17 @@ def render(events: list[Event], day: dt.date, failed: int = 0) -> list[str]:
     for n, e in enumerate(events, 1):
         links = []
         if e.source is not None:
-            links.append("📰 " + _a(e.source.link, e.source.source))
+            links.append("📰 " + _a(e.source.link, f"原文·{e.source.source}"))
         if e.video is not None:
-            links.append("▶️ " + _a(e.video.link, f"YouTube · {e.video.source}"))
+            links.append("▶️ " + _a(e.video.link, f"视频·{e.video.source}：{e.video_title}" if e.video_title
+                                    else f"视频·{e.video.source}"))
         else:
-            links.append("▶️ " + _a(youtube_search(e.x_query), "YouTube 今日视频"))
-        links.append("𝕏 " + _a(x_search(e.x_query), "X 上的讨论"))
+            links.append("▶️ " + _a(youtube_search(e.x_query), "YouTube 今日相关视频"))
+        links.append("𝕏 " + _a(x_search(e.x_query), "X 热门讨论"))
         body = f"\n{n}. <b>{html.escape(e.title)}</b>\n"
         if e.summary:
             body += html.escape(e.summary) + "\n"
-        blocks.append(body + "　".join(links) + "\n")
+        blocks.append(body + "\n".join(links) + "\n")
     tail = "\n<i>新闻来自 BBC、半岛电视台、卫报、纽约时报、NPR、DW、France 24 等，AI 整理成中文。</i>"
     if failed:
         tail += f"\n<i>（{failed} 个来源今天没打开）</i>"
@@ -388,6 +441,8 @@ async def build_digest(attempts: list[tuple], now: dt.datetime, session: ClientS
         raise RuntimeError(f"只拿到 {len(headlines)} 条新闻，来源可能都打不开：{'、'.join(news_failed) or '（无）'}")
     logger.info("新闻：%s 条标题、%s 条视频，交给 AI 挑选", len(headlines), len(videos))
     events = await choose(attempts, build_prompt(headlines, videos), lambda text: parse_events(text, headlines, videos))
+    events = await translate(attempts, events)
+    logger.info("新闻：选出 %s", "；".join(e.title for e in events))
     return render(events, day or now.date(), failed=len(news_failed))
 
 
