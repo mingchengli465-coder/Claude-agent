@@ -95,7 +95,8 @@ class FakeAI:
 
 
 answer = "好的：\n" + json.dumps({"events": [
-    {"title": "开罗谈判达成停火", "summary": "双方同意停火并交换囚犯。", "source": 1, "video": 1, "x_query": "Cairo ceasefire"},
+    {"title": "开罗谈判达成停火", "summary": "双方同意停火并交换囚犯。", "source": 1, "video": 1, "video_title": "停火协议解读",
+     "x_query": "Cairo ceasefire"},
     {"title": "央行意外降息", "summary": "降息出乎市场预期。", "source": "H2", "video": None, "x_query": "central bank rate cut"},
     {"title": "", "summary": "没有标题的会被跳过", "source": 3},
     {"title": "沿海城市地震", "summary": "", "source": 99, "video": 42, "x_query": ""},
@@ -116,15 +117,41 @@ assert good.kwargs[0]["response_format"] == {"type": "json_object"} and "extra_b
 text = "\n".join(messages)
 assert text.startswith("🌍 <b>今日世界十大事件</b>　10月9日 周五"), text[:60]
 assert "1. <b>开罗谈判达成停火</b>\n双方同意停火并交换囚犯。" in text
-assert '<a href="https://www.bbc.co.uk/news/world-1">BBC</a>' in text
-assert '<a href="https://www.youtube.com/watch?v=abc123XYZ_0">YouTube · BBC News</a>' in text
+assert '<a href="https://www.bbc.co.uk/news/world-1">原文·BBC</a>' in text
+assert '<a href="https://www.youtube.com/watch?v=abc123XYZ_0">视频·BBC News：停火协议解读</a>' in text
 assert 'href="https://x.com/search?q=Cairo+ceasefire&amp;src=typed_query&amp;f=top"' in text
-assert "2. <b>央行意外降息</b>" in text and '<a href="https://www.dw.com/en/rates">DW</a>' in text
-assert 'href="https://www.youtube.com/results?search_query=central+bank+rate+cut&amp;sp=EgIIAg%3D%3D">YouTube 今日视频</a>' in text
+assert "2. <b>央行意外降息</b>" in text and '<a href="https://www.dw.com/en/rates">原文·DW</a>' in text
+assert 'href="https://www.youtube.com/results?search_query=central+bank+rate+cut&amp;sp=EgIIAg%3D%3D">YouTube 今日相关视频</a>' in text
 assert "没有标题" not in text, "an event without a title is skipped"
 assert "3. <b>沿海城市地震</b>" in text and "x.com/search?q=%E6%B2%BF" in text, "no keywords: search the title"
 assert "（1 个来源今天没打开）" in text
 print("PASS the AI's ten become a Chinese list with article, YouTube and X links")
+
+# whatever the AI leaves in English gets a second, translating pass
+english = json.dumps({"events": [
+    {"title": "Ceasefire agreed in Cairo", "summary": "Both sides agreed to stop fighting.", "source": 1, "video": 1,
+     "x_query": "Cairo ceasefire"},
+    {"title": "央行意外降息", "summary": "降息出乎市场预期。", "source": 2, "video": None, "x_query": "rate cut"}]})
+translation = json.dumps({"items": [{"title": "开罗达成停火", "summary": "双方同意停止交火。", "video_title": "停火协议解读"}]},
+                         ensure_ascii=False)
+
+
+class TwoAnswers(FakeAI):
+    def __init__(self, *answers):
+        super().__init__(answers[0]); self.answers = list(answers)
+    async def create(self, model, messages, **kw):
+        self.answer = self.answers[min(len(self.prompts), len(self.answers) - 1)]
+        return await super().create(model, messages, **kw)
+
+
+ai = TwoAnswers(english, translation)
+out = "\n".join(asyncio.run(news.build_digest([(ai, "m")], NOW, session=session, channels=[("BBC News", "UCbbc")],
+                                              feeds=[("BBC", "https://bbc/rss"), ("More", "https://more/rss")])))
+assert "1. <b>开罗达成停火</b>\n双方同意停止交火。" in out and "Ceasefire agreed" not in out, out
+assert "视频·BBC News：停火协议解读" in out and "2. <b>央行意外降息</b>" in out
+assert len(ai.prompts) == 2 and "Ceasefire agreed in Cairo" in ai.prompts[1] and "央行意外降息" not in ai.prompts[1]
+assert news.chinese("NATO 峰会在海牙召开") and not news.chinese("Ceasefire agreed in Cairo") and news.chinese("")
+print("PASS anything left in English is translated into Chinese in a second pass")
 
 # an empty answer whose JSON sits in the thinking is still used
 thinker = types.SimpleNamespace(choices=[types.SimpleNamespace(finish_reason="stop", message=types.SimpleNamespace(
