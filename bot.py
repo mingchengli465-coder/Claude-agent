@@ -40,6 +40,7 @@ import tweet as tweet_mod
 import agent as agent_mod
 import bluesky
 import messenger as messenger_mod
+import news as news_mod
 import demos as demos_mod
 import leadfinder
 import outreach as outreach_mod
@@ -1175,6 +1176,98 @@ def schedule_visits_report(application: Application) -> None:
     logger.info("每日访客报告：%s %s", VISITS_REPORT_TIME, VISITS_TIMEZONE)
 
 
+# --- the day's ten world events (news.py) ---------------------------------------------------
+NEWS_CHAT_IDS = [c.strip() for c in os.environ.get("NEWS_CHAT_ID", "").split(",") if c.strip()]
+NEWS_TIME = os.environ.get("NEWS_TIME", "08:00").strip()
+NEWS_TIMEZONE = os.environ.get("NEWS_TIMEZONE", "Asia/Shanghai").strip()
+NEWS_RETRIES = 2            # more tries, 30 minutes apart, before telling the chat it failed
+news_lock = asyncio.Lock()
+
+
+def news_state() -> news_mod.State:
+    path = os.environ.get("NEWS_STATE_PATH", "").strip()
+    return news_mod.State(Path(path) if path else cs.CS_DB_PATH.with_name("news_state.json"))
+
+
+def news_send_time() -> dt.time | None:
+    try:
+        hour, minute = (int(part) for part in NEWS_TIME.split(":"))
+        return dt.time(hour=hour, minute=minute, tzinfo=ZoneInfo(NEWS_TIMEZONE))
+    except (ValueError, KeyError):
+        logger.error("NEWS_TIME=%r 或 NEWS_TIMEZONE=%r 无法解析，每日新闻不发", NEWS_TIME, NEWS_TIMEZONE)
+        return None
+
+
+async def send_news(bot, chat_ids: list[str], *, scheduled: bool) -> bool:
+    """Build today's ten events and send them to chat_ids. True when they went out."""
+    async with news_lock:
+        now = dt.datetime.now(ZoneInfo(NEWS_TIMEZONE))
+        state = news_state()
+        if scheduled and state.last() == now.date().isoformat():
+            return True  # a restart's catch-up and the daily job can meet: once a day is enough
+        messages = await news_mod.build_digest(chat_attempts(), now.astimezone(dt.timezone.utc), day=now.date())
+        sent = False
+        for chat_id in chat_ids:
+            try:
+                for text in messages:
+                    await bot.send_message(chat_id=int(chat_id), text=text, parse_mode="HTML",
+                                           disable_web_page_preview=True)
+                sent = True
+            except TelegramError as exc:
+                logger.error("新闻发不到 chat %s：%s（先在 Telegram 打开这个机器人点 Start）", chat_id, exc)
+        if sent and scheduled:
+            state.mark(now.date())
+        logger.info("今日新闻%s：%s 条消息", "已发出" if sent else "没发出去", len(messages))
+        return sent
+
+
+async def news_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    attempt = (context.job.data or {}).get("attempt", 0) if context.job else 0
+    try:
+        if await send_news(context.bot, NEWS_CHAT_IDS, scheduled=True):
+            return
+        error = "Telegram 发不出去（先打开机器人点 Start）"
+    except Exception as exc:  # noqa: BLE001 - try again later, then say so
+        logger.exception("今日新闻失败（第 %s 次）", attempt + 1)
+        error = str(exc)
+    if attempt < NEWS_RETRIES and context.job_queue is not None:
+        context.job_queue.run_once(news_job, when=1800, data={"attempt": attempt + 1}, name="news-retry")
+        return
+    for chat_id in NEWS_CHAT_IDS:
+        try:
+            await context.bot.send_message(chat_id=int(chat_id), text=f"⚠️ 今天的世界新闻没整理出来：{error[:300]}")
+        except TelegramError:
+            pass
+
+
+async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/news: today's ten events right now, for the chats that get them every day."""
+    chat_id = str(update.effective_chat.id)
+    if chat_id not in NEWS_CHAT_IDS and not is_owner(chat_id):
+        if not await refused(update):
+            await update.effective_message.reply_text("这个机器人没有为你开启每日新闻。")
+        return
+    await update.effective_message.reply_text("🌍 正在整理今天的世界十大事件，大约一两分钟…")
+    try:
+        await send_news(context.bot, [chat_id], scheduled=False)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("/news 失败")
+        await update.effective_message.reply_text(f"⚠️ 没整理出来：{str(exc)[:300]}")
+
+
+def schedule_news(application: Application) -> None:
+    if not NEWS_CHAT_IDS or application.job_queue is None:
+        return
+    when = news_send_time()
+    if when is None:
+        return
+    application.job_queue.run_daily(news_job, time=when, name="news-daily")
+    # after a restart past today's time, a digest not yet sent goes out now
+    if news_mod.due(dt.datetime.now(when.tzinfo), when, news_state().last()):
+        application.job_queue.run_once(news_job, when=60, name="news-catchup")
+    logger.info("每日世界新闻：%s %s，发到 %s", NEWS_TIME, NEWS_TIMEZONE, "、".join(NEWS_CHAT_IDS))
+
+
 # --- cold emails, sent from the owner's Gmail ---------------------------------------------
 leads_db: outreach_mod.Leads | None = None
 # free trials and the personal demo made for each business we email (trials.py)
@@ -2212,6 +2305,7 @@ def main() -> None:
     application.add_handler(CommandHandler("mail", mail_command))
     application.add_handler(CommandHandler("outreach", outreach_command))
     application.add_handler(CommandHandler("outreach_stop", outreach_stop_command))
+    application.add_handler(CommandHandler("news", news_command))
     application.add_handler(CallbackQueryHandler(mail_button, pattern=r"^mail:"))
     application.add_handler(CallbackQueryHandler(reply_button, pattern=r"^reply:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, route_text))
@@ -2224,6 +2318,7 @@ def main() -> None:
     # No more daily 小红书 notes: the owner turned them off. (/xhs is gone too.)
     schedule_daily_tweets(application)
     schedule_visits_report(application)
+    schedule_news(application)
     start_outreach()
     schedule_outreach(application)
 
