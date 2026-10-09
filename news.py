@@ -1,10 +1,12 @@
-"""The day's ten most important world events, with a YouTube video and the X conversation for each.
+"""The day's ten most important events in AI, finance, the world economy and politics, with a YouTube
+video and the X conversation for each. No casualty, disaster or crime stories.
 
 Once a day (NEWS_TIME in NEWS_TIMEZONE) the bot:
-    1. reads the last 36 hours of headlines from international newsrooms' RSS feeds
-       (BBC, Al Jazeera, Guardian, NYT, NPR, DW, France 24, Sky, CNBC, Google News, BBC 中文)
-    2. reads the latest uploads of news channels on YouTube (their public channel feeds)
-    3. asks the AI to pick the ten events that matter most to the world, write each up
+    1. reads the last 36 hours of headlines from RSS feeds: AI and tech (TechCrunch, The Verge,
+       MIT Technology Review, Ars Technica...), business and economy (BBC, NYT, Guardian, Economist,
+       MarketWatch, DW...) and world politics (BBC, NYT, Politico, NPR, Al Jazeera, BBC 中文...)
+    2. reads the latest uploads of business and news channels on YouTube (Bloomberg, CNBC, WSJ, FT...)
+    3. asks the AI to pick the ten that matter most across the four topics, write each up
        in Chinese, and match each to one of those YouTube videos when one is about it
     4. sends the list to NEWS_CHAT_ID: a source article, a YouTube video (or a YouTube
        search of today's uploads when no channel covered it), and an X search of the event
@@ -37,42 +39,60 @@ from aiohttp import ClientSession, ClientTimeout
 
 logger = logging.getLogger(__name__)
 
+# AI, finance, the world economy and major politics; the general world feeds stay for the politics
 FEEDS = [
+    # AI and tech
+    ("TechCrunch", "https://techcrunch.com/category/artificial-intelligence/feed/"),
+    ("The Verge", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"),
+    ("MIT Technology Review", "https://www.technologyreview.com/feed/"),
+    ("Ars Technica", "https://feeds.arstechnica.com/arstechnica/index"),
+    ("Guardian", "https://www.theguardian.com/technology/artificialintelligenceai/rss"),
+    ("NYT", "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"),
+    ("BBC", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
+    ("Google News", "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-US&gl=US&ceid=US:en"),
+    # finance and the economy
+    ("BBC", "https://feeds.bbci.co.uk/news/business/rss.xml"),
+    ("NYT", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"),
+    ("NYT", "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml"),
+    ("Guardian", "https://www.theguardian.com/business/rss"),
+    ("Economist", "https://www.economist.com/finance-and-economics/rss.xml"),
+    ("Economist", "https://www.economist.com/business/rss.xml"),
+    ("MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
+    ("DW", "https://rss.dw.com/rdf/rss-en-bus"),
+    ("Google News", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"),
+    # politics and the world
     ("BBC", "https://feeds.bbci.co.uk/news/world/rss.xml"),
-    ("BBC", "https://feeds.bbci.co.uk/news/rss.xml"),
     ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
     ("Guardian", "https://www.theguardian.com/world/rss"),
     ("NYT", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"),
-    ("NYT", "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"),
-    ("NPR", "https://feeds.npr.org/1004/rss.xml"),
+    ("NYT", "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml"),
+    ("NPR", "https://feeds.npr.org/1014/rss.xml"),
+    ("Politico", "https://rss.politico.com/politics-news.xml"),
     ("DW", "https://rss.dw.com/rdf/rss-en-all"),
     ("France 24", "https://www.france24.com/en/rss"),
-    ("Sky News", "https://feeds.skynews.com/feeds/rss/world.xml"),
-    ("CNBC", "https://www.cnbc.com/id/100727362/device/rss/rss.html"),
-    ("Google News", "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"),
-    ("Google News", "https://news.google.com/rss?hl=en-SG&gl=SG&ceid=SG:en"),
+    ("Google News", "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"),
     ("BBC 中文", "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml"),
 ]
 # News channels on YouTube: https://www.youtube.com/feeds/videos.xml?channel_id=<id> lists the latest uploads
 VIDEO_CHANNELS = [
-    ("BBC News", "UC16niRr50-MSBwiO3YDb3RA"),
+    ("Bloomberg", "UCIALMKvObZNtJ6AmdCLP7Lg"),
+    ("CNBC Television", "UCrp_UI8XtuYfpiqluWLD7Lw"),
+    ("Yahoo Finance", "UCEAZeUIeJs0IjQiqTCdVSIg"),
+    ("WSJ", "UCK7tptUDHh-RYDsdxO1-5QQ"),
+    ("Financial Times", "UCoUxsWakJucWg46KW5RsvPw"),
+    ("The Economist", "UC0p5jTq6Xx_DosDFxVXnWaQ"),
     ("Reuters", "UChqUTb7kYRX8-EiaN3XFrSQ"),
+    ("BBC News", "UC16niRr50-MSBwiO3YDb3RA"),
     ("AP", "UC52X5wxOL_s5yw0dQk7NtgA"),
-    ("Al Jazeera English", "UCNye-wNBqNL5ZzHSJj3l8Bg"),
     ("DW News", "UCknLrEdhRCp1aegoMqRaCZg"),
-    ("Sky News", "UCoMdktPbSTixAyNGwb-UYkQ"),
     ("CNA", "UC83jt4dlz1Gjl58fzQrrKZg"),
-    ("FRANCE 24 English", "UCQfwfsi5VrQ8yKZ-UWmAEFg"),
-    ("Guardian News", "UCHpw8xwDNhU9gdohEcJu4aA"),
-    ("CNN", "UCupvZG-5ko_eiXAupbDfxWw"),
-    ("NBC News", "UCeY0bbntWzzVIaj2z3QigXg"),
-    ("WION", "UC_gUM8rL-Lrg6O3adPW9K1g"),
+    ("Al Jazeera English", "UCNye-wNBqNL5ZzHSJj3l8Bg"),
 ]
 YT_FEED = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
 USER_AGENT = "Mozilla/5.0 (compatible; vinc-news/1.0; +https://github.com/mingchengli465-coder/Claude-agent)"
 WINDOW_HOURS = 36       # headlines older than this are yesterday's news
-PER_FEED = 25           # headlines kept from one feed
-MAX_HEADLINES = 220     # what the AI reads
+PER_FEED = 20           # headlines kept from one feed
+MAX_HEADLINES = 300     # what the AI reads
 MAX_VIDEOS = 160
 EVENTS = 10
 AI_TIMEOUT = 300        # seconds: a long read for the model
@@ -83,21 +103,28 @@ _JSON = re.compile(r"\{.*\}", re.S)
 
 PROMPT = """你是国际新闻编辑。下面是过去 {hours} 小时各大国际媒体的新闻标题（H 开头）和新闻频道在 YouTube 上的最新视频（V 开头）。
 
-请选出对全人类最重要的 {n} 件事，按重要性从高到低排：
-- 优先：战争与和平、外交与重大政策、重大灾难与伤亡、全球经济与市场、科技与科学突破、公共卫生、气候
-- 多家媒体都在报道的事件更重要；同一件事只算一次
-- 不要娱乐八卦，体育只有特别重大时才选
+请选出今天最重要的 {n} 件事，只从这四类里选，按重要性从高到低排：
+- AI：大模型和 AI 公司的发布、融资、收购、监管、芯片和算力
+- 金融：股市、债市、汇率、黄金和大宗商品、央行和利率、大公司财报、加密货币的大事
+- 全球经济：贸易和关税、通胀、GDP 和就业数据、产业政策、能源、供应链
+- 政治：选举、领导人更替、峰会和外交谈判、制裁、重大政策和法律、地缘政治局势的转折
+四类都要有，大致平均（每类 2 到 3 件）；多家媒体都在报道的更重要；同一件事只算一次。
+
+不要选：死伤人数、袭击、空袭、枪击、爆炸、灾难、事故、犯罪、审判和处决、天气、娱乐八卦、体育。
+战争和冲突只选停火、谈判、制裁、对经济和市场的影响这类政治经济进展，摘要里也不要写死伤人数。
+
 - 每件事写一个简体中文标题（20 字内）和一两句中文摘要（60 字内），只写新闻里有的事实
 - 标题、摘要、视频标题全部翻译成简体中文，不要留英文句子（人名、地名、机构名可以保留常用英文缩写，如 NATO、OpenAI）
 
 每件事要给：
+- "category"：这件事属于哪一类，填 "AI"、"金融"、"经济" 或 "政治"
 - "source"：最能代表这件事的一条 H 编号（数字），尽量选原媒体，少选 Google News
 - "video"：讲这件事的一条 V 编号（数字）；没有真正对应的视频就填 null，宁缺毋滥
 - "video_title"：这条视频标题的简体中文翻译（没有视频就填 ""）
 - "x_query"：在 X 上搜这件事用的英文关键词（2 到 5 个词）
 
 只输出 JSON，格式：
-{{"events": [{{"title": "以色列与哈马斯在开罗达成停火", "summary": "双方同意从周五起停火并交换被扣押人员，埃及和卡塔尔担任调解方。", "source": 3, "video": 12, "video_title": "停火协议意味着什么", "x_query": "Israel Hamas ceasefire Cairo"}}]}}
+{{"events": [{{"category": "金融", "title": "美联储宣布降息25个基点", "summary": "美联储将基准利率下调至3.75%，称通胀放缓、就业降温，美股收涨。", "source": 3, "video": 12, "video_title": "美联储降息对市场意味着什么", "x_query": "Fed rate cut"}}]}}
 
 新闻标题：
 {headlines}
@@ -124,6 +151,7 @@ class Event:
     video: Item | None
     x_query: str
     video_title: str = ""
+    category: str = ""
 
 
 # --------------------------------------------------------------------------- #
@@ -270,7 +298,8 @@ def parse_events(text: str, headlines: list[Item], videos: list[Item], n: int = 
         events.append(Event(title=title, summary=str(row.get("summary") or "").strip(),
                             source=_pick(headlines, row.get("source")), video=_pick(videos, row.get("video")),
                             x_query=str(row.get("x_query") or "").strip() or title,
-                            video_title=str(row.get("video_title") or "").strip()))
+                            video_title=str(row.get("video_title") or "").strip(),
+                            category=str(row.get("category") or "").strip()))
     if not events:
         raise ValueError("AI 没有选出任何事件")
     return events[:n]
@@ -402,10 +431,13 @@ def original(e: Event) -> str:
     return "".join(line + "\n" for line in lines)
 
 
+TOPIC_ICONS = {"AI": "🤖", "金融": "💹", "经济": "🌐", "政治": "🏛️"}
+
+
 def render(events: list[Event], day: dt.date, failed: int = 0) -> list[str]:
     """Telegram HTML messages, split between events so no link is ever cut in half."""
     weekday = "一二三四五六日"[day.weekday()]
-    head = f"🌍 <b>今日世界十大事件</b>　{day.month}月{day.day}日 周{weekday}\n"
+    head = f"🌍 <b>今日十件大事：AI · 金融 · 经济 · 政治</b>　{day.month}月{day.day}日 周{weekday}\n"
     blocks = []
     for n, e in enumerate(events, 1):
         links = []
@@ -417,12 +449,13 @@ def render(events: list[Event], day: dt.date, failed: int = 0) -> list[str]:
         else:
             links.append("▶️ " + _a(youtube_search(e.x_query), "YouTube 今日相关视频"))
         links.append("𝕏 " + _a(x_search(e.x_query), "X 热门讨论"))
-        body = f"\n{n}. <b>{html.escape(e.title)}</b>\n"
+        tag = f"{TOPIC_ICONS[e.category]} {e.category}｜" if e.category in TOPIC_ICONS else ""
+        body = f"\n{n}. {tag}<b>{html.escape(e.title)}</b>\n"
         if e.summary:
             body += html.escape(e.summary) + "\n"
         body += original(e)
         blocks.append(body + "\n".join(links) + "\n")
-    tail = ("\n<i>新闻来自 BBC、半岛电视台、卫报、纽约时报、NPR、DW、France 24 等。中文是 AI 翻译整理的，"
+    tail = ("\n<i>新闻来自 BBC、纽约时报、卫报、经济学人、MarketWatch、TechCrunch、MIT 科技评论、Politico 等。中文是 AI 翻译整理的，"
             "🔤 是媒体原文标题和摘要，🎬 是视频原标题。</i>")
     if failed:
         tail += f"\n<i>（{failed} 个来源今天没打开）</i>"
