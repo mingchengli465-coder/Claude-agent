@@ -389,6 +389,19 @@ def _a(url: str, label: str) -> str:
     return f'<a href="{html.escape(url, quote=True)}">{html.escape(label)}</a>'
 
 
+def original(e: Event) -> str:
+    """The headline (and its summary) as the newsroom wrote it, and the video's own title, under the Chinese."""
+    lines = []
+    if e.source is not None:
+        lines.append(f"🔤 <i>{html.escape(e.source.title)}</i>")
+        summary = e.source.summary
+        if summary and summary.rstrip(".…").lower() not in e.source.title.lower():
+            lines.append(f"<i>{html.escape(summary)}</i>")
+    if e.video is not None and e.video_title and e.video.title != e.video_title:
+        lines.append(f"🎬 <i>{html.escape(e.video.title)}</i>")
+    return "".join(line + "\n" for line in lines)
+
+
 def render(events: list[Event], day: dt.date, failed: int = 0) -> list[str]:
     """Telegram HTML messages, split between events so no link is ever cut in half."""
     weekday = "一二三四五六日"[day.weekday()]
@@ -407,8 +420,10 @@ def render(events: list[Event], day: dt.date, failed: int = 0) -> list[str]:
         body = f"\n{n}. <b>{html.escape(e.title)}</b>\n"
         if e.summary:
             body += html.escape(e.summary) + "\n"
+        body += original(e)
         blocks.append(body + "\n".join(links) + "\n")
-    tail = "\n<i>新闻来自 BBC、半岛电视台、卫报、纽约时报、NPR、DW、France 24 等，AI 整理成中文。</i>"
+    tail = ("\n<i>新闻来自 BBC、半岛电视台、卫报、纽约时报、NPR、DW、France 24 等。中文是 AI 翻译整理的，"
+            "🔤 是媒体原文标题和摘要，🎬 是视频原标题。</i>")
     if failed:
         tail += f"\n<i>（{failed} 个来源今天没打开）</i>"
     messages, current = [], head
