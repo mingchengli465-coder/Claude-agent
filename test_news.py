@@ -95,9 +95,9 @@ class FakeAI:
 
 
 answer = "好的：\n" + json.dumps({"events": [
-    {"title": "开罗谈判达成停火", "summary": "双方同意停火并交换囚犯。", "source": 1, "video": 1, "video_title": "停火协议解读",
+    {"category": "政治", "title": "开罗谈判达成停火", "summary": "双方同意停火并交换囚犯。", "source": 1, "video": 1, "video_title": "停火协议解读",
      "x_query": "Cairo ceasefire"},
-    {"title": "央行意外降息", "summary": "降息出乎市场预期。", "source": "H2", "video": None, "x_query": "central bank rate cut"},
+    {"category": "金融", "title": "央行意外降息", "summary": "降息出乎市场预期。", "source": "H2", "video": None, "x_query": "central bank rate cut"},
     {"title": "", "summary": "没有标题的会被跳过", "source": 3},
     {"title": "沿海城市地震", "summary": "", "source": 99, "video": 42, "x_query": ""},
 ]}, ensure_ascii=False)
@@ -115,17 +115,19 @@ assert "response_format" in chatty.kwargs[0] and "response_format" not in chatty
 assert chatty.kwargs[2]["max_tokens"] == 32000, "DeepSeek with thinking on gets room to think, last"
 assert good.kwargs[0]["response_format"] == {"type": "json_object"} and "extra_body" not in good.kwargs[0]
 text = "\n".join(messages)
-assert text.startswith("🌍 <b>今日世界十大事件</b>　10月9日 周五"), text[:60]
-assert ("1. <b>开罗谈判达成停火</b>\n双方同意停火并交换囚犯。\n"
+assert text.startswith("🌍 <b>今日十件大事：AI · 金融 · 经济 · 政治</b>　10月9日 周五"), text[:60]
+assert "不要选：死伤人数" in prompt and '"category"' in prompt
+assert ("1. 🏛️ 政治｜<b>开罗谈判达成停火</b>\n双方同意停火并交换囚犯。\n"
         "🔤 <i>Ceasefire agreed after talks in Cairo</i>\n<i>Both sides agreed to a ceasefire &amp; prisoner swap.</i>\n"
         "🎬 <i>Ceasefire deal explained</i>\n📰 ") in text, text[:600]
 assert '<a href="https://www.bbc.co.uk/news/world-1">原文·BBC</a>' in text
 assert '<a href="https://www.youtube.com/watch?v=abc123XYZ_0">视频·BBC News：停火协议解读</a>' in text
 assert 'href="https://x.com/search?q=Cairo+ceasefire&amp;src=typed_query&amp;f=top"' in text
-assert "2. <b>央行意外降息</b>" in text and '<a href="https://www.dw.com/en/rates">原文·DW</a>' in text
+assert "2. 💹 金融｜<b>央行意外降息</b>" in text and '<a href="https://www.dw.com/en/rates">原文·DW</a>' in text
 assert 'href="https://www.youtube.com/results?search_query=central+bank+rate+cut&amp;sp=EgIIAg%3D%3D">YouTube 今日相关视频</a>' in text
 assert "没有标题" not in text, "an event without a title is skipped"
-assert "2. <b>央行意外降息</b>\n降息出乎市场预期。\n🔤 <i>Central bank cuts rates</i>\n<i>A surprise cut.</i>\n" in text
+assert "2. 💹 金融｜<b>央行意外降息</b>\n降息出乎市场预期。\n🔤 <i>Central bank cuts rates</i>\n<i>A surprise cut.</i>\n" in text
+assert "3. <b>沿海城市地震</b>" in text, "no (or an unknown) topic: no tag"
 assert "3. <b>沿海城市地震</b>" in text and "x.com/search?q=%E6%B2%BF" in text, "no keywords: search the title"
 assert "（1 个来源今天没打开）" in text
 print("PASS the AI's ten become a Chinese list with article, YouTube and X links")

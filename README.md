@@ -609,14 +609,16 @@ real person……），命中就一定转。
 注意：自建应用只有企业成员（和你加进可见范围的人）能用；企业外的普通微信用户发不了消息，
 那要走「微信客服」。
 
-## 每日世界十大事件
+## 每日十件大事（AI · 金融 · 经济 · 政治）
 
 设了 `NEWS_CHAT_ID`（Telegram chat ID，可以逗号分隔多个），机器人每天 `NEWS_TIME`
-（默认 `08:00`，`NEWS_TIMEZONE` 默认 `Asia/Shanghai`）发一份「今日世界十大事件」：
+（默认 `08:00`，`NEWS_TIMEZONE` 默认 `Asia/Shanghai`）发一份「今日十件大事」：
 
-1. 读 BBC、半岛电视台、卫报、纽约时报、NPR、DW、France 24、Sky、CNBC、Google News、BBC 中文
-   过去 36 小时的新闻（RSS，不用账号），和 BBC、路透、美联社等新闻频道在 YouTube 的最新视频；
-2. AI（DeepSeek，失败换 OpenRouter）挑出对全人类最重要的 10 件事，写成中文；
+1. 读过去 36 小时的新闻（RSS，不用账号）：AI 和科技（TechCrunch、The Verge、MIT 科技评论、Ars Technica…）、
+   商业和经济（BBC、纽约时报、卫报、经济学人、MarketWatch、DW…）、国际政治（BBC、纽约时报、Politico、NPR、
+   半岛电视台、BBC 中文…），以及 Bloomberg、CNBC、WSJ、FT、路透等频道在 YouTube 的最新视频；
+2. AI（DeepSeek，失败换 OpenRouter）只从 AI、金融、全球经济、政治四类里挑 10 件，四类大致平均，
+   不选死伤、袭击、灾难、犯罪、娱乐、体育；每件写成中文，标上类别，下面附媒体原文标题和摘要；
 3. 每件事附原文链接、对应的 YouTube 视频（频道当天没发就给「今日上传」的 YouTube 搜索），
    和 X 上这件事的热门讨论（X 没有免费的搜索 API，所以是 X 搜索链接，不是某一条推文）。
 
