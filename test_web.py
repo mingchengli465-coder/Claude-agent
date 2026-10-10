@@ -47,16 +47,22 @@ async def main():
         r = await client.get("/")
         home = await r.text()
         assert r.status == 200 and "ALWAYS ON" in home and "{{" not in home
-        assert "YOUR SHOP<br>KEEPS ANSWERING" in home and "Ocean" not in home, "the business, not the ocean"
-        for section in ("services", "ai-cs", "claude-code", "pricing", "about", "contact", "faq"):
+        assert "AI, SET UP<br>FOR YOU" in home and "Ocean" not in home, "the business, not the ocean"
+        for section in ("services", "ai-cs", "claude-code", "deepseek", "pricing", "about", "contact", "faq"):
             assert f'id="{section}"' in home, section
         assert "US$70–85" in home and "US$9.9" in home and "US$14" in home, "the prices"
+        # what's for sale, at a glance: the four offerings with their prices, linked to their sections
+        for href, price in (("#ai-cs", "US$70"), ("#claude-code", "US$14"), ("#deepseek", "US$10"), ("#services", "US$2+")):
+            assert f'<a class="stat rv"' in home and f'href="{href}"><b>{price}</b>' in home, href
+        # DeepSeek: a setup service on the customer's own account, never resold credits
+        assert "DeepSeek, set up for you" in home and '"dsNote"' in home and "I only charge the US$10 setup fee" in home
+        assert "Do you sell me DeepSeek credits?" in home and "Claude Opus 5.5</td><td>$4</td><td>$20</td>" in home
         assert 'data-copy="Vinc100327"' in home and 'href="https://t.me/Vinceeeeentttt"' in home, "the owner's contacts"
         assert 'href="https://x.com/Vincent40769988"' in home and "<details" in home
         assert 'data-src=""' in home, "no whale video yet: the page draws its own deep sea"
         assert 'id="lang"' in home and 'data-k="heroH1"' in home and '"heroH1": ["永不打烊", "ALWAYS ON"]' in home
         assert 'localStorage.setItem("siteLang"' in home, "繁 / EN on the homepage"
-        assert 'var BIG = ["heroH1"' in home and '"finalArt"]' in home and '<span class="sub">' in home, \
+        assert 'var BIG = ["heroH1"' in home and '"finalArt", "dsTitle", "dsSecTitle", "dsWhyTitle"]' in home and '<span class="sub">' in home, \
             "繁 mode: the big words stay English, the Chinese underneath in small"
         assert "复制" not in home, "繁體 and English only"
         assert 'data-href-en="trial-en"' in home, "English readers go to the English trial"

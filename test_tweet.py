@@ -54,13 +54,14 @@ assert "www." not in tw.strip_urls("去 www.example.com 看看")
 assert tw.strip_urls("沒有網址的文字") == "沒有網址的文字"
 print("PASS URLs are removed, plain text untouched")
 
-# --- the prompt sells the design service, in English -------------------------
+# --- the prompt sells the AI services, in English ------------------------------
 built = tw._build_prompt(tw.ENGLISH, ["Your homepage has one job.", "Slide 1 should say what you do."],
-                         tw.DOMAINS[1])
+                         tw.DOMAINS[0])
 for slot in ("{language}", "{recent_tweets}", "{service}", "{domain}"):
     assert slot not in built, f"{slot} left unfilled"
 assert tw.X_SERVICE_BRIEF in built, "the model must see what it is selling"
-assert "This tweet's focus: pitch decks for founders" in built
+assert "This tweet's focus: DeepSeek setup: over 10x cheaper than flagship AI models" in built
+assert "one-person AI studio" in built and "design studio" not in built
 assert "- Your homepage has one job.\n- Slide 1 should say what you do." in built
 assert "Write ONE original tweet in English" in built
 assert "220\u2013270 characters" in built and "never over 270" in built, "tweets should use the full length"
@@ -69,11 +70,12 @@ for rule in ("Never invent clients", "No prices", "call to action", "No links"):
 assert "(none yet)" in tw._build_prompt(tw.ENGLISH, [])
 print("PASS the prompt carries the service brief, the focus, the history and the honesty rules")
 
-assert all(any(k in d for k in ("website", "deck", "landing", "presentation")) for d in tw.DOMAINS), tw.DOMAINS
+assert sum("DeepSeek" in d for d in tw.DOMAINS) == 3 and len(tw.DOMAINS) == 8, tw.DOMAINS
 assert all(ord(c) < 128 for d in tw.DOMAINS for c in d), "domains are English now"
-for word in ("website", "PowerPoint", "DM"):
-    assert word in tw.DEFAULT_SERVICE_BRIEF
-print(f"PASS {len(tw.DOMAINS)} design service lines rotate")
+for word in ("AI customer assistant", "Claude Code", "DeepSeek setup", "US$10", "you pay DeepSeek directly", "DM"):
+    assert word in tw.DEFAULT_SERVICE_BRIEF, word
+assert "deck" not in tw.DEFAULT_LINK_REPLY_TEXT and "DeepSeek" in tw.DEFAULT_LINK_REPLY_TEXT
+print(f"PASS {len(tw.DOMAINS)} service lines rotate, DeepSeek in three of them")
 
 # --- English only by default -------------------------------------------------
 assert tw.ENGLISH_RATIO == 1.0, tw.ENGLISH_RATIO
