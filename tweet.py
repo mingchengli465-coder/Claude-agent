@@ -63,7 +63,7 @@ ENGLISH = "English"
 CHINESE = "Simplified Chinese"
 LANGUAGE_LIMITS = {ENGLISH: TWEET_CHAR_LIMIT, CHINESE: CHINESE_CHAR_LIMIT}
 # Share of tweets written in English; the rest are Simplified Chinese. The
-# account sells design work to English-speaking clients, so English only.
+# account sells to English-speaking clients, so English only.
 ENGLISH_RATIO = float(os.environ.get("X_ENGLISH_RATIO", "1.0"))
 X_WEIGHTED_LIMIT = 280
 # Two at most; more reads as spam on a promotional account.
@@ -76,25 +76,28 @@ X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", "")
 X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", "")
 
 # Each tweet promotes one service line, rotated so the feed isn't one pitch
-# on repeat (X also treats identical promotional posts as spam).
+# on repeat (X also treats identical promotional posts as spam). DeepSeek setup,
+# the newest service, gets three of the eight slots.
 DOMAINS = [
-    "custom websites for small businesses",
-    "pitch decks for founders",
-    "landing pages",
-    "presentation redesign: turning a cluttered deck into a clear one",
-    "portfolio and personal-brand websites",
-    "sales and client-proposal decks",
+    "DeepSeek setup: over 10x cheaper than flagship AI models, connected for you",
+    "an AI customer assistant that answers a small shop's messages 24/7",
+    "Claude Code or Codex installed on your own computer, step by step",
+    "DeepSeek for people who want a capable AI without flagship prices",
+    "a question small shops get at midnight, answered by an AI from their own price list",
+    "what a DeepSeek setup gets you: your own account and key, connected to your tools",
+    "a free trial: paste your website and get your own AI assistant in seconds",
+    "small jobs done with AI and checked by hand: code, slides, simple websites",
 ]
 
 # Everything a tweet may claim about the service. The model is told it can't
 # add to this, so set X_SERVICE_BRIEF in Railway to change the offer (prices,
 # turnaround, a new service) instead of editing the prompt.
-DEFAULT_SERVICE_BRIEF = """I design custom websites and presentations for clients.
-Websites: small-business sites, landing pages, portfolio and personal-brand sites. Designed around the client's brand and content, not a template.
-Presentations: pitch decks, sales and proposal decks, talks and conference or class presentations. Clear structure, clean visuals.
-Clients get the finished website, or an editable deck file (PowerPoint, which also opens in Keynote and Google Slides).
-Pricing: quoted per project.
-How to start: send me a DM."""
+DEFAULT_SERVICE_BRIEF = """I'm vinc, a one-person AI studio. I set up AI for small businesses and individuals, one-on-one, in English or Chinese.
+1. AI customer assistant for small businesses: answers customers 24/7 from the business's own price list and FAQ, on their website or Telegram; orders and haggling go to the owner's phone. US$70 one-off setup, then US$9.9 a month, cancel any time. Free trial: paste your website and get a working assistant in seconds.
+2. Claude Code or Codex set up on your own computer over screen share, then your first task done together. From US$14, about an hour. You use your own account.
+3. DeepSeek setup: I help you open your own DeepSeek API account, top up (you pay DeepSeek directly, the balance is yours), get your API key, connect it to your tools (chat apps, coding tools, your website or bot) and show you how to spend less (off-peak half price, caching). US$10, about 30 minutes, questions answered afterwards. DeepSeek's list price is about US$0.30 per million input tokens and US$1.20 per million output tokens, half that off-peak: over 10x cheaper than flagship models such as Claude Opus 5.5 (US$4 / US$20). Its API works like OpenAI's, so most tools can use it.
+4. Small jobs done with AI and checked by me: code from US$8, simple websites US$10-14, slides US$0.2 a slide.
+How to start: send me a DM, or message my assistant on Telegram."""
 X_SERVICE_BRIEF = os.environ.get("X_SERVICE_BRIEF", "").strip() or DEFAULT_SERVICE_BRIEF
 
 # Posted as a reply under every tweet, so the tweet itself stays link-free (X
@@ -110,7 +113,7 @@ def set_bot_username(username: str | None) -> None:
     """Called once the bot knows its own @username (bot.py's post_init)."""
     global _bot_username
     _bot_username = (username or "").strip().lstrip("@")
-DEFAULT_LINK_REPLY_TEXT = "Have a website or deck in mind? Message me on Telegram:\n{link}"
+DEFAULT_LINK_REPLY_TEXT = "Want an AI assistant for your shop, Claude Code installed, or DeepSeek set up? Message me on Telegram:\n{link}"
 X_LINK_REPLY_TEXT = os.environ.get("X_LINK_REPLY_TEXT", "").strip() or DEFAULT_LINK_REPLY_TEXT
 
 client = AsyncOpenAI(
@@ -304,7 +307,7 @@ def take_domain(state: dict) -> str:
 
 # Placeholders are filled by str.replace rather than str.format, so nothing
 # else in the text has to be escaped.
-TWEET_PROMPT = """You run a small independent design studio and post on X to win clients. Write ONE original tweet in {language} that promotes your custom design work.
+TWEET_PROMPT = """You run a one-person AI studio and post on X to win clients. Write ONE original tweet in {language} that promotes your services.
 
 What you sell (you may only claim what is written here):
 {service}
@@ -316,15 +319,15 @@ Rules:
 - If English: use the full length. Aim for 220\u2013270 characters including hashtags, never over 270.
 - If Chinese: aim for 100\u2013130 Chinese characters including hashtags, never over 130.
 - Fill that length with substance: 4\u20136 short lines, e.g. the problem, why it costs the client, what you'd do instead, then the call to action. No filler.
-- Sound like a real designer talking to potential clients, not an ad agency or a press release.
-- Pick ONE angle: a design tip a client can use today, a common mistake you fix, what "custom" gets you that a template doesn't, a sign someone needs a redesign, or a direct offer.
+- Sound like a real person who sets up AI for people, talking to potential clients, not an ad agency or a press release.
+- Pick ONE angle: a tip a reader can use today, a common mistake you fix, a cost saving, a sign someone needs this, or a direct offer.
 - Every tweet must make it clear you take on this kind of work, and end with a short call to action such as "DMs open." or "DM me if that's you."
 - Be specific. One concrete detail beats three adjectives.
 - Never invent clients, projects, results, numbers, reviews or quotes. No "I just shipped a site for...", no "conversions up 40%".
-- No prices, discounts, deadlines or turnaround times unless they are in the list above.
-- Don't name or knock other companies, tools or designers.
+- No prices, discounts, deadlines or turnaround times unless they are in the list above. Prices and the price comparison above may be quoted exactly.
+- You may name DeepSeek, Claude Code, Codex and the models in the price comparison. Don't name or knock any other company or person.
 - Short sentences. Line breaks are fine. At most 1 emoji, or none.
-- 0\u20132 relevant hashtags at the end, such as #WebDesign #PitchDeck. Never more than 2.
+- 0\u20132 relevant hashtags at the end, such as #DeepSeek #AI #ClaudeCode #SmallBusiness. Never more than 2.
 - No links, no @mentions, no quotation marks around the whole tweet.
 
 Recent tweets (do not repeat these topics or openings):
