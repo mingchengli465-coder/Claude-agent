@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import demos  # noqa: E402
+import indexnow  # noqa: E402
 import web  # noqa: E402
 
 API = os.environ.get("PAGES_API_ORIGIN", "https://worker-production-42fb.up.railway.app").rstrip("/")
@@ -96,6 +97,8 @@ def build(out: Path) -> None:
     for font in (ROOT / "web_static" / "fonts").iterdir():
         shutil.copy(font, out / "fonts" / font.name)
     (out / ".nojekyll").write_text("", encoding="utf-8")
+    # IndexNow's proof that the site is ours (indexnow.py)
+    (out / indexnow.key_file_name()).write_text(indexnow.KEY, encoding="utf-8")
     print(f"built {', '.join(PAGES.values())} into {out} (chat server: {API})")
 
 

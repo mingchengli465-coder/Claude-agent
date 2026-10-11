@@ -713,7 +713,9 @@ ROLE_MAILBOX = DEPARTMENT_MAILBOX | {"info", "hello", "hi", "enquiries", "enquir
                                      "contactus", "office", "admin", "mail", "email", "team", "shop", "store", "studio",
                                      "orders", "order", "bookings", "booking", "book", "stay", "sales", "support",
                                      "help", "service", "general", "reception", "welcome"}
-# the free mailboxes a sole trader uses (gmail.com, hotmail.co.uk, bigpond.net.au…), by the first part of the domain
+# the free mailboxes a sole trader uses (gmail.com, hotmail.co.uk, bigpond.net.au…), by the first part of the domain.
+# In the UK (PECR) and Ireland (S.I. 336/2011) a sole trader counts as an individual, and individuals may
+# only get marketing email they agreed to, so there these addresses are left alone.
 FREE_MAILBOX = {"gmail", "googlemail", "outlook", "hotmail", "live", "msn", "yahoo", "ymail", "icloud", "me", "aol",
                 "btinternet", "btconnect", "sky", "talktalk", "virginmedia", "bigpond", "optusnet", "xtra", "eircom",
                 "singnet", "netvigator"}
@@ -723,8 +725,11 @@ def skip_reason(lead: dict) -> str:
     """Why a business isn't worth a cold email, for the owner ("" when it is)."""
     if lead.get("kind") == "trial":
         return ""
-    if (lead.get("email") or "").lower().partition("@")[0] in DEPARTMENT_MAILBOX:
+    local, _, domain = (lead.get("email") or "").lower().partition("@")
+    if local in DEPARTMENT_MAILBOX:
         return "部门邮箱，老板看不到"
+    if lead.get("region") in ("uk", "ie") and domain.split(".")[0] in FREE_MAILBOX:
+        return "英国/爱尔兰的个人邮箱：当地法律不许未经同意发推广邮件"
     if lead.get("kind") == "agency":
         return ""
     name = lead.get("name") or ""

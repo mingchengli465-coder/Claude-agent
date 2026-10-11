@@ -52,12 +52,15 @@ for lead in ({"email": "info@capellasingapore.com", "name": "Capella Singapore",
              {"email": "a@ex.my", "name": "Co-Living @ Damai Residence", "region": "my", "cat": "bnb"},
              {"email": "a@ex.my", "name": "Noordin Mews", "region": "my", "cat": "bnb"},
              {"email": "reservations@smallplace.uk", "name": "Fern Villa", "region": "uk", "cat": "bnb"},
-             {"email": "marketing@salon.sg", "name": "Kerat Hair Studio", "region": "sg", "cat": "beauty"}):
+             {"email": "marketing@salon.sg", "name": "Kerat Hair Studio", "region": "sg", "cat": "beauty"},
+             {"email": "kylies.cakes@hotmail.co.uk", "name": "Kylie's Cakes", "region": "uk", "cat": "bakery"},
+             {"email": "lulabelle@gmail.com", "name": "Lulabelle Flowers", "region": "ie", "cat": "florist"}):
     assert not om.worth_emailing(lead), lead
 for lead in ({"email": "info@stoneclose.uk", "name": "Stone Close Tea Room & B&B", "region": "uk", "cat": "bnb"},
              {"email": "x@ex.uk", "name": "The Swan Hotel & Inn", "region": "uk", "cat": "bnb"},
              {"email": "hello@pinelodge.uk", "name": "Pine Lodge Bed & Breakfast", "region": "uk", "cat": "bnb"},
              {"email": "orders@duke.sg", "name": "Duke Bakery", "region": "sg", "cat": "bakery"},
+             {"email": "seasidesweets@bigpond.com", "name": "Seaside Sweets", "region": "au", "cat": "bakery"},
              {"email": "studio@agency.uk", "name": "Hotel Web Studio", "region": "uk", "kind": "agency"},
              {"email": "x@ex.sg", "name": "Bloom Room", "region": "trial", "kind": "trial"}):
     assert om.worth_emailing(lead), lead
@@ -73,7 +76,9 @@ picky.add([{"email": "info@summerview.sg", "name": "Summer View Hotel", "region"
 assert [l["name"] for l in picky.due()] == ["Jo's Cakes", "Flower Affair SG"]
 assert picky.get("info@summerview.sg")["status"] == "skipped" and picky.get("info@summerview.sg")["note"] == "大酒店或服务式公寓"
 assert picky.waiting("sg") == 2 and picky.prune() == 0
-print("PASS big hotels, chains and department mailboxes are set aside; a sole trader's Gmail goes first")
+assert "个人邮箱" in om.skip_reason({"email": "kylies.cakes@hotmail.co.uk", "name": "Kylie's Cakes", "region": "uk"})
+print("PASS big hotels, chains, department mailboxes and UK/Irish sole traders' own mailboxes are set aside; "
+      "elsewhere a sole trader's Gmail goes first")
 
 # --- the list and the daily limit ------------------------------------------------------------
 tmp = tempfile.mkdtemp()
