@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How to Set Up the DeepSeek API (2026): API Key, Cost Calculator | vinc</title>
+<meta name="description" content="Get your own DeepSeek API key in 15 minutes, connect it to any OpenAI-compatible tool, and see what it costs next to Claude with a quick calculator.">
+<link rel="canonical" href="https://mingchengli465-coder.github.io/Claude-agent/guides/set-up-deepseek-api.html">
+<link rel="alternate" hreflang="en" href="https://mingchengli465-coder.github.io/Claude-agent/guides/set-up-deepseek-api.html">
+<link rel="alternate" hreflang="zh-Hant" href="https://mingchengli465-coder.github.io/Claude-agent/guides/deepseek-api-setup.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How to Set Up the DeepSeek API (2026): API Key, Cost Calculator | vinc">
+<meta property="og:description" content="Get your own DeepSeek API key in 15 minutes, connect it to any OpenAI-compatible tool, and see what it costs next to Claude with a quick calculator.">
+<meta property="og:url" content="https://mingchengli465-coder.github.io/Claude-agent/guides/set-up-deepseek-api.html">
+<meta name="theme-color" content="#ffffff">
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("siteTheme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d1d1f'/%3E%3Ctext x='29' y='45' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='38' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3Ccircle cx='47' cy='42' r='4.5' fill='%230071e3'/%3E%3C/svg%3E">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "HowTo", "name": "How to set up the DeepSeek API", "description": "Get your own DeepSeek API key in 15 minutes, connect it to any OpenAI-compatible tool, and see what it costs next to Claude with a quick calculator.", "inLanguage": "en", "datePublished": "2026-10-11", "dateModified": "2026-10-11", "author": {"@type": "Person", "name": "vinc"}, "mainEntityOfPage": "https://mingchengli465-coder.github.io/Claude-agent/guides/set-up-deepseek-api.html", "step": [{"@type": "HowToStep", "name": "Create an account", "text": "Sign up on the DeepSeek Open Platform, platform.deepseek.com."}, {"@type": "HowToStep", "name": "Top up", "text": "Add a small balance on the Top up page. You pay DeepSeek directly and only for what you use."}, {"@type": "HowToStep", "name": "Create an API key", "text": "API keys → Create new API key. Copy it at once: it's shown only one time."}, {"@type": "HowToStep", "name": "Test it", "text": "Send one request to https://api.deepseek.com with the model deepseek-flash."}, {"@type": "HowToStep", "name": "Connect your tools", "text": "Any tool that takes an OpenAI-compatible API: base URL https://api.deepseek.com and your key."}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Is the DeepSeek API free?", "acceptedAnswer": {"@type": "Answer", "text": "No. The chat app is free, but the API is pay-as-you-go from a balance you top up. It's one of the cheapest capable models: about US$0.30 per million input tokens and US$1.20 per million output tokens, half that off-peak."}}, {"@type": "Question", "name": "Can you sell me DeepSeek credits?", "acceptedAnswer": {"@type": "Answer", "text": "No. DeepSeek's terms don't allow reselling or sharing accounts and keys. You open your own account and top up yourself; I only help you set it up."}}, {"@type": "Question", "name": "Which model should I use?", "acceptedAnswer": {"@type": "Answer", "text": "deepseek-flash, the general model on DeepSeek's API since July 2026, for chat, writing and code."}}, {"@type": "Question", "name": "Does it work with my app?", "acceptedAnswer": {"@type": "Answer", "text": "If the app lets you set an \"OpenAI-compatible\" base URL and key, yes: use https://api.deepseek.com."}}, {"@type": "Question", "name": "What if I get stuck?", "acceptedAnswer": {"@type": "Answer", "text": "I can set it up with you over screen share in about 30 minutes for US$10. Ask the assistant in the corner."}}]}</script>
+<style>
+  :root { color-scheme: light; --bg:#fff; --bg2:#f5f5f7; --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --line:rgba(0,0,0,.12); --accent:#0071e3; --accent-h:#0077ed; --link:#0066cc; --code:#f5f5f7;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace; }
+  html[data-theme="dark"] { color-scheme: dark; --bg:#000; --bg2:#161617; --ink:#f5f5f7; --ink2:#d2d2d7; --muted:#a1a1a6; --line:rgba(255,255,255,.16); --link:#2997ff; --code:#1d1d1f; }
+  *,*::before,*::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:400 18px/1.7 var(--sans); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid var(--line); }
+  .bar .in { max-width: 760px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 18px; }
+  .logo { font: 700 21px/1 var(--sans); letter-spacing: -.04em; color: var(--ink); }
+  .logo:hover { text-decoration: none; }
+  .logo i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .bar .sp { flex: 1; }
+  .bar .lang { font-size: 14px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 400 15px/1 var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--accent-h); text-decoration: none; }
+  .btn.line { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px var(--link); }
+  .btn.line:hover { background: var(--accent); color: #fff; box-shadow: none; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 40px; }
+  .crumb { font-size: 14px; color: var(--muted); }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.12; letter-spacing: -.035em; margin: 12px 0 0; font-weight: 700; text-wrap: balance; }
+  html[lang="zh-TW"] h1 { letter-spacing: -.015em; line-height: 1.22; }
+  .lead { font-size: 21px; color: var(--ink2); margin: 20px 0 0; }
+  .meta { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.03em; margin: 56px 0 0; font-weight: 700; }
+  html[lang="zh-TW"] h2 { letter-spacing: -.01em; }
+  h3 { font-size: 21px; margin: 32px 0 0; letter-spacing: -.02em; }
+  p, li { color: var(--ink2); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 8px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 400 .88em var(--mono); background: var(--code); padding: 2px 6px; border-radius: 6px; }
+  .cmd { position: relative; margin: 14px 0; border-radius: 14px; background: var(--code); }
+  .cmd small { display: block; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
+  .cmd pre { margin: 0; padding: 10px 92px 14px 16px; overflow-x: auto; font: 400 15px/1.6 var(--mono); color: var(--ink); }
+  .cmd button { position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg); color: var(--link); font: 500 13px var(--sans); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+  .cmd button.ok { background: #1fa84a; color: #fff; box-shadow: none; }
+  .note { margin: 20px 0; padding: 16px 18px; border-radius: 14px; background: var(--bg2); font-size: 16px; }
+  .note p { margin: 0; }
+  .cta { margin: 48px 0; padding: 28px; border-radius: 24px; background: var(--bg2); }
+  .cta h2 { margin: 0; font-size: 26px; }
+  .cta p { margin: 10px 0 20px; }
+  .cta .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .faq dt { font-weight: 600; color: var(--ink); margin-top: 22px; }
+  .faq dd { margin: 6px 0 0; color: var(--ink2); }
+  .more { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .more ul { list-style: none; padding: 0; }
+  footer { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink2); }
+
+  .calc { margin: 22px 0; padding: 22px; border-radius: 20px; background: var(--bg2); }
+  .calc .in2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .calc label { display: block; font-size: 14px; color: var(--muted); }
+  .calc input { width: 100%; margin-top: 6px; height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); font: 400 17px var(--sans); }
+  .calc table { margin-bottom: 0; }
+  .calc td.n { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+  .calc tr.best td { color: var(--ink); font-weight: 600; }
+  .calc .small { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+  @media (max-width: 520px) { .calc .in2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <a class="logo" href="../">vinc<i></i></a>
+  <a class="lang" href="index.html">Guides</a>
+  <span class="sp"></span>
+  <a class="lang" href="deepseek-api-setup.html" hreflang="zh-Hant">繁體中文</a>
+  <button class="btn" type="button" data-chat>Ask my AI</button>
+</div></header>
+<main>
+  <div class="crumb"><a href="../">vinc · AI studio</a> / <a href="index.html">Guides</a></div>
+  <h1>How to set up the DeepSeek API, and what it really costs</h1>
+  <p class="lead">DeepSeek is a capable AI model whose API costs a fraction of the flagship models'. Here's how to get your own account and API key, connect it to your tools and keep the bill low. About 15 minutes.</p>
+  <div class="meta">6-minute read · Updated October 2026</div>
+
+  <h2>What it costs: a quick calculator</h2>
+  <p>Type in roughly how much you'll use. A million tokens is about 750,000 English words.</p>
+  <div class="calc">
+    <div class="in2"><label>Input tokens a month (millions)<input id="calc-in" type="number" min="0" step="0.5" value="5" inputmode="decimal"></label>
+    <label>Output tokens a month (millions)<input id="calc-out" type="number" min="0" step="0.5" value="1" inputmode="decimal"></label></div>
+    <table><tr><th>Model</th><th style="text-align:right">A month</th><th style="text-align:right">vs DeepSeek</th></tr><tr class=best><td>DeepSeek (off-peak)</td><td class="n" id="c-deepseek-off"></td><td class="n" id="x-deepseek-off"></td></tr><tr><td>DeepSeek (peak)</td><td class="n" id="c-deepseek-peak"></td><td class="n" id="x-deepseek-peak"></td></tr><tr><td>Claude Sonnet 5.5</td><td class="n" id="c-sonnet"></td><td class="n" id="x-sonnet"></td></tr><tr><td>Claude Opus 5.5</td><td class="n" id="c-opus"></td><td class="n" id="x-opus"></td></tr></table>
+    <p class="small">Public list prices per million tokens, October 2026: DeepSeek about $0.30 in / $1.20 out (half that off-peak), Claude Sonnet 5.5 $2 / $10, Claude Opus 5.5 $4 / $20. Cached input costs less still. Check each official pricing page before you rely on it.</p>
+  </div>
+
+  <h2>Step 1: Create an account</h2>
+  <p>Go to <a href="https://platform.deepseek.com" rel="noopener">platform.deepseek.com</a> (the DeepSeek Open Platform, not the chat app) and sign up with your email or phone.</p>
+
+  <h2>Step 2: Top up</h2>
+  <p>Open <strong>Top up</strong> and add a small amount, US$5–10 is plenty to start. The money goes to DeepSeek and stays in your own account; you're billed per token, nothing monthly.</p>
+
+  <h2>Step 3: Create an API key</h2>
+  <p>Open <strong>API keys</strong> → <strong>Create new API key</strong>, give it a name and copy it straight away: it's shown only once. Treat it like a password and never share it.</p>
+
+  <h2>Step 4: Test it</h2>
+  <p>Paste this in a terminal, with your key in place of <code>YOUR_API_KEY</code>:</p>
+  <div class="cmd"><small>Terminal (Mac, Linux, Windows with curl)</small><pre>curl https://api.deepseek.com/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"model": "deepseek-flash", "messages": [{"role": "user", "content": "Hello!"}]}'</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+  <p>A reply with <code>"content": "Hello! …"</code> means it works.</p>
+
+  <h2>Step 5: Connect your tools</h2>
+  <p>DeepSeek's API works like OpenAI's, so most apps, plugins and code libraries can use it. Wherever a tool asks for an OpenAI-compatible endpoint, enter:</p>
+  <table><tr><th>Setting</th><th>Value</th></tr><tr><td>Base URL</td><td><code>https://api.deepseek.com</code></td></tr><tr><td>API key</td><td>your key</td></tr><tr><td>Model</td><td><code>deepseek-flash</code></td></tr></table>
+  <p>In Python, with the official <code>openai</code> package:</p>
+  <div class="cmd"><small>Python</small><pre>from openai import OpenAI
+
+client = OpenAI(api_key="YOUR_API_KEY", base_url="https://api.deepseek.com")
+reply = client.chat.completions.create(
+    model="deepseek-flash",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(reply.choices[0].message.content)</pre><button type="button" data-done="Copied ✓">Copy</button></div>
+
+  <div class="cta"><h2>Rather have it done for you?</h2><p>Over screen share, I help you open your own DeepSeek account, top up, get your key, connect it to the tools you use (a chat app, a coding tool, your website or bot) and set it up to cost as little as possible. <strong>US$10</strong>, about 30 minutes, and questions answered afterwards. The account and balance are yours; I don't resell credits.</p><div class="row"><button class="btn" type="button" data-chat>Ask my AI to book</button><a class="btn line" href="../#deepseek">DeepSeek setup</a></div></div>
+
+  <h2>Spend less</h2>
+  <ul>
+    <li><strong>Run big jobs off-peak.</strong> DeepSeek charges about half during its off-peak hours (night-time in Beijing); the exact window is on its pricing page.</li>
+    <li><strong>Keep the start of your prompts the same.</strong> DeepSeek caches repeated prompt beginnings automatically, and cached input costs far less.</li>
+    <li><strong>Turn off thinking for simple tasks.</strong> deepseek-flash reasons before it answers, which uses output tokens. For short, simple replies add <code>"thinking": {"type": "disabled"}</code> to the request.</li>
+    <li><strong>Ask for shorter answers.</strong> Output tokens cost about four times as much as input.</li>
+  </ul>
+
+  <h2>Common errors</h2>
+  <table>
+    <tr><th>You see</th><th>Fix</th></tr>
+    <tr><td>401 Authentication Fails</td><td>The key is wrong or was deleted. Copy it again, without spaces.</td></tr>
+    <tr><td>402 Insufficient Balance</td><td>Top up your account.</td></tr>
+    <tr><td>400 / model not found</td><td>Check the model name: <code>deepseek-flash</code>. The old names deepseek-chat and deepseek-reasoner were retired in July 2026.</td></tr>
+    <tr><td>429 Rate limit</td><td>Too many requests at once. Wait a moment and try again, or send them one by one.</td></tr>
+  </table>
+
+  <h2>FAQ</h2>
+  <dl class="faq"><dt>Is the DeepSeek API free?</dt><dd>No. The chat app is free, but the API is pay-as-you-go from a balance you top up. It's one of the cheapest capable models: about US$0.30 per million input tokens and US$1.20 per million output tokens, half that off-peak.</dd><dt>Can you sell me DeepSeek credits?</dt><dd>No. DeepSeek's terms don't allow reselling or sharing accounts and keys. You open your own account and top up yourself; I only help you set it up.</dd><dt>Which model should I use?</dt><dd>deepseek-flash, the general model on DeepSeek's API since July 2026, for chat, writing and code.</dd><dt>Does it work with my app?</dt><dd>If the app lets you set an "OpenAI-compatible" base URL and key, yes: use https://api.deepseek.com.</dd><dt>What if I get stuck?</dt><dd>I can set it up with you over screen share in about 30 minutes for US$10. Ask the assistant in the corner.</dd></dl>
+  <div class="more"><strong>More guides</strong><ul><li><a href="install-claude-code.html">How to install Claude Code</a></li><li><a href="install-codex-cli.html">How to install OpenAI Codex CLI</a></li><li><a href="deepseek-api-setup.html">DeepSeek API 申請與接入教學（繁體中文）</a></li></ul></div>
+</main>
+<footer>© 2026 vinc · AI studio · Written by me, last updated October 2026.</footer>
+
+<script>
+  (function () {
+    var PRICES = [["deepseek-off", 0.15, 0.60], ["deepseek-peak", 0.30, 1.20], ["sonnet", 2, 10], ["opus", 4, 20]];
+    var inp = document.getElementById("calc-in"), out = document.getElementById("calc-out");
+    function money(x) { return "US$" + (x < 10 ? x.toFixed(2) : Math.round(x).toLocaleString("en-US")); }
+    function run() {
+      var a = Math.max(0, parseFloat(inp.value) || 0), b = Math.max(0, parseFloat(out.value) || 0), base = null;
+      PRICES.forEach(function (p) {
+        var cost = a * p[1] + b * p[2], cell = document.getElementById("c-" + p[0]);
+        if (base === null) base = cost;
+        cell.textContent = money(cost);
+        var x = document.getElementById("x-" + p[0]);
+        if (x) x.textContent = base > 0 ? "×" + (cost / base).toFixed(0) : "";
+      });
+    }
+    inp.addEventListener("input", run); out.addEventListener("input", run); run();
+  })();
+</script>
+<script src="/widget.js" data-color="#0071e3" data-track defer></script>
+<script>
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector("button"), text = box.querySelector("pre").textContent, label = b.textContent;
+    b.addEventListener("click", function () {
+      function done() { b.classList.add("ok"); b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.classList.remove("ok"); b.textContent = label; }, 1600); }
+      function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) { b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); }); });
+</script>
+</body>
+</html>

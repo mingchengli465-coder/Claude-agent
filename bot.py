@@ -40,6 +40,7 @@ import tweet as tweet_mod
 import agent as agent_mod
 import bluesky
 import messenger as messenger_mod
+import indexnow as indexnow_mod
 import news as news_mod
 import demos as demos_mod
 import leadfinder
@@ -1268,6 +1269,22 @@ def schedule_news(application: Application) -> None:
     logger.info("每日世界新闻：%s %s，发到 %s", NEWS_TIME, NEWS_TIMEZONE, "、".join(NEWS_CHAT_IDS))
 
 
+# --- search engines: new and changed pages go to Bing (IndexNow) -------------------------------
+async def indexnow_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        logger.info("搜索引擎：%s", await indexnow_mod.submit(Path(cs.CS_DB_PATH).with_name("indexnow.json")))
+    except Exception:  # noqa: BLE001 - tomorrow is another try
+        logger.exception("提交网页给 Bing 失败")
+
+
+def schedule_indexnow(application: Application) -> None:
+    """Twenty minutes after a start (the site has finished publishing by then), then daily."""
+    if not indexnow_mod.ON or application.job_queue is None:
+        return
+    application.job_queue.run_once(indexnow_job, when=20 * 60, name="indexnow-now")
+    application.job_queue.run_repeating(indexnow_job, interval=24 * 3600, first=24 * 3600, name="indexnow-daily")
+
+
 # --- cold emails, sent from the owner's Gmail ---------------------------------------------
 leads_db: outreach_mod.Leads | None = None
 # free trials and the personal demo made for each business we email (trials.py)
@@ -2360,6 +2377,7 @@ def main() -> None:
     schedule_daily_tweets(application)
     schedule_visits_report(application)
     schedule_news(application)
+    schedule_indexnow(application)
     start_outreach()
     schedule_outreach(application)
 

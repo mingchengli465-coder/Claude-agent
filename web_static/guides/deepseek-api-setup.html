@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DeepSeek API 申請與接入教學（2026）：API Key、費用試算 | vinc</title>
+<meta name="description" content="15 分鐘申請自己的 DeepSeek API Key，接進任何支援 OpenAI 格式的工具，再用試算表看看它比 Claude 便宜多少。">
+<link rel="canonical" href="https://mingchengli465-coder.github.io/Claude-agent/guides/deepseek-api-setup.html">
+<link rel="alternate" hreflang="en" href="https://mingchengli465-coder.github.io/Claude-agent/guides/set-up-deepseek-api.html">
+<link rel="alternate" hreflang="zh-Hant" href="https://mingchengli465-coder.github.io/Claude-agent/guides/deepseek-api-setup.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="DeepSeek API 申請與接入教學（2026）：API Key、費用試算 | vinc">
+<meta property="og:description" content="15 分鐘申請自己的 DeepSeek API Key，接進任何支援 OpenAI 格式的工具，再用試算表看看它比 Claude 便宜多少。">
+<meta property="og:url" content="https://mingchengli465-coder.github.io/Claude-agent/guides/deepseek-api-setup.html">
+<meta name="theme-color" content="#ffffff">
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("siteTheme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d1d1f'/%3E%3Ctext x='29' y='45' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='38' fill='white' text-anchor='middle'%3Ev%3C/text%3E%3Ccircle cx='47' cy='42' r='4.5' fill='%230071e3'/%3E%3C/svg%3E">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "HowTo", "name": "DeepSeek API 申請與接入", "description": "15 分鐘申請自己的 DeepSeek API Key，接進任何支援 OpenAI 格式的工具，再用試算表看看它比 Claude 便宜多少。", "inLanguage": "zh-Hant", "datePublished": "2026-10-11", "dateModified": "2026-10-11", "author": {"@type": "Person", "name": "vinc"}, "mainEntityOfPage": "https://mingchengli465-coder.github.io/Claude-agent/guides/deepseek-api-setup.html", "step": [{"@type": "HowToStep", "name": "註冊帳號", "text": "到 DeepSeek 開放平台 platform.deepseek.com 註冊。"}, {"@type": "HowToStep", "name": "充值", "text": "在「充值」頁面儲值一點點，錢直接付給 DeepSeek，用多少扣多少。"}, {"@type": "HowToStep", "name": "建立 API Key", "text": "API keys → 建立新的 API Key，馬上複製，它只顯示一次。"}, {"@type": "HowToStep", "name": "測試", "text": "用模型 deepseek-flash 向 https://api.deepseek.com 發一次請求。"}, {"@type": "HowToStep", "name": "接進你的工具", "text": "任何支援 OpenAI 相容接口的工具：Base URL 填 https://api.deepseek.com，再填你的 Key。"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "DeepSeek API 免費嗎？", "acceptedAnswer": {"@type": "Answer", "text": "不免費。聊天 App 免費，但 API 是按用量從你充值的餘額扣錢。它是最便宜的好用模型之一：每百萬輸入 token 約 US$0.30、輸出約 US$1.20，離峰再半價。"}}, {"@type": "Question", "name": "你可以直接賣我 DeepSeek 額度嗎？", "acceptedAnswer": {"@type": "Answer", "text": "不行。DeepSeek 的條款不允許轉賣、共用帳號或 Key。你用自己的帳號、自己充值，我只幫你設定好。"}}, {"@type": "Question", "name": "該用哪個模型？", "acceptedAnswer": {"@type": "Answer", "text": "deepseek-flash：2026 年 7 月起 DeepSeek API 的通用模型，聊天、寫作、寫程式都可以。"}}, {"@type": "Question", "name": "我的 App 能接嗎？", "acceptedAnswer": {"@type": "Answer", "text": "只要能填「OpenAI 相容」的 Base URL 和 Key 就可以，填 https://api.deepseek.com。"}}, {"@type": "Question", "name": "卡住了怎麼辦？", "acceptedAnswer": {"@type": "Answer", "text": "我可以遠端陪你設定好，大約 30 分鐘，US$10。點右下角問 AI 助理就能預約。"}}]}</script>
+<style>
+  :root { color-scheme: light; --bg:#fff; --bg2:#f5f5f7; --ink:#1d1d1f; --ink2:#424245; --muted:#6e6e73; --line:rgba(0,0,0,.12); --accent:#0071e3; --accent-h:#0077ed; --link:#0066cc; --code:#f5f5f7;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang TC","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace; }
+  html[data-theme="dark"] { color-scheme: dark; --bg:#000; --bg2:#161617; --ink:#f5f5f7; --ink2:#d2d2d7; --muted:#a1a1a6; --line:rgba(255,255,255,.16); --link:#2997ff; --code:#1d1d1f; }
+  *,*::before,*::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:400 18px/1.7 var(--sans); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid var(--line); }
+  .bar .in { max-width: 760px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 18px; }
+  .logo { font: 700 21px/1 var(--sans); letter-spacing: -.04em; color: var(--ink); }
+  .logo:hover { text-decoration: none; }
+  .logo i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+  .bar .sp { flex: 1; }
+  .bar .lang { font-size: 14px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 400 15px/1 var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--accent-h); text-decoration: none; }
+  .btn.line { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px var(--link); }
+  .btn.line:hover { background: var(--accent); color: #fff; box-shadow: none; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 40px; }
+  .crumb { font-size: 14px; color: var(--muted); }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.12; letter-spacing: -.035em; margin: 12px 0 0; font-weight: 700; text-wrap: balance; }
+  html[lang="zh-TW"] h1 { letter-spacing: -.015em; line-height: 1.22; }
+  .lead { font-size: 21px; color: var(--ink2); margin: 20px 0 0; }
+  .meta { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.03em; margin: 56px 0 0; font-weight: 700; }
+  html[lang="zh-TW"] h2 { letter-spacing: -.01em; }
+  h3 { font-size: 21px; margin: 32px 0 0; letter-spacing: -.02em; }
+  p, li { color: var(--ink2); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 8px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 400 .88em var(--mono); background: var(--code); padding: 2px 6px; border-radius: 6px; }
+  .cmd { position: relative; margin: 14px 0; border-radius: 14px; background: var(--code); }
+  .cmd small { display: block; padding: 12px 16px 0; font-size: 13px; color: var(--muted); }
+  .cmd pre { margin: 0; padding: 10px 92px 14px 16px; overflow-x: auto; font: 400 15px/1.6 var(--mono); color: var(--ink); }
+  .cmd button { position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg); color: var(--link); font: 500 13px var(--sans); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+  .cmd button.ok { background: #1fa84a; color: #fff; box-shadow: none; }
+  .note { margin: 20px 0; padding: 16px 18px; border-radius: 14px; background: var(--bg2); font-size: 16px; }
+  .note p { margin: 0; }
+  .cta { margin: 48px 0; padding: 28px; border-radius: 24px; background: var(--bg2); }
+  .cta h2 { margin: 0; font-size: 26px; }
+  .cta p { margin: 10px 0 20px; }
+  .cta .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .faq dt { font-weight: 600; color: var(--ink); margin-top: 22px; }
+  .faq dd { margin: 6px 0 0; color: var(--ink2); }
+  .more { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .more ul { list-style: none; padding: 0; }
+  footer { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; }
+  td { color: var(--ink2); }
+
+  .calc { margin: 22px 0; padding: 22px; border-radius: 20px; background: var(--bg2); }
+  .calc .in2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .calc label { display: block; font-size: 14px; color: var(--muted); }
+  .calc input { width: 100%; margin-top: 6px; height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); font: 400 17px var(--sans); }
+  .calc table { margin-bottom: 0; }
+  .calc td.n { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+  .calc tr.best td { color: var(--ink); font-weight: 600; }
+  .calc .small { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+  @media (max-width: 520px) { .calc .in2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <a class="logo" href="../">vinc<i></i></a>
+  <a class="lang" href="index.html">教學</a>
+  <span class="sp"></span>
+  <a class="lang" href="set-up-deepseek-api.html" hreflang="en">English</a>
+  <button class="btn" type="button" data-chat>問 AI 助理</button>
+</div></header>
+<main>
+  <div class="crumb"><a href="../">vinc · AI studio</a> / <a href="index.html">教學</a></div>
+  <h1>DeepSeek API 申請與接入教學，順便算算到底多便宜</h1>
+  <p class="lead">DeepSeek 是好用又便宜的 AI 模型，API 價格只有旗艦模型的十幾分之一。這篇教你申請自己的帳號和 API Key、接進你常用的工具，再把費用壓到最低。大約 15 分鐘。</p>
+  <div class="meta">閱讀 6 分鐘 · 2026 年 10 月更新</div>
+
+  <h2>要花多少錢：試算一下</h2>
+  <p>填你大概的用量。一百萬 token 大約是一百多萬個中文字。</p>
+  <div class="calc">
+    <div class="in2"><label>每月輸入 token（百萬）<input id="calc-in" type="number" min="0" step="0.5" value="5" inputmode="decimal"></label>
+    <label>每月輸出 token（百萬）<input id="calc-out" type="number" min="0" step="0.5" value="1" inputmode="decimal"></label></div>
+    <table><tr><th>模型</th><th style="text-align:right">每月</th><th style="text-align:right">倍數</th></tr><tr class=best><td>DeepSeek（離峰）</td><td class="n" id="c-deepseek-off"></td><td class="n" id="x-deepseek-off"></td></tr><tr><td>DeepSeek（尖峰）</td><td class="n" id="c-deepseek-peak"></td><td class="n" id="x-deepseek-peak"></td></tr><tr><td>Claude Sonnet 5.5</td><td class="n" id="c-sonnet"></td><td class="n" id="x-sonnet"></td></tr><tr><td>Claude Opus 5.5</td><td class="n" id="c-opus"></td><td class="n" id="x-opus"></td></tr></table>
+    <p class="small">2026 年 10 月公開標價（每百萬 token）：DeepSeek 約輸入 $0.30／輸出 $1.20（離峰再半價），Claude Sonnet 5.5 是 $2／$10，Claude Opus 5.5 是 $4／$20。命中快取的輸入更便宜。實際價格以各家官網為準。</p>
+  </div>
+
+  <h2>第 1 步：註冊帳號</h2>
+  <p>打開 <a href="https://platform.deepseek.com" rel="noopener">platform.deepseek.com</a>（DeepSeek 開放平台，不是聊天 App），用電郵或手機號註冊。</p>
+
+  <h2>第 2 步：充值</h2>
+  <p>進「<strong>充值</strong>」頁面儲值一點點，一開始 US$5–10 就很夠用。錢直接付給 DeepSeek，留在你自己的帳號裡；按 token 計費，沒有月費。</p>
+
+  <h2>第 3 步：建立 API Key</h2>
+  <p>進「<strong>API keys</strong>」→「<strong>建立新的 API Key</strong>」，取個名字後馬上複製：它只顯示一次。Key 就像密碼，不要給任何人。</p>
+
+  <h2>第 4 步：測試</h2>
+  <p>把下面這段貼進終端機，<code>YOUR_API_KEY</code> 換成你的 Key：</p>
+  <div class="cmd"><small>終端機（Mac、Linux，或有 curl 的 Windows）</small><pre>curl https://api.deepseek.com/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"model": "deepseek-flash", "messages": [{"role": "user", "content": "Hello!"}]}'</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+  <p>看到 <code>"content": "Hello! …"</code> 就代表成功了。</p>
+
+  <h2>第 5 步：接進你的工具</h2>
+  <p>DeepSeek 的 API 跟 OpenAI 的格式一樣，大部分 App、外掛和程式庫都能直接用。工具要你填「OpenAI 相容接口」的地方，這樣填：</p>
+  <table><tr><th>設定</th><th>填什麼</th></tr><tr><td>Base URL</td><td><code>https://api.deepseek.com</code></td></tr><tr><td>API Key</td><td>你的 Key</td></tr><tr><td>模型 Model</td><td><code>deepseek-flash</code></td></tr></table>
+  <p>用 Python 的話，裝官方的 <code>openai</code> 套件：</p>
+  <div class="cmd"><small>Python</small><pre>from openai import OpenAI
+
+client = OpenAI(api_key="YOUR_API_KEY", base_url="https://api.deepseek.com")
+reply = client.chat.completions.create(
+    model="deepseek-flash",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(reply.choices[0].message.content)</pre><button type="button" data-done="已複製 ✓">複製</button></div>
+
+  <div class="cta"><h2>不想自己弄？</h2><p>我遠端一對一，陪你開好自己的 DeepSeek 帳號、充值、拿到 Key，接進你用的工具（聊天軟體、寫程式工具、你的網站或機器人），再設定成最省錢的用法。<strong>US$10</strong>，大約 30 分鐘，之後有問題隨時問。帳號和餘額都是你自己的，我不賣額度。</p><div class="row"><button class="btn" type="button" data-chat>問 AI 助理預約</button><a class="btn line" href="../#deepseek">DeepSeek 接入服務</a></div></div>
+
+  <h2>怎麼更省錢</h2>
+  <ul>
+    <li><strong>大量任務放在離峰時段跑。</strong>DeepSeek 離峰時段（北京時間深夜）大約半價，確切時間看官網價格頁。</li>
+    <li><strong>提示詞開頭保持一樣。</strong>重複的開頭會自動命中快取，快取的輸入便宜很多。</li>
+    <li><strong>簡單任務關掉「思考」。</strong>deepseek-flash 會先思考再回答，思考也算輸出 token。簡短的問答在請求裡加上 <code>"thinking": {"type": "disabled"}</code>。</li>
+    <li><strong>請它答短一點。</strong>輸出 token 大約是輸入的四倍價錢。</li>
+  </ul>
+
+  <h2>常見錯誤</h2>
+  <table>
+    <tr><th>看到</th><th>怎麼辦</th></tr>
+    <tr><td>401 Authentication Fails</td><td>Key 錯了或已刪除。重新複製，前後不要有空格。</td></tr>
+    <tr><td>402 Insufficient Balance</td><td>餘額不足，去充值。</td></tr>
+    <tr><td>400 / model not found</td><td>檢查模型名稱：<code>deepseek-flash</code>。舊的 deepseek-chat、deepseek-reasoner 已在 2026 年 7 月停用。</td></tr>
+    <tr><td>429 Rate limit</td><td>同時發太多請求。等一下再試，或一個一個發。</td></tr>
+  </table>
+
+  <h2>常見問題</h2>
+  <dl class="faq"><dt>DeepSeek API 免費嗎？</dt><dd>不免費。聊天 App 免費，但 API 是按用量從你充值的餘額扣錢。它是最便宜的好用模型之一：每百萬輸入 token 約 US$0.30、輸出約 US$1.20，離峰再半價。</dd><dt>你可以直接賣我 DeepSeek 額度嗎？</dt><dd>不行。DeepSeek 的條款不允許轉賣、共用帳號或 Key。你用自己的帳號、自己充值，我只幫你設定好。</dd><dt>該用哪個模型？</dt><dd>deepseek-flash：2026 年 7 月起 DeepSeek API 的通用模型，聊天、寫作、寫程式都可以。</dd><dt>我的 App 能接嗎？</dt><dd>只要能填「OpenAI 相容」的 Base URL 和 Key 就可以，填 https://api.deepseek.com。</dd><dt>卡住了怎麼辦？</dt><dd>我可以遠端陪你設定好，大約 30 分鐘，US$10。點右下角問 AI 助理就能預約。</dd></dl>
+  <div class="more"><strong>更多教學</strong><ul><li><a href="claude-code-install.html">Claude Code 安裝教學</a></li><li><a href="codex-install.html">Codex CLI 安裝教學</a></li><li><a href="set-up-deepseek-api.html">How to set up the DeepSeek API (English)</a></li></ul></div>
+</main>
+<footer>© 2026 vinc的ai鋪子 · 我自己寫的，2026 年 10 月更新。</footer>
+
+<script>
+  (function () {
+    var PRICES = [["deepseek-off", 0.15, 0.60], ["deepseek-peak", 0.30, 1.20], ["sonnet", 2, 10], ["opus", 4, 20]];
+    var inp = document.getElementById("calc-in"), out = document.getElementById("calc-out");
+    function money(x) { return "US$" + (x < 10 ? x.toFixed(2) : Math.round(x).toLocaleString("en-US")); }
+    function run() {
+      var a = Math.max(0, parseFloat(inp.value) || 0), b = Math.max(0, parseFloat(out.value) || 0), base = null;
+      PRICES.forEach(function (p) {
+        var cost = a * p[1] + b * p[2], cell = document.getElementById("c-" + p[0]);
+        if (base === null) base = cost;
+        cell.textContent = money(cost);
+        var x = document.getElementById("x-" + p[0]);
+        if (x) x.textContent = base > 0 ? "×" + (cost / base).toFixed(0) : "";
+      });
+    }
+    inp.addEventListener("input", run); out.addEventListener("input", run); run();
+  })();
+</script>
+<script src="/widget.js" data-color="#0071e3" data-track defer></script>
+<script>
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector("button"), text = box.querySelector("pre").textContent, label = b.textContent;
+    b.addEventListener("click", function () {
+      function done() { b.classList.add("ok"); b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.classList.remove("ok"); b.textContent = label; }, 1600); }
+      function fallback() { var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    });
+  });
+  document.querySelectorAll("[data-chat]").forEach(function (b) { b.addEventListener("click", function () { if (window.aiChatOpen) window.aiChatOpen(); }); });
+</script>
+</body>
+</html>

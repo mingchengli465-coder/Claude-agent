@@ -78,7 +78,11 @@ async def main():
     for kind in demos.DEMOS:
         html = (out / f"demo-{kind}.html").read_text(encoding="utf-8")
         assert f'"kind": "{kind}"' in html and f'var API = "{build_pages.API}";' in html, kind
-    assert "/demo-groomer.html</loc>" in (out / "sitemap.xml").read_text(encoding="utf-8")
+    sitemap = (out / "sitemap.xml").read_text(encoding="utf-8")
+    assert "/demo-groomer.html</loc>" in sitemap
+    assert "/guides/set-up-deepseek-api.html</loc>" in sitemap and "/guides/deepseek-api-setup.html</loc>" in sitemap
+    import indexnow
+    assert (out / indexnow.key_file_name()).read_text(encoding="utf-8") == indexnow.KEY, "IndexNow's key file is published"
     print("PASS every demo is published with the site and listed in the sitemap")
 
     # the emails point at the demo of the business's own kind
