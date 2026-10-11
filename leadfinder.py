@@ -68,6 +68,11 @@ TAGS = {
     "groomer": [("shop", "pet_grooming")],
     "tutor": [("amenity", "prep_school")],
 }
+# In Singapore, Hong Kong and Malaysia the places to stay on the map are commercial hotels and serviced
+# apartments, whose inboxes no owner reads: only the shops are searched there.
+NO_STAYS = ("sg", "hk", "my")
+# a hotel this big (or this posh) has a front desk and a booking system already
+BIG_ROOMS, BIG_STARS = 30, 4
 PLURAL = {"bnb": "places to stay", "florist": "florists", "bakery": "cake shops and bakeries",
           "beauty": "beauty and hair salons", "groomer": "dog groomers", "tutor": "tuition centres"}
 # shops with only a website: how many to look up per town, and how many at once
@@ -93,14 +98,16 @@ FREE_MAIL = ("gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "hotma
              "bigpond.com", "bigpond.net.au", "xtra.co.nz", "eircom.net", "sky.com", "talktalk.net", "virginmedia.com")
 
 
-def query(lat: float, lon: float, radius: int) -> str:
+def query(lat: float, lon: float, radius: int, region: str = "") -> str:
     """Every kind of business we write to around one town (with an email or a website; pick() sorts them)."""
     # a box around the town: much lighter for the servers than "around"
     dlat, dlon = radius / 111_320, radius / (111_320 * max(0.2, math.cos(math.radians(lat))))
     near = f"({lat - dlat:.4f},{lon - dlon:.4f},{lat + dlat:.4f},{lon + dlon:.4f})"
     # one clause per tag key (a regex over the values) keeps the query cheap for busy servers
     by_key: dict[str, list[str]] = {}
-    for pairs in TAGS.values():
+    for kind, pairs in TAGS.items():
+        if kind == "bnb" and region in NO_STAYS:
+            continue
         for k, v in pairs:
             by_key.setdefault(k, []).append(v)
     parts = "".join(f'nwr["{k}"~"^({"|".join(values)})$"]["name"]{near};' for k, values in by_key.items())
@@ -136,7 +143,15 @@ def _independent(el: dict) -> tuple[dict, str]:
         return {}, ""
     if tags.get("opening_hours") == "closed":
         return {}, ""
+    if kind == "bnb" and (_number(tags.get("rooms")) > BIG_ROOMS or _number(tags.get("stars")) >= BIG_STARS):
+        return {}, ""
     return tags, kind
+
+
+def _number(value: str | None) -> int:
+    """The leading number of a map tag ("4", "4S", "120 rooms"), 0 without one."""
+    found = re.match(r"\s*(\d+)", value or "")
+    return int(found.group(1)) if found else 0
 
 
 def pick(elements: list[dict], region: str) -> list[dict]:
@@ -314,7 +329,7 @@ async def find(region: str, day: int, attempt: int = 0, session: ClientSession |
     try:
         for url in OVERPASS:
             try:
-                async with session.post(url, data={"data": query(lat, lon, radius)},
+                async with session.post(url, data={"data": query(lat, lon, radius, region)},
                                         headers={"User-Agent": MAP_AGENT}) as r:
                     if r.status != 200:
                         logger.warning("地图查询 %s 返回 %s", url, r.status)

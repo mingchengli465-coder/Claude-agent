@@ -1297,6 +1297,22 @@ MAIL_UPDATE_TEXT = (
 )
 
 
+REPLIES_UPDATE_TEXT = (
+    "📬 客户回信我这一天多都没看到：Gmail 脚本查回信太费 Gmail 的每日额度，额度用完就什么都查不了。"
+    "更新一下脚本就好（1 分钟，iPad 上就行）：\n\n"
+    "1. Safari 打开 https://script.google.com ，点开你之前建的那个项目\n"
+    "2. 把代码全删掉，粘贴我下一条发的新代码，点上面的💾保存\n"
+    "3. 点右上角「部署 / Deploy」→「管理部署 / Manage deployments」→ 点 ✏️ 编辑 →"
+    "「版本 / Version」选「新版本 / New version」→ 点「部署 / Deploy」\n\n"
+    "更新前我每 3 小时查一次回信，更新后每 30 分钟查一次。现在也可以直接打开 Gmail 看看有没有客户回信（垃圾邮件里也看一下）。"
+)
+# How often replies are looked for. The scripts before version 3 cost far more Gmail calls per look,
+# so with them it's every 3 hours at most, or Gmail's daily allowance runs out.
+REPLY_CHECK_MINUTES = int(os.environ.get("OUTREACH_REPLY_CHECK_MINUTES", "30"))
+OLD_SCRIPT_REPLY_GAP = dt.timedelta(hours=3)
+_last_reply_check: dt.datetime | None = None
+
+
 def mailer() -> outreach_mod.Mailer | None:
     if leads_db is None:
         return None
@@ -1587,7 +1603,7 @@ async def _image_mailer(context) -> outreach_mod.Mailer | None:
     except outreach_mod.MailError as exc:
         logger.warning("查 Gmail 发信脚本版本失败：%s", exc)
         return None
-    if version >= outreach_mod.MAILER_VERSION:
+    if version >= outreach_mod.IMAGE_VERSION:
         return box
     if not leads_db.setting("update_asked"):
         leads_db.set_setting("update_asked", "1")
@@ -1636,6 +1652,7 @@ async def find_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     if leads_db is None or not OWNER_CHAT_ID:
         return
     shares = {**outreach_mod.MIX, **outreach_mod.INTL_MIX}
+    leads_db.prune()
     emails, names = leads_db.known()
     added: dict[str, int] = {}
     day = dt.date.today().toordinal()
@@ -1646,13 +1663,18 @@ async def find_leads_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         for attempt in range(4):  # four towns at most a day, to be kind to the free map servers
             if need <= 0:
                 break
-            fresh = [lead for lead in await leadfinder.find(region, day, attempt, skip=names)
-                     if lead["email"] not in emails and lead["name"].lower() not in names][:need]
+            found = [lead for lead in await leadfinder.find(region, day, attempt, skip=names)
+                     if lead["email"] not in emails and lead["name"].lower() not in names]
             await asyncio.sleep(leadfinder.PAUSE)
+            # the ones not worth a cold email are kept too (set aside), so they aren't looked up again
+            fresh = [lead for lead in found if outreach_mod.worth_emailing(lead)][:need]
+            kept = fresh + [lead for lead in found if not outreach_mod.worth_emailing(lead)]
+            if kept:
+                leads_db.add(kept)
+                leads_db.prune()
+                emails |= {lead["email"] for lead in kept}
+                names |= {lead["name"].lower() for lead in kept}
             if fresh:
-                leads_db.add(fresh)
-                emails |= {lead["email"] for lead in fresh}
-                names |= {lead["name"].lower() for lead in fresh}
                 added[region] = added.get(region, 0) + len(fresh)
                 need -= len(fresh)
     if added:
@@ -1695,11 +1717,26 @@ async def outreach_daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def email_replies_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Tell the owner when a business answers (or the address bounced)."""
+    global _last_reply_check
     box = mailer()
     if box is None or not OWNER_CHAT_ID:
         return
+    emails = leads_db.emailed()
+    if not emails:
+        return
+    now = dt.datetime.now(dt.timezone.utc)
     try:
-        found = await box.replies(leads_db.emailed())
+        version = await box.version()
+        if version < outreach_mod.MAILER_VERSION:
+            if not leads_db.setting("replies_update_asked"):
+                leads_db.set_setting("replies_update_asked", "1")
+                await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=REPLIES_UPDATE_TEXT,
+                                               disable_web_page_preview=True)
+                await context.bot.send_message(chat_id=int(OWNER_CHAT_ID), text=outreach_mod.script_for(leads_db.secret()))
+            if _last_reply_check is not None and now - _last_reply_check < OLD_SCRIPT_REPLY_GAP:
+                return
+        _last_reply_check = now
+        found = await box.replies(emails, chunk=len(emails) if version >= outreach_mod.MAILER_VERSION else 15)
     except outreach_mod.MailError as exc:
         logger.warning("查邮件回复失败：%s", exc)
         return
@@ -1915,6 +1952,9 @@ def start_outreach() -> None:
     if added:
         logger.info("邮件名单新加了 %d 家", added)
     leads_db.set_setting("batch_running", "")  # a batch cut short by a restart starts again
+    aside = leads_db.prune()
+    if aside:
+        logger.info("名单里 %d 家大酒店、连锁店或部门邮箱不发了（不太可能回）", aside)
     if leads_db.retry_transient():
         logger.info("上次因为 Gmail 没反应没发出去的邮件，重新排进名单")
 
@@ -1929,8 +1969,9 @@ def schedule_outreach(application: Application) -> None:
         logger.error("OUTREACH_TIME=%r 无法解析，每天的邮件不会自动问你", outreach_mod.SEND_TIME)
     else:
         application.job_queue.run_daily(outreach_daily_job, time=when, name="outreach-daily")
-    # every 10 minutes, so a business that answers hears back within the half hour, by itself
-    application.job_queue.run_repeating(email_replies_job, interval=600, first=120, name="email-replies")
+    # every half hour, so a business that answers hears back within the hour, by itself
+    application.job_queue.run_repeating(email_replies_job, interval=REPLY_CHECK_MINUTES * 60, first=120,
+                                        name="email-replies")
     application.job_queue.run_repeating(reply_auto_job, interval=60, first=90, name="reply-auto")
     application.job_queue.run_repeating(trial_mail_job, interval=300, first=150, name="trial-mail")
     application.job_queue.run_repeating(batch_job, interval=300, first=60, name="outreach-batch")

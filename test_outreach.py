@@ -44,6 +44,37 @@ script = om.script_for("s3cret")
 assert "const SECRET = 's3cret';" in script and "GmailApp.sendEmail" in script and "{secret}" not in script
 print("PASS every email is 繁體中文 first, then English, each with its own first line, price line and opt-out")
 
+# --- who is worth a cold email ------------------------------------------------------------------
+for lead in ({"email": "info@capellasingapore.com", "name": "Capella Singapore", "region": "sg", "cat": "bnb"},
+             {"email": "info@crowneplaza.hk", "name": "Crowne Plaza Hong Kong Causeway Bay", "region": "hk"},
+             {"email": "stay@riverside.uk", "name": "Riverside Hotel", "region": "uk", "cat": "bnb"},
+             {"email": "hello@wellington.uk", "name": "Wellington Apartments", "region": "uk", "cat": "bnb"},
+             {"email": "a@ex.my", "name": "Co-Living @ Damai Residence", "region": "my", "cat": "bnb"},
+             {"email": "a@ex.my", "name": "Noordin Mews", "region": "my", "cat": "bnb"},
+             {"email": "reservations@smallplace.uk", "name": "Fern Villa", "region": "uk", "cat": "bnb"},
+             {"email": "marketing@salon.sg", "name": "Kerat Hair Studio", "region": "sg", "cat": "beauty"}):
+    assert not om.worth_emailing(lead), lead
+for lead in ({"email": "info@stoneclose.uk", "name": "Stone Close Tea Room & B&B", "region": "uk", "cat": "bnb"},
+             {"email": "x@ex.uk", "name": "The Swan Hotel & Inn", "region": "uk", "cat": "bnb"},
+             {"email": "hello@pinelodge.uk", "name": "Pine Lodge Bed & Breakfast", "region": "uk", "cat": "bnb"},
+             {"email": "orders@duke.sg", "name": "Duke Bakery", "region": "sg", "cat": "bakery"},
+             {"email": "studio@agency.uk", "name": "Hotel Web Studio", "region": "uk", "kind": "agency"},
+             {"email": "x@ex.sg", "name": "Bloom Room", "region": "trial", "kind": "trial"}):
+    assert om.worth_emailing(lead), lead
+assert om.skip_reason({"email": "a@ex.sg", "name": "Capella Singapore"}) == "连锁品牌"
+by_score = sorted([{"email": "info@shop.uk", "name": "A"}, {"email": "sarah@shop.uk", "name": "B"},
+                   {"email": "sarahsflowers@gmail.com", "name": "C"}, {"email": "info@farm.uk", "name": "Ash-Hining Farm"}],
+                  key=lambda l: -om.reply_score(l))
+assert [l["name"] for l in by_score] == ["C", "B", "Ash-Hining Farm", "A"], by_score
+picky = om.Leads(os.path.join(tempfile.mkdtemp(), "picky.sqlite3"))
+picky.add([{"email": "info@summerview.sg", "name": "Summer View Hotel", "region": "sg", "cat": "bnb"},
+           {"email": "info@flowers.sg", "name": "Flower Affair SG", "region": "sg", "cat": "florist"},
+           {"email": "jo.cakes@gmail.com", "name": "Jo's Cakes", "region": "sg", "cat": "bakery"}])
+assert [l["name"] for l in picky.due()] == ["Jo's Cakes", "Flower Affair SG"]
+assert picky.get("info@summerview.sg")["status"] == "skipped" and picky.get("info@summerview.sg")["note"] == "大酒店或服务式公寓"
+assert picky.waiting("sg") == 2 and picky.prune() == 0
+print("PASS big hotels, chains and department mailboxes are set aside; a sole trader's Gmail goes first")
+
 # --- the list and the daily limit ------------------------------------------------------------
 tmp = tempfile.mkdtemp()
 db = om.Leads(os.path.join(tmp, "cs.sqlite3"))
@@ -53,7 +84,8 @@ assert db.secret() == db.secret() and len(db.secret()) > 20
 many = [{"email": f"shop{i}@ex.com", "name": f"Shop {i}"} for i in range(12)]
 db.add(many)
 om.DAILY_LIMIT = 10
-assert len(db.due()) == 10 and db.due()[0]["email"] == "info@whyzee.com.sg"
+assert len(db.due()) == 10 and [l["email"] for l in db.due()[:3]] == [
+    "bakers@bakingmaniachk.com", "info@whyzee.com.sg", "order@incake.com.hk"], "someone's own address before info@"
 for lead in db.due()[:4]:
     db.mark(lead["email"], "sent")
 assert db.sent_today() == 4 and len(db.due()) == 6
@@ -91,14 +123,14 @@ print("PASS OUTREACH_MIX takes 6 from Hong Kong and 4 from Singapore, and fills 
 
 # --- the Apps Script mailer, against a fake that redirects like the real one ------------------
 async def mailer_tests():
-    sent, results, searched, bounced = [], {}, [], []
+    sent, results, searched, bounced, script = [], {}, [], [], {"version": 1}
 
     async def exec_(request):
         req = await request.json()
         if req.get("secret") != "s3cret":
             out = {"ok": False, "error": "bad secret"}
         elif req["action"] == "ping":
-            out = {"ok": True, "email": "me@gmail.com"}
+            out = {"ok": True, "email": "me@gmail.com", **({"version": script["version"]} if script["version"] > 1 else {})}
         elif req["action"] == "send":
             if req["to"].startswith("broken"):
                 out = {"ok": False, "error": "Invalid email: " + req["to"]}
@@ -180,7 +212,7 @@ async def mailer_tests():
         bot.OWNER_CHAT_ID = "424242"
         bot.leads_db = om.Leads(os.path.join(tempfile.mkdtemp(), "cs.sqlite3"))
         bot.leads_db.set_setting("secret", "s3cret")
-        bot.leads_db.add(leads + [{"email": "broken@ex.com", "name": "Broken"}, {"email": "broken2@ex.com", "name": "Broken2"}] + many[:2])
+        bot.leads_db.add(leads + [{"email": "broken1@ex.com", "name": "Broken"}, {"email": "broken2@ex.com", "name": "Broken2"}] + many[:2])
         bot.leads_db.add([{"email": "away@ex.com", "name": "Away Shop"}])
         bot.leads_db.mark("away@ex.com", "sent")
         ctx = types.SimpleNamespace(bot=Bot())
@@ -200,7 +232,7 @@ async def mailer_tests():
         assert bot.leads_db.setting("url") == link and "Gmail 接好了（me@gmail.com）" in told[0]["text"]
         offer = told[1]
         assert "今天要发这 7 封" in offer["text"] and "Whyzee Bakery · info@whyzee.com.sg" in offer["text"]
-        assert "Whyzee Bakery 你好" in offer["text"]
+        assert "Baking Maniac 你好" in offer["text"], "the likeliest to answer is shown (and sent) first"
         go, no = [b.callback_data for b in offer["reply_markup"].inline_keyboard[0]]
         assert not await bot.connect_mailer(Update("hello"))
         print("PASS /mail gives the steps and a script with this bot's secret; pasting the link connects "
@@ -224,11 +256,11 @@ async def mailer_tests():
                 break
             await asyncio.sleep(0.02)
         to = [s["to"] for s in sent[1:]]
-        assert to == ["info@whyzee.com.sg", "bakers@bakingmaniachk.com", "order@incake.com.hk"], to
+        assert to == ["bakers@bakingmaniachk.com", "info@whyzee.com.sg", "order@incake.com.hk"], to
         assert sent[3]["subject"].startswith("InCake 3D 的客人查詢")
         assert "发好了 3 封" in told[0]["text"] and "Broken2" in told[0]["text"] and "后面的先停了" in told[0]["text"]
         assert "Broken 发不出去" in told[0]["text"], told[0]["text"]
-        assert bot.leads_db.get("broken@ex.com")["status"] == "failed" and bot.leads_db.get("shop0@ex.com")["status"] == "new"
+        assert bot.leads_db.get("broken1@ex.com")["status"] == "failed" and bot.leads_db.get("shop0@ex.com")["status"] == "new"
         q = Query(go)
         await bot.mail_button(types.SimpleNamespace(callback_query=q), ctx)
         assert q.alerts == ["这批已经处理过了"] and len(sent) == 4, "the same batch can't be sent twice"
@@ -251,8 +283,12 @@ async def mailer_tests():
             drafted.append((lead["name"], subject, text))
             return "Hi! Happy to set up a free trial. Could you send me your price list?\n\nVincent"
         real_draft, bot.draft_reply = bot.draft_reply, fake_draft
+        searched.clear()
         await bot.email_replies_job(ctx)
         await bot.email_replies_job(ctx)
+        assert "客户回信我这一天多都没看到" in told[0]["text"] and "version: 3" in told[1]["text"], "an old script: asked to update"
+        assert len(searched) == 1, "an old script is used at most every 3 hours: each look costs many Gmail calls"
+        told[:2] = []
         texts = [t["text"] for t in told]
         assert len(texts) == 5, texts
         assert "Whyzee Bakery 回你邮件了" in texts[0] and "demo work" in texts[0]
@@ -261,6 +297,8 @@ async def mailer_tests():
         assert "不需要" in texts[2] and "退回来了" in texts[3]
         assert "自动回复" in texts[4] and len(drafted) == 1, "an out-of-office isn't answered"
         assert bot.leads_db.get("away@ex.com")["status"] == "sent", "its follow-up still goes"
+        assert "shop1@ex.com" not in bot.leads_db.emailed() and "shop0@ex.com" not in bot.leads_db.emailed(), \
+            "a bounced address and a no-thanks aren't watched any more"
         print("PASS a business that answers gets a drafted reply; no-thanks and bounces don't")
 
         # ✅ sends the draft from Gmail, in reply; only once
@@ -273,6 +311,17 @@ async def mailer_tests():
         await bot.reply_button(types.SimpleNamespace(callback_query=Query(send_btn)), ctx)
         assert len(sent) == before + 1 and "处理过了" in told[-1]["text"]
         print("PASS ✅ sends the drafted reply once, from the owner's Gmail")
+
+        # once the script is updated: every half hour, all the businesses in one call, no more asking
+        script["version"] = 3
+        real_emailed, bot.leads_db.emailed = bot.leads_db.emailed, lambda: [f"x{i}@ex.com" for i in range(40)]
+        searched.clear(); told.clear()
+        await bot.email_replies_job(ctx)
+        await bot.email_replies_job(ctx)
+        bot.leads_db.emailed = real_emailed
+        assert searched == [40, 40], searched
+        assert not any("更新一下脚本" in t["text"] for t in told)
+        print("PASS the updated script takes every business in one call, each time")
 
         # replying to a draft with their own words sends those instead
         await bot.offer_reply_draft(Bot(), bot.leads_db.get("info@whyzee.com.sg"), "Re: Quick idea", "And the price?")
@@ -356,6 +405,6 @@ assert names == ["email-replies", "find-leads", "find-leads-now", "outreach-batc
 daily = [j for j in app.job_queue.jobs() if j.name == "outreach-daily"][0]
 fields = {f.name: str(f) for f in daily.job.trigger.fields}
 assert fields["hour"] == "10" and str(daily.job.trigger.timezone) == "Asia/Singapore"
-print("PASS every day at 10:00 Singapore time the owner is asked; replies are checked every 10 minutes")
+print("PASS every day at 10:00 Singapore time the owner is asked; replies are checked every half hour")
 
 print("\nALL OUTREACH TESTS PASSED")
