@@ -112,7 +112,7 @@ async def main():
         # in hours, old script: the owner is asked once to update it, and nothing is sent
         om.in_work_hours = lambda lead, now=None: True
         await bot.batch_job(ctx); await bot.batch_job(ctx)
-        assert len(told) == 2 and "管理部署" in told[0] and "version: 2" in told[1] and "s3cret" in told[1]
+        assert len(told) == 2 and "管理部署" in told[0] and "version: 3" in told[1] and "s3cret" in told[1]
         assert not sent
         told.clear()
 

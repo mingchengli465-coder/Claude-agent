@@ -92,6 +92,8 @@ You can try the one on my own site: {link}
 
 If you send me your price list or FAQ, I'm happy to set up a free demo on it so you can see how it answers your customers before deciding anything. {price}
 
+Shall I make one for {name}? Just reply "yes".
+
 Best,
 Vincent
 Telegram: {telegram}
@@ -114,6 +116,8 @@ ZH_BODY = """{name}你好，
 可以先到我的網站試試看：{link}
 
 如果你願意把價目表或常見問題發給我，我可以免費幫你做一個示範版，你先試用，滿意再決定。{price}
+
+要我幫{name}做一個嗎？回覆「好」就可以。
 
 Vincent
 Telegram：{telegram}
@@ -223,14 +227,18 @@ BILINGUAL_RULE = "\n\n———— English below ————\n\n"
 ZH_FIRST = "很多客人會在晚上發訊息問價錢、款式和預約時間，第二天才回覆的話，有些客人可能已經找了別家。"
 
 # The owner pastes this into script.google.com once. {secret} is filled in per bot.
-# version 2 sends HTML with inline images (the mockups); version 1 sent plain text only
-MAILER_VERSION = 2
+# version 2 sends HTML with inline images (the mockups); version 1 sent plain text only. Version 3 looks
+# for replies with one Gmail search per twenty businesses and for bounces once: before, every search of
+# fifteen also read every bounce, and checked every ten minutes that used up Gmail's daily allowance
+# (Apps Script: "Service invoked too many times for one day"), after which no reply was seen at all.
+MAILER_VERSION = 3
+IMAGE_VERSION = 2
 MAILER_SCRIPT = """const SECRET = '{secret}';
 
 function doPost(e) {
   const req = JSON.parse(e.postData.contents);
   if (req.secret !== SECRET) return out({ok: false, error: 'bad secret'});
-  if (req.action === 'ping') return out({ok: true, version: 2, email: Session.getEffectiveUser().getEmail()});
+  if (req.action === 'ping') return out({ok: true, version: 3, email: Session.getEffectiveUser().getEmail()});
   if (req.action === 'send') {
     const options = {name: req.name || 'Vincent'};
     if (req.html) {
@@ -245,18 +253,30 @@ function doPost(e) {
   }
   if (req.action === 'replies') {
     const emails = req.emails.map(function (x) { return x.toLowerCase(); });
-    const query = '(' + emails.map(function (x) { return 'from:' + x; }).join(' OR ')
-      + ' OR from:mailer-daemon) newer_than:' + (req.days || 3) + 'd';
+    const days = ' newer_than:' + (req.days || 3) + 'd';
     const found = [];
-    GmailApp.search(query, 0, 30).forEach(function (t) {
+    const add = function (m, who, bounce, text) {
+      found.push({id: m.getId(), lead: who, bounce: bounce, subject: m.getSubject(), text: text.slice(0, 1500)});
+    };
+    // answers: one search per twenty businesses
+    for (let i = 0; i < emails.length; i += 20) {
+      const group = emails.slice(i, i + 20);
+      GmailApp.search('(' + group.map(function (x) { return 'from:' + x; }).join(' OR ') + ')' + days, 0, 20)
+        .forEach(function (t) {
+          t.getMessages().forEach(function (m) {
+            const from = m.getFrom().toLowerCase();
+            const who = group.filter(function (x) { return from.indexOf(x) >= 0; })[0];
+            if (who) add(m, who, false, m.getPlainBody());
+          });
+        });
+    }
+    // bounces: one search for them all
+    GmailApp.search('from:mailer-daemon newer_than:2d', 0, 20).forEach(function (t) {
       t.getMessages().forEach(function (m) {
-        const from = m.getFrom().toLowerCase();
-        const text = m.getPlainBody();
-        const who = emails.filter(function (x) {
-          return from.indexOf(x) >= 0 || (from.indexOf('mailer-daemon') >= 0 && text.toLowerCase().indexOf(x) >= 0);
-        })[0];
-        if (who) found.push({id: m.getId(), lead: who, bounce: from.indexOf('mailer-daemon') >= 0,
-                             subject: m.getSubject(), text: text.slice(0, 1500)});
+        if (m.getFrom().toLowerCase().indexOf('mailer-daemon') < 0) return;
+        const text = m.getPlainBody(), low = text.toLowerCase();
+        const who = emails.filter(function (x) { return low.indexOf(x) >= 0; })[0];
+        if (who) add(m, who, true, text);
       });
     });
     return out({ok: true, replies: found});
@@ -282,6 +302,8 @@ INTL_BODY = """{greeting}
 It answers from your own information ({facts}), takes down every enquiry, and sends it straight to you to confirm. {demo_line}
 
 I'm Vincent, a student developer in Singapore, and I set these up for small businesses. I'd be happy to build you a free trial version first, so you can see how it handles real questions. If you decide to keep it, it's a one-off {price}, cancel anytime.
+
+Shall I set up the free trial for {name}? A one-word "yes" is enough.
 
 Here's a 38-second video of how it works: {video}
 
@@ -444,6 +466,8 @@ Just bringing this back to the top of your inbox in case it got buried. Here's t
 
 If a 24/7 assistant that answers from your own information and passes every enquiry to you would help, I'm happy to set up a free trial on your site this week, with no obligation.{personal}
 
+Shall I go ahead? A one-word "yes" is enough.
+
 Best,
 Vincent
 {link}
@@ -456,6 +480,8 @@ FOLLOWUP_ZH = """{name}你好，
 {mockup}
 
 如果一個按你們自己的資料 24 小時回覆、並把每個查詢轉給你們的 AI 客服有幫助，我很樂意這星期先免費幫你們做一個試用版，不用任何承諾。{personal}
+
+要我開始做嗎？回覆「好」就可以。
 
 Vincent
 Telegram：{telegram}
@@ -663,6 +689,67 @@ def parse_leads(raw: str) -> list[dict]:
 # the daily HK/SG/MY batch (and its limit) leaves the English-market countries alone
 ASIA = "COALESCE(region, '') NOT IN ('uk', 'ie', 'au', 'nz', 'ca', 'us', 'trial')"
 
+# --- who is worth a cold email --------------------------------------------------------------------
+# A week of mail to big hotels (Capella, the Fullerton Bay, Crowne Plaza…) brought no answers: a
+# reservations desk or a head office reads those inboxes, and they have booking systems already. The
+# owner of a small shop or B&B reads their own, so the list keeps to them, likeliest first.
+CHAIN = re.compile(
+    r"\b(marriott|hilton|hyatt|sheraton|westin|intercontinental|crowne plaza|holiday inn|hotel indigo|ibis|novotel|"
+    r"mercure|pullman|sofitel|swiss[oô]tel|fairmont|radisson|best western|premier inn|travelodge|ramada|wyndham|"
+    r"four seasons|ritz-carlton|shangri-la|mandarin oriental|pan pacific|parkroyal|citadines|ascott|yotel\w*|m social|"
+    r"hotel 81|langham|cordis|kempinski|m[oö]venpick|copthorne|avani|eastin|cititel|grand chancellor|"
+    r"britannia hotel|village hotel|autograph collection|moxy|aloft|le m[eé]ridien|st\.? regis|dash living|mykey|"
+    r"accor|oasia|dorsett|capella|fullerton|rydges|quest apartments)\b", re.I)
+# a hotel, serviced apartments or a conference venue, unless the name says it's a small place to stay
+BIG_PLACE = re.compile(r"\b(hotels?|resort|suites|residences?|serviced|apartments?|aparthotel|convention|"
+                       r"conference cent(re|er)|co-?living)\b|酒店|公寓", re.I)
+SMALL_PLACE = re.compile(r"\b(b ?& ?b|bed (and|&) breakfast|guest ?house|cottage|farm|croft|lodge|homestay|inn)\b", re.I)
+# mailboxes a department reads, never the person who'd buy
+DEPARTMENT_MAILBOX = {"hr", "careers", "jobs", "recruitment", "press", "media", "pr", "accounts", "finance", "billing",
+                      "concierge", "frontdesk", "frontoffice", "fo", "rsvn", "reservation", "reservations", "groups",
+                      "groupsales", "events", "marketing", "legal", "privacy", "it"}
+# shared mailboxes; anything else at a small shop is usually the owner's own
+ROLE_MAILBOX = DEPARTMENT_MAILBOX | {"info", "hello", "hi", "enquiries", "enquiry", "inquiries", "inquiry", "contact",
+                                     "contactus", "office", "admin", "mail", "email", "team", "shop", "store", "studio",
+                                     "orders", "order", "bookings", "booking", "book", "stay", "sales", "support",
+                                     "help", "service", "general", "reception", "welcome"}
+# the free mailboxes a sole trader uses (gmail.com, hotmail.co.uk, bigpond.net.au…), by the first part of the domain
+FREE_MAILBOX = {"gmail", "googlemail", "outlook", "hotmail", "live", "msn", "yahoo", "ymail", "icloud", "me", "aol",
+                "btinternet", "btconnect", "sky", "talktalk", "virginmedia", "bigpond", "optusnet", "xtra", "eircom",
+                "singnet", "netvigator"}
+
+
+def skip_reason(lead: dict) -> str:
+    """Why a business isn't worth a cold email, for the owner ("" when it is)."""
+    if lead.get("kind") == "trial":
+        return ""
+    if (lead.get("email") or "").lower().partition("@")[0] in DEPARTMENT_MAILBOX:
+        return "部门邮箱，老板看不到"
+    if lead.get("kind") == "agency":
+        return ""
+    name = lead.get("name") or ""
+    if CHAIN.search(name):
+        return "连锁品牌"
+    if BIG_PLACE.search(name) and not SMALL_PLACE.search(name):
+        return "大酒店或服务式公寓"
+    if lead.get("region") in ("sg", "hk", "my") and lead.get("cat") == "bnb":
+        return "新马港的酒店"
+    return ""
+
+
+def worth_emailing(lead: dict) -> bool:
+    return not skip_reason(lead)
+
+
+def reply_score(lead: dict) -> int:
+    """Higher goes first: a sole trader's own mailbox (Gmail and the like), then someone's own address
+    at the shop, then a small place to stay; info@ at the shop's domain last."""
+    local, _, domain = (lead.get("email") or "").lower().partition("@")
+    score = 2 if domain.split(".")[0] in FREE_MAILBOX else 0
+    if local not in ROLE_MAILBOX and not any(c.isdigit() for c in local):
+        score += 1
+    return score + (1 if SMALL_PLACE.search(lead.get("name") or "") else 0)
+
 
 # errors from Gmail or the network rather than from the address: worth another try later
 TRANSIENT = ("没有正常回应", "连不上")
@@ -771,8 +858,7 @@ class Leads:
         taking each region's share from OUTREACH_MIX first."""
         room = self.room_today(now)
         with self._db() as db:
-            waiting = [dict(r) for r in db.execute(
-                f"SELECT * FROM leads WHERE status='new' AND COALESCE(batch, '') = '' AND {ASIA} ORDER BY rowid")]
+            waiting = self._likely(db, f"status='new' AND COALESCE(batch, '') = '' AND {ASIA}")
             sent = dict(db.execute("SELECT region, COUNT(*) FROM leads WHERE sent_at >= ? GROUP BY region",
                                    (self._day_start(now).isoformat(),)).fetchall())
         batch = []
@@ -792,9 +878,23 @@ class Leads:
             sent = db.execute("SELECT COUNT(*) FROM leads WHERE region=? AND sent_at >= ? AND COALESCE(batch, '') = ''",
                               (region, start.isoformat())).fetchone()[0]
             room = max(0, INTL_MIX.get(region, 0) - sent)
-            return [dict(r) for r in db.execute(
-                "SELECT * FROM leads WHERE status='new' AND region=? AND COALESCE(batch, '') = '' ORDER BY rowid LIMIT ?",
-                (region, room))]
+            return self._likely(db, "status='new' AND region=? AND COALESCE(batch, '') = ''", (region,))[:room]
+
+    def _likely(self, db: sqlite3.Connection, where: str, args: tuple = ()) -> list[dict]:
+        """The waiting businesses that match, likeliest to answer first. Those not worth a cold email
+        are set aside (status 'skipped', the reason in the note) and never sent."""
+        rows = [dict(r) for r in db.execute(f"SELECT * FROM leads WHERE {where} ORDER BY rowid", args)]
+        aside = [(skip_reason(r), r["email"]) for r in rows if skip_reason(r)]
+        if aside:
+            db.executemany("UPDATE leads SET status='skipped', note=? WHERE email=? AND status='new'", aside)
+        return sorted((r for r in rows if worth_emailing(r)), key=lambda r: -reply_score(r))
+
+    def prune(self) -> int:
+        """Set aside every waiting business not worth a cold email; how many there were."""
+        with self._db() as db:
+            before = db.total_changes
+            self._likely(db, "status='new'")
+            return db.total_changes - before
 
     def waiting(self, region: str) -> int:
         with self._db() as db:
@@ -813,13 +913,16 @@ class Leads:
                               "(note LIKE ? OR note LIKE ?)", (f"%{TRANSIENT[0]}%", f"%{TRANSIENT[1]}%")).rowcount
 
     def followup_due(self, now: dt.datetime | None = None, limit: int = 100) -> list[dict]:
-        """Emailed FOLLOWUP_DAYS ago or more, no answer, not followed up yet (agencies aren't chased)."""
+        """Emailed FOLLOWUP_DAYS ago or more, no answer, not followed up yet (agencies aren't chased,
+        nor businesses no longer worth a cold email)."""
         now = now or dt.datetime.now(dt.timezone.utc)
         before = (now - dt.timedelta(days=FOLLOWUP_DAYS)).isoformat()
         with self._db() as db:
-            return [dict(r) for r in db.execute(
+            rows = [dict(r) for r in db.execute(
                 "SELECT * FROM leads WHERE status='sent' AND sent_at <= ? AND followed_at IS NULL "
-                "AND COALESCE(kind, '') NOT IN ('agency', 'trial') ORDER BY sent_at LIMIT ?", (before, limit))]
+                "AND COALESCE(kind, '') NOT IN ('agency', 'trial') ORDER BY sent_at", (before,))]
+        # a big hotel emailed before the list was cleaned up isn't chased
+        return [r for r in rows if worth_emailing(r)][:limit]
 
     def mark_followed(self, email: str) -> None:
         with self._db() as db:
@@ -840,10 +943,12 @@ class Leads:
                 "SELECT * FROM leads WHERE status='new' AND COALESCE(batch, '') != '' ORDER BY rowid")]
 
     def emailed(self, days: int = 21) -> list[str]:
-        """Businesses emailed in the last few weeks: the ones whose replies are still worth watching."""
+        """Businesses emailed in the last few weeks: the ones whose replies are still worth watching
+        (not the bounced addresses, nor those who said no)."""
         since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
         with self._db() as db:
-            return [r[0] for r in db.execute("SELECT email FROM leads WHERE sent_at >= ? ORDER BY sent_at DESC", (since,))]
+            return [r[0] for r in db.execute("SELECT email FROM leads WHERE sent_at >= ? AND status IN ('sent', 'replied') "
+                                             "ORDER BY sent_at DESC", (since,))]
 
     def counts(self) -> dict[str, int]:
         with self._db() as db:
@@ -905,7 +1010,8 @@ class Mailer:
         return (await self._call("ping")).get("email", "")
 
     async def version(self) -> int:
-        """1 for the first script (plain text only), 2 once it can send images."""
+        """1 for the first script (plain text only), 2 once it can send images, 3 once it looks for
+        replies cheaply (all the businesses in one call)."""
         return int((await self._call("ping")).get("version", 1))
 
     async def send(self, to: str, subject: str, body: str, html: str = "", image: bytes | None = None) -> None:
@@ -915,8 +1021,9 @@ class Mailer:
         await self._call("send", to=to, subject=subject, body=body, name=SENDER_NAME, **extra)
 
     async def replies(self, emails: list[str], days: int = 3, chunk: int = 15) -> list[dict]:
-        """Replies from these addresses. A few at a time: one Gmail search with every address in it
-        gets too long for Gmail once the list grows."""
+        """Replies from these addresses. A few at a time for the older scripts: one Gmail search with
+        every address in it gets too long for Gmail once the list grows. Version 3 splits the list
+        itself, so it takes them all at once (chunk=len(emails))."""
         found = []
         for i in range(0, len(emails), chunk):
             found += (await self._call("replies", emails=emails[i:i + chunk], days=days)).get("replies", [])

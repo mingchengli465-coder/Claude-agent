@@ -32,6 +32,8 @@ ELEMENTS = [
     {"tags": {"name": "Closed Shop", "shop": "bakery", "contact:email": "a@closed.au", "disused:shop": "bakery"}},
     {"tags": {"name": "Two Emails", "tourism": "guest_house", "contact:email": "first@two.au; second@two.au", "addr:town": "Margaret River"}},
     {"tags": {"name": "Rosie's Again", "shop": "bakery", "email": "hello@rosiescakes.com.au"}},
+    {"tags": {"name": "The Grand", "tourism": "hotel", "email": "stay@grand.au", "stars": "5"}},
+    {"tags": {"name": "Big Sleep", "tourism": "hotel", "email": "stay@bigsleep.au", "rooms": "120"}},
 ]
 found = leadfinder.pick(ELEMENTS, "au")
 assert [l["email"] for l in found] == ["hello@rosiescakes.com.au", "first@two.au"]
@@ -39,7 +41,9 @@ rosie = found[0]
 assert rosie["city"] == "Perth" and rosie["site"] == "https://rosiescakes.com.au" and rosie["cat"] == "bakery"
 assert rosie["first"] == "I came across Rosie's Cakes on the map while looking at cake shops and bakeries in Perth."
 assert found[1]["city"] == "Margaret River" and found[1]["cat"] == "bnb"
-print("PASS the map gives independent, open businesses with a real email; chains and platforms are left out")
+sg = leadfinder.query(1.35, 103.82, 20000, "sg")
+assert '"tourism"' not in sg and '"shop"' in sg and sg.count("nwr[") == 2, "no hotels searched in Singapore"
+print("PASS the map gives independent, open businesses with a real email; chains, platforms and big hotels are left out")
 
 
 async def overpass():
@@ -218,7 +222,9 @@ async def main():
             asked.append((region, attempt))
             kind = "bnb"
             return [{**rosie, "region": region, "email": f"{region}-{attempt}-{i}@ex.com", "name": f"{region} {attempt} {i}",
-                     "cat": kind} for i in range(10)] + [{**rosie, "email": "old@ex.au", "name": "Already Known"}]
+                     "cat": kind} for i in range(10)] + [{**rosie, "email": "old@ex.au", "name": "Already Known"},
+                    {**rosie, "region": region, "email": f"{region}-{attempt}-hotel@ex.com", "name": f"Grand Hotel {region}",
+                     "cat": kind}]
         real_find = leadfinder.find
         leadfinder.find = fake_find
         await bot.find_leads_job(ctx)
@@ -226,6 +232,7 @@ async def main():
         assert bot.leads_db.waiting("au") == om.INTL_MIX["au"] * 3, "a few days waiting in each country"
         assert ("uk", 1) in asked and ("ie", 1) not in asked, "a second town only when the first wasn't enough"
         assert bot.leads_db.waiting("uk") == om.INTL_MIX["uk"] * 3
+        assert bot.leads_db.get("au-0-hotel@ex.com")["status"] == "skipped", "a hotel is kept aside, not counted or sent"
         assert "在地图上新找到" in told[0] and "澳洲" in told[0]
         told.clear()
 
