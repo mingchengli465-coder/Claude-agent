@@ -1324,10 +1324,33 @@ REPLIES_UPDATE_TEXT = (
     "更新前我每 3 小时查一次回信，更新后每 30 分钟查一次。现在也可以直接打开 Gmail 看看有没有客户回信（垃圾邮件里也看一下）。"
 )
 # How often replies are looked for. The scripts before version 3 cost far more Gmail calls per look,
-# so with them it's every 3 hours at most, or Gmail's daily allowance runs out.
+# so with them it's every 3 hours at most, over the last day's mail only, or Gmail's daily allowance
+# runs out. Until one such look has gone through every business, it reaches back 4 days instead, so
+# the replies that came while Gmail was refusing (or the bot was down) are still found.
 REPLY_CHECK_MINUTES = int(os.environ.get("OUTREACH_REPLY_CHECK_MINUTES", "30"))
 OLD_SCRIPT_REPLY_GAP = dt.timedelta(hours=3)
+OLD_SCRIPT_DAYS, OLD_SCRIPT_CATCH_UP_DAYS, OLD_SCRIPT_CHUNK = 1, 4, 15
 _last_reply_check: dt.datetime | None = None
+_replies_caught_up = False
+
+
+async def _replies_old_script(box: outreach_mod.Mailer, emails: list[str]) -> list[dict]:
+    """Replies through a script older than version 3: a few businesses per call, the most recently
+    emailed first. A call that fails doesn't lose the others' replies; once Gmail's daily allowance
+    is used up, the rest wait for the next round."""
+    global _replies_caught_up
+    days = OLD_SCRIPT_DAYS if _replies_caught_up else OLD_SCRIPT_CATCH_UP_DAYS
+    found, complete = [], True
+    for i in range(0, len(emails), OLD_SCRIPT_CHUNK):
+        try:
+            found += await box.replies(emails[i:i + OLD_SCRIPT_CHUNK], days=days, chunk=OLD_SCRIPT_CHUNK)
+        except outreach_mod.MailError as exc:
+            complete = False
+            logger.warning("查邮件回复（第 %d 组）失败：%s", i // OLD_SCRIPT_CHUNK + 1, exc)
+            if "too many times" in str(exc):
+                break
+    _replies_caught_up = _replies_caught_up or complete
+    return found
 
 
 def mailer() -> outreach_mod.Mailer | None:
@@ -1753,7 +1776,10 @@ async def email_replies_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             if _last_reply_check is not None and now - _last_reply_check < OLD_SCRIPT_REPLY_GAP:
                 return
         _last_reply_check = now
-        found = await box.replies(emails, chunk=len(emails) if version >= outreach_mod.MAILER_VERSION else 15)
+        if version >= outreach_mod.MAILER_VERSION:
+            found = await box.replies(emails, chunk=len(emails))
+        else:
+            found = await _replies_old_script(box, emails)
     except outreach_mod.MailError as exc:
         logger.warning("查邮件回复失败：%s", exc)
         return

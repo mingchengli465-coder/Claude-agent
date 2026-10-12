@@ -317,6 +317,29 @@ async def mailer_tests():
         assert len(sent) == before + 1 and "处理过了" in told[-1]["text"]
         print("PASS ✅ sends the drafted reply once, from the owner's Gmail")
 
+        # an older script: a few businesses per call, a failed call doesn't lose the rest, and once
+        # Gmail's daily allowance runs out the round stops; the first full round reaches back 4 days
+        class OldBox:
+            def __init__(self, fail): self.calls, self.fail = [], fail
+            async def replies(self, emails, days=3, chunk=15):
+                self.calls.append((len(emails), days))
+                if len(self.calls) in self.fail:
+                    raise om.MailError(self.fail[len(self.calls)])
+                return [{"id": f"o{len(self.calls)}", "lead": emails[0]}]
+        many_emails = [f"o{i}@ex.com" for i in range(40)]
+        bot._replies_caught_up = False
+        box = OldBox({2: "连不上 Gmail 发信脚本："})
+        assert [r["id"] for r in await bot._replies_old_script(box, many_emails)] == ["o1", "o3"]
+        assert box.calls == [(15, 4), (15, 4), (10, 4)] and not bot._replies_caught_up, "a failed call: catch up next time too"
+        box = OldBox({1: "Error Exception: Service invoked too many times for one day: gmail."})
+        assert await bot._replies_old_script(box, many_emails) == [] and box.calls == [(15, 4)], "out of allowance: stop"
+        box = OldBox({})
+        assert len(await bot._replies_old_script(box, many_emails)) == 3 and bot._replies_caught_up
+        box = OldBox({})
+        await bot._replies_old_script(box, many_emails)
+        assert box.calls == [(15, 1), (15, 1), (10, 1)], "once caught up, only the last day's mail"
+        print("PASS an older script: a few per call, a failure loses nothing else, out of allowance stops the round")
+
         # once the script is updated: every half hour, all the businesses in one call, no more asking
         script["version"] = 3
         real_emailed, bot.leads_db.emailed = bot.leads_db.emailed, lambda: [f"x{i}@ex.com" for i in range(40)]
