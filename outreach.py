@@ -952,8 +952,9 @@ class Leads:
         (not the bounced addresses, nor those who said no)."""
         since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
         with self._db() as db:
+            # the latest email (a follow-up counts) first: those are the likeliest to be answered
             return [r[0] for r in db.execute("SELECT email FROM leads WHERE sent_at >= ? AND status IN ('sent', 'replied') "
-                                             "ORDER BY sent_at DESC", (since,))]
+                                             "ORDER BY COALESCE(followed_at, sent_at) DESC", (since,))]
 
     def counts(self) -> dict[str, int]:
         with self._db() as db:
