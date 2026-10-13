@@ -209,5 +209,22 @@ assert bot.leads_db.sent_today() == 0, "not counted in the day's cold emails"
 msgs = om2.reply_messages(lead, "Re: ready", "How do I pay?")
 assert "Bloom Room" in msgs[1]["content"] and "one line of code" in msgs[1]["content"]
 shop_page = (pathlib.Path(__file__).parent / "web_static" / "showcase.html").read_text(encoding="utf-8")
-assert 'class="js-mail"' in shop_page and "Going live: " in shop_page and "mailto:{{EMAIL}}" in shop_page
+assert 'class="js-mail"' in shop_page and "Going live: " in shop_page and '"mailto:" + email' in shop_page
+assert 'href="{{CONTACT_URL}}" class="js-mail"' in shop_page, "without an email, going live goes to Telegram"
 print("PASS a shop that left its email gets how to use its trial and go live, once; its answer is watched")
+
+# Gmail refuses (blocked, out of allowance): the owner gets the lead on Telegram instead
+class DeadBox:
+    async def send(self, *a, **k): raise om2.MailError("Gmail 发信脚本没有正常回应：Access Denied")
+
+bot.mailer = lambda: DeadBox()
+row2 = bot.trials_db.create("Petal Lane", "florist", "Roses US$50", "hi@petallane.test")
+bot.leads_db.set_setting(f"trialmail:{row2['slug']}", json.dumps({"due": due, "email": "hi@petallane.test",
+                                                                  "name": "Petal Lane", "slug": row2["slug"]}))
+told.clear()
+asyncio.run(bot.trial_mail_job(ctx))
+assert len(told) == 1 and "Petal Lane" in told[0] and "hi@petallane.test" in told[0] and row2["slug"] in told[0], told
+assert bot.leads_db.get("hi@petallane.test") is None, "not marked as emailed"
+asyncio.run(bot.trial_mail_job(ctx))
+assert len(told) == 1, "told once"
+print("PASS when Gmail won't send, the owner gets the trial's name, email and page on Telegram, once")

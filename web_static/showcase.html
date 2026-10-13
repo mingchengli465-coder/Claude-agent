@@ -63,7 +63,7 @@
       <a href="#" class="js-ask">Ask</a>
       <a href="trial" class="js-trial">Your own</a>
       <a href="video" data-en="video-en">Video</a>
-      <a href="mailto:{{EMAIL}}" class="js-mail">Contact</a>
+      <a href="{{CONTACT_URL}}" class="js-mail">Contact</a>
       <button class="search keep js-ask" type="button" aria-label="Ask the assistant">&#8981;</button>
     </nav>
     <div class="hero">
@@ -153,8 +153,11 @@ window.DEEP_LANG = "{{DEEP_LANG}}";
     var own = TRIAL + "?kind=" + encodeURIComponent(shop.kind) + (shop.slug ? "&name=" + encodeURIComponent(shop.name) : "");
     all(".js-own", function (a) { a.setAttribute("href", own); });
     all(".js-trial", function (a) { a.setAttribute("href", own); });
-    var mail = "mailto:{{EMAIL}}?subject=" + encodeURIComponent("Going live: " + shop.name)
-      + "&body=" + encodeURIComponent("Hi Vincent, I'd like to make the assistant for " + shop.name + " official.\n" + location.href);
+    // the owner's email when there is one (a ready-made "going live" message), else their Telegram
+    var email = "{{EMAIL}}";
+    var mail = email ? "mailto:" + email + "?subject=" + encodeURIComponent("Going live: " + shop.name)
+      + "&body=" + encodeURIComponent("Hi Vincent, I'd like to make the assistant for " + shop.name + " official.\n" + location.href)
+      : "{{CONTACT_URL}}";
     all(".js-mail", function (a) { a.setAttribute("href", mail); });
     if (shop.sample && shop.slug) $("note-sample").hidden = false;
     if (shop.site) { $("site-host").textContent = shop.site.replace(/^https?:\/\//, "").replace(/\/.*$/, ""); $("note-read").hidden = false; }

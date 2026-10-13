@@ -212,6 +212,20 @@ def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
 
 
 
+def _email(links: list[tuple[str, str, str]]) -> str:
+    return next((t for _, h, t in links if h.startswith("mailto:")), "")
+
+
+def privacy_contact(links: list[tuple[str, str, str]], telegram: str) -> str:
+    """Where the privacy policy sends deletion requests: the owner's email, else their Telegram."""
+    email = _email(links)
+    if email:
+        return f'<a href="mailto:{html.escape(email, quote=True)}">{html.escape(email)}</a>'
+    if telegram:
+        return f'<a href="{html.escape(telegram, quote=True)}">Telegram @{html.escape(telegram.rsplit("/", 1)[-1])}</a>'
+    return ""
+
+
 def demo_fill(body: str, kind: str, english: bool = False) -> str:
     """The industry demo page for one kind of business (English-only: links to the other English ones)."""
     d = demos_mod.DEMOS[kind]
@@ -458,7 +472,9 @@ class WebChat:
                     .replace("{{WECHAT_DISPLAY}}", "" if wechat else "none")
                     .replace("{{SOCIAL_LINKS}}", links_html)
                     .replace("{{SOCIAL_DISPLAY}}", "" if links else "none")
-                    .replace("{{EMAIL}}", html.escape(next((t for l, h, t in links if h.startswith("mailto:")), "")))
+                    .replace("{{PRIVACY_CONTACT}}", privacy_contact(links, telegram))
+                    .replace("{{EMAIL}}", html.escape(_email(links)))
+                    .replace("{{CONTACT_URL}}", html.escape("mailto:" + _email(links) if _email(links) else telegram, quote=True))
                     .replace("{{TRIAL_KINDS}}", "".join(
                         f'<option value="{k}">{html.escape(d["label"])}</option>' if name.endswith("-en.html") else
                         f'<option value="{k}">{html.escape(d["label_zh"])} · {html.escape(d["label"])}</option>'
