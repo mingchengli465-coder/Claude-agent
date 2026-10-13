@@ -56,7 +56,7 @@ AUTO = os.environ.get("OUTREACH_AUTO", "false").lower() == "true"
 SENDER_NAME = os.environ.get("OUTREACH_SENDER_NAME", "Vincent")
 SITE_LINK = os.environ.get("OUTREACH_LINK", "https://mingchengli465-coder.github.io/Claude-agent/?from=email")
 TELEGRAM_LINK = os.environ.get("OUTREACH_TELEGRAM", "https://t.me/Vinceeeeentttt")
-REPLY_EMAIL = os.environ.get("OUTREACH_EMAIL", "mingchengli465@gmail.com")
+REPLY_EMAIL = os.environ.get("OUTREACH_EMAIL", "mingchengli465@outlook.com")
 
 SCRIPT_URL = re.compile(r"https://script\.google\.com/macros/s/[\w-]+/exec")
 # Outside HK/SG/MY the email is English only, sent in the recipient's working hours.

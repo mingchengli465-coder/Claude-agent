@@ -84,7 +84,7 @@ async def main():
         assert 'data-copy="Vinc100327"' in site and 'data-copy="Abide2837-"' in site
         assert 'href="https://www.facebook.com/profile.php?id=61574166461675"' in site
         assert 'href="https://x.com/Vincent40769988"' in site
-        assert "mailto:" not in site, "no email while the owner's Gmail is blocked (products.yaml has none)"
+        assert 'href="mailto:mingchengli465@outlook.com"' in site and "gmail.com" not in site
         r = await client.get("/demo")
         page = await r.text()
         assert r.status == 200 and "text/html" in r.headers["Content-Type"]
