@@ -44,6 +44,7 @@ import indexnow as indexnow_mod
 import news as news_mod
 import demos as demos_mod
 import leadfinder
+import livecam
 import outreach as outreach_mod
 import sitemedia
 import sitetext
@@ -1256,6 +1257,42 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.effective_message.reply_text(f"⚠️ 没整理出来：{str(exc)[:300]}")
 
 
+# --- /live: what San Francisco and Singapore look like right now (public cameras) -------------------
+LIVE_USAGE = "发 /live 看旧金山和新加坡现在的样子，或者 /live 旧金山、/live 新加坡 只看一个。"
+
+
+async def live_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/live [旧金山|新加坡]: a picture from a public camera there, a minute or two old (owner only)."""
+    if not is_owner(update.effective_chat.id):
+        await update.effective_message.reply_text(XHS_DENIED_TEXT)
+        return
+    asked = [livecam.ALIASES.get(a.strip().lower()) for a in (context.args or [])]
+    keys = [k for k in asked if k] if asked else list(livecam.PLACES)
+    if not keys:
+        await update.effective_message.reply_text(LIVE_USAGE)
+        return
+    for key in dict.fromkeys(keys):
+        try:
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.UPLOAD_PHOTO)
+            shot = await livecam.snapshot(key)
+        except livecam.LiveCamError as exc:
+            await update.effective_message.reply_text(f"⚠️ {livecam.PLACES[key].name}的摄像头现在打不开：{exc}")
+            continue
+        except TelegramError:
+            continue
+        await update.effective_message.reply_photo(photo=shot.jpeg, caption=shot.caption)
+
+
+async def live_check_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Once after a start: can the cameras be reached from here? (Only the log hears about it.)"""
+    for key, place in livecam.PLACES.items():
+        try:
+            shot = await livecam.snapshot(key)
+            logger.info("实时摄像头 %s 可以用（%d KB）", place.name, len(shot.jpeg) // 1024)
+        except livecam.LiveCamError as exc:
+            logger.warning("实时摄像头 %s 打不开：%s", place.name, exc)
+
+
 def schedule_news(application: Application) -> None:
     if not NEWS_CHAT_IDS or application.job_queue is None:
         return
@@ -2399,6 +2436,7 @@ def main() -> None:
     application.add_handler(CommandHandler("outreach", outreach_command))
     application.add_handler(CommandHandler("outreach_stop", outreach_stop_command))
     application.add_handler(CommandHandler("news", news_command))
+    application.add_handler(CommandHandler("live", live_command))
     application.add_handler(CallbackQueryHandler(mail_button, pattern=r"^mail:"))
     application.add_handler(CallbackQueryHandler(reply_button, pattern=r"^reply:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, route_text))
@@ -2413,6 +2451,8 @@ def main() -> None:
     schedule_visits_report(application)
     schedule_news(application)
     schedule_indexnow(application)
+    if OWNER_CHAT_ID and application.job_queue is not None:
+        application.job_queue.run_once(live_check_job, when=45, name="live-check")
     start_outreach()
     schedule_outreach(application)
 
