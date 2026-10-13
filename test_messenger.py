@@ -168,8 +168,8 @@ async def main():
             # the privacy page Meta asks for
             page = await (await client.get("/privacy")).text()
             assert "Privacy Policy" in page and "隐私政策" in page and "{{" not in page
-            assert page.count('<a href="https://t.me/Vinceeeeentttt">Telegram @Vinceeeeentttt</a>') == 4, \
-                "without an email, deletion requests go to the owner's Telegram"
+            assert page.count('<a href="mailto:mingchengli465@outlook.com">mingchengli465@outlook.com</a>') == 4, \
+                "deletion requests go to the owner's email"
             print("PASS /privacy is served with a way to reach the owner")
         await fb.close()
 
