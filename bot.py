@@ -1899,6 +1899,15 @@ async def trial_mail_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             await box.send(item["email"], subject, body)
         except outreach_mod.MailError as exc:
             logger.warning("试用说明邮件没发出去（%s）：%s", item["email"], exc)
+            # someone who tried it is the warmest lead there is: the owner gets them by hand instead
+            try:
+                await context.bot.send_message(
+                    chat_id=int(OWNER_CHAT_ID), disable_web_page_preview=True,
+                    text=f"🔥 {item['name']} 做了免费试用，留了邮箱 {item['email']}，但 Gmail 发不出去。\n"
+                         f"他们的试用页：{link}\n\n用你别的邮箱亲自给他们发一封：问问试用得怎么样、要不要正式上线"
+                         "（US$70 一次 + 每月 US$9.9）。")
+            except TelegramError:
+                logger.exception("试用客户的通知没发出去")
             continue
         leads_db.add([{"email": item["email"], "name": item["name"], "region": "trial", "kind": "trial", "site": link}])
         leads_db.mark(item["email"], "sent")

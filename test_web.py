@@ -83,7 +83,8 @@ async def main():
         assert 'href="https://t.me/Vinceeeeentttt"' in site and "@Vinceeeeentttt" in site
         assert 'data-copy="Vinc100327"' in site and 'data-copy="Abide2837-"' in site
         assert 'href="https://www.facebook.com/profile.php?id=61574166461675"' in site
-        assert 'href="https://x.com/Vincent40769988"' in site and 'href="mailto:mingchengli465@gmail.com"' in site
+        assert 'href="https://x.com/Vincent40769988"' in site
+        assert "mailto:" not in site, "no email while the owner's Gmail is blocked (products.yaml has none)"
         r = await client.get("/demo")
         page = await r.text()
         assert r.status == 200 and "text/html" in r.headers["Content-Type"]
@@ -248,3 +249,12 @@ assert (out / "mockups" / "gale-green.png").exists() and "mockups" not in sitema
 print("PASS the GitHub Pages copy is self-contained apart from the chat server")
 
 print("\nALL WEB CHAT TESTS PASSED")
+
+
+# --- with an email in products.yaml, the privacy page and the demos use it ------------------------
+import html as _html
+links = [("Email", "mailto:me@shop.test", "me@shop.test")]
+assert web.privacy_contact(links, "https://t.me/someone") == '<a href="mailto:me@shop.test">me@shop.test</a>'
+assert web.privacy_contact([], "https://t.me/someone") == '<a href="https://t.me/someone">Telegram @someone</a>'
+assert web.privacy_contact([], "") == ""
+print("PASS the privacy page points to the owner's email, or to their Telegram without one")
