@@ -113,7 +113,7 @@ INTENT_LEVELS = {"": 0, "interested": 1, "ready": 2}
 INTENT_LABELS = {1: "有购买意向", 2: "准备购买"}
 
 CHANNEL_LABELS = {"telegram": "Telegram", "web": "网站聊天窗口", "facebook": "Facebook Messenger", "fb_comment": "Facebook 评论",
-                  "wecom": "企业微信", "wecombot": "企业微信机器人"}
+                  "wecom": "企业微信", "wecombot": "企业微信机器人", "whatsapp": "WhatsApp"}
 
 # A safety net under the model's own judgement: these always go to the owner.
 _HANDOFF_KEYWORDS = [
@@ -204,7 +204,7 @@ SYSTEM_TEMPLATE = """{persona}
 - 资料里写了的价格、交付周期、修改次数、能做什么，直接照资料回答。这是你最重要的工作，不许因为这些问题转给本人。
 - 价格分几种情况（比如国内商户 / 海外商户）而客户没说是哪种时，用一句话简单报出来，再问一句他是哪种。
 - 客户说得太短或看不懂（比如只发了"?"、"在吗"、"hi"），就简单打个招呼，问他想了解哪项服务，或者把上一条回答换个说法再讲一遍。不要转给本人。
-- 客户要本人的联系方式，只给微信号和 Telegram 就行（客户点名要别的再给）。
+- 客户要本人的联系方式，只给微信号和 Telegram 就行；海外客户（用英文、在新加坡马来西亚等地的）有 WhatsApp 的话也给 WhatsApp（客户点名要别的再给）。
 
 【主动问清需求】
 客户需求没说清楚时，一次只问一个问题，帮本人收集报价需要的信息：
