@@ -258,3 +258,13 @@ assert web.privacy_contact(links, "https://t.me/someone") == '<a href="mailto:me
 assert web.privacy_contact([], "https://t.me/someone") == '<a href="https://t.me/someone">Telegram @someone</a>'
 assert web.privacy_contact([], "") == ""
 print("PASS the privacy page points to the owner's email, or to their Telegram without one")
+
+
+# --- a WhatsApp number in products.yaml becomes a click-to-chat link -----------------------------
+import pathlib as _pl, tempfile as _tf
+_yaml = _pl.Path(_tf.mkdtemp()) / "products.yaml"
+_yaml.write_text("联系本人:\n  WhatsApp: +65 9123 4567\n  X: https://x.com/someone\n", encoding="utf-8")
+assert web.owner_links(_yaml)[0] == ("WhatsApp", "https://wa.me/6591234567", "+65 9123 4567"), web.owner_links(_yaml)
+_yaml.write_text("联系本人:\n  WhatsApp: call me\n", encoding="utf-8")
+assert web.owner_links(_yaml) == [], "a value that isn't a phone number is left out"
+print("PASS a WhatsApp number becomes a wa.me link to chat with the owner")

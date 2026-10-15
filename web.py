@@ -17,6 +17,7 @@
     GET  /privacy     privacy policy (Meta asks for one before Messenger goes live)
     GET/POST /fb/webhook  Facebook Messenger, when it is configured (messenger.py)
     GET/POST /wecom/callback  企业微信, when it is configured (wecom.py)
+    GET/POST /wa/webhook  WhatsApp (the official Business Platform), when it is configured (whatsapp.py)
 
 Visitors are customers on the "web" channel, keyed by a random id the widget
 keeps in the browser. The owner is told and replies in Telegram exactly as for
@@ -186,6 +187,8 @@ def owner_contacts(path: Path = cs.CS_PRODUCTS_PATH) -> tuple[str, list[str]]:
 
 _OTHER_LINKS = {
     # key in products.yaml: (label, pattern, how to turn the value into a link)
+    # WhatsApp: the number with its country code (+65 9123 4567); the link opens a chat with it
+    "WhatsApp": ("WhatsApp", re.compile(r"^\+?[0-9][0-9 ()-]{6,22}$"), lambda v: "https://wa.me/" + re.sub(r"\D", "", v)),
     "X": ("X", re.compile(r"^https://(x|twitter)\.com/[A-Za-z0-9_]{1,15}/?$"), lambda v: v),
     "Facebook": ("Facebook", re.compile(r"^https://(www\.|m\.)?facebook\.com/[A-Za-z0-9_.?=&/-]{1,120}$"), lambda v: v),
     "邮箱": ("Email", re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,120}\.[A-Za-z]{2,24}$"), lambda v: "mailto:" + v),
@@ -193,7 +196,7 @@ _OTHER_LINKS = {
 
 
 def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
-    """[(label, href, text)] for the owner's X / Facebook / email in 联系本人,
+    """[(label, href, text)] for the owner's WhatsApp / X / Facebook / email in 联系本人,
     in that order; empty or malformed entries are left out."""
     try:
         import yaml
@@ -206,7 +209,7 @@ def owner_links(path: Path = cs.CS_PRODUCTS_PATH) -> list[tuple[str, str, str]]:
         value = str(data.get(key) or "").strip()
         if pattern.match(value):
             handle = value.rstrip("/").rsplit("/", 1)[-1]
-            text = value if key == "邮箱" else "→" if "?" in handle else "@" + handle
+            text = value if key in ("邮箱", "WhatsApp") else "→" if "?" in handle else "@" + handle
             links.append((label, href(value), text))
     return links
 
@@ -244,10 +247,11 @@ class WebChat:
     def __init__(self, service: cs.CustomerService, title: str = "", contact_link: str = "",
                  clock=time.time, visits: visits_mod.Visits | None = None, messenger=None, sites=None,
                  demos: dict | None = None, trials: trials_mod.Trials | None = None, trial_service=None,
-                 on_trial=None, media_origin: str | None = None, wecom=None):
+                 on_trial=None, media_origin: str | None = None, wecom=None, whatsapp=None):
         self.service = service
-        # 企业微信 (wecom.py): brings its own callback route, like the Facebook messenger
+        # 企业微信 (wecom.py) and WhatsApp (whatsapp.py) bring their own webhook routes, like the Facebook messenger
         self.wecom = wecom
+        self.whatsapp = whatsapp
         # where the owner's pictures and video are served from: this server (None: when they're on
         # the volume), or another origin for a copy of the pages hosted elsewhere (GitHub Pages)
         self.media_origin = media_origin
@@ -325,6 +329,8 @@ class WebChat:
             self.messenger.routes(app)
         if self.wecom is not None:
             self.wecom.routes(app)
+        if self.whatsapp is not None:
+            self.whatsapp.routes(app)
         app.router.add_route("OPTIONS", "/api/{tail:.*}", self.preflight)
         return app
 

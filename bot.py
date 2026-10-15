@@ -52,6 +52,7 @@ import visits as visits_mod
 import web
 import wecom as wecom_mod
 import wecom_bot as wecom_bot_mod
+import whatsapp as whatsapp_mod
 import xhs
 
 logging.basicConfig(
@@ -2282,6 +2283,8 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
     fb = messenger_mod.Messenger.from_env(service, notify=tell_owner)
     # 企业微信 shares the same customer service; None (and no route) unless its WECOM_* variables are set
     wc = wecom_mod.WeCom.from_env(service, notify=tell_owner)
+    # WhatsApp's official Business Platform: None (and no route) unless its WHATSAPP_* variables are set
+    wa = whatsapp_mod.WhatsApp.from_env(service, notify=tell_owner)
     # 企业微信「智能机器人」: a WebSocket we open ourselves, so it needs no callback URL; off unless WECOM_BOT_* are set
     global wecom_robot
     if wecom_robot is None:
@@ -2318,7 +2321,7 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
     chat = web.WebChat(service, title=web.shop_name(), contact_link=contact, visits=counter, messenger=fb,
                        sites=site_store, demos=getattr(service, "demo_services", {}),
                        trials=getattr(service, "trials", None), trial_service=getattr(service, "trial_service", None),
-                       on_trial=on_trial, wecom=wc)
+                       on_trial=on_trial, wecom=wc, whatsapp=wa)
     try:
         await chat.start()
     except OSError:
@@ -2332,6 +2335,8 @@ async def start_web_chat(bot_username: str = "", bot=None) -> None:
     if wc is not None:
         # WeCom calls the callback while the URL is saved in its console, so the server is up first here too
         fb_setup_tasks.add(asyncio.get_running_loop().create_task(wc.connect()))
+    if wa is not None:
+        fb_setup_tasks.add(asyncio.get_running_loop().create_task(wa.connect()))
 
 
 async def post_shutdown(application: Application) -> None:
@@ -2342,6 +2347,8 @@ async def post_shutdown(application: Application) -> None:
             await web_chat.messenger.close()
         if web_chat.wecom is not None:
             await web_chat.wecom.close()
+        if web_chat.whatsapp is not None:
+            await web_chat.whatsapp.close()
         await web_chat.stop()
 
 
